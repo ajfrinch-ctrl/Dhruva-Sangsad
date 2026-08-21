@@ -1,0 +1,25 @@
+{
+  "name": "ধ্রুব সংসদ — Dhruvo Sangsad",
+  "short_name": "ধ্রুব সংসদ",
+  "description": "সদস্য, জমা, বকেয়া, অগ্রিম ও রিপোর্ট ব্যবস্থাপনা সিস্টেম — Member, Deposit, Due, Advance and Reporting Management System",
+  "lang": "bn",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "/dhruvo-sangsad/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "categories": ["finance", "productivity", "business"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "জমা এন্ট্রি / Deposit", "short_name": "জমা", "url": "./index.html#deposit", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "রিপোর্ট / Reports", "short_name": "রিপোর্ট", "url": "./index.html#reports", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "সদস্য অনুসন্ধান / Search", "short_name": "অনুসন্ধান", "url": "./index.html#search", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

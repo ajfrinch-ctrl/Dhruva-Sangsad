@@ -1,0 +1,96 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'maker')",
+      "$userId": {
+        ".read": "auth != null && ($userId === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || ($userId === auth.uid && (!data.exists() || newData.child('role').val() === data.child('role').val())))",
+        ".validate": "newData.hasChildren(['id','username','role','createdAt','updatedAt']) && newData.child('role').val().matches(/^(admin|maker|member)$/)",
+        "password": {
+          ".validate": "newData.isString() && newData.val().length > 20"
+        },
+        "$other": { ".validate": true }
+      }
+    },
+
+    "members": {
+      ".read": "auth != null",
+      ".indexOn": ["memberId", "mobile", "status", "nameEn"],
+      "$memberDocId": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'maker' || (!data.exists() && newData.child('status').val() === 'pending') || (root.child('users').child(auth.uid).child('memberDocId').val() === $memberDocId && newData.child('status').val() === data.child('status').val() && newData.child('memberId').val() === data.child('memberId').val()))",
+        ".validate": "newData.hasChildren(['id','memberId','nameBn','nameEn','mobile','whatsapp','installment','status','createdAt','updatedAt']) && newData.child('status').val().matches(/^(pending|active|rejected)$/) && newData.child('memberId').val().length === 6 && newData.child('installment').isNumber() && newData.child('installment').val() >= 0",
+        "memberId": {
+          ".validate": "!data.exists() || newData.val() === data.val()"
+        },
+        "$other": { ".validate": true }
+      }
+    },
+
+    "deposits": {
+      ".read": "auth != null",
+      ".indexOn": ["memberId", "memberDocId", "date", "status", "type", "method"],
+      "$depositId": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'maker' && (!data.exists() || data.child('date').val() === newData.child('date').val())) || (!data.exists() && newData.child('status').val() === 'pending' && newData.child('memberDocId').val() === root.child('users').child(auth.uid).child('memberDocId').val()))",
+        ".validate": "newData.hasChildren(['id','memberId','memberDocId','date','type','method','amount','status','createdAt','updatedAt']) && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && newData.child('type').val().matches(/^(monthly|advance|special|other)$/) && newData.child('method').val().matches(/^(cash|mobile|bank)$/) && newData.child('status').val().matches(/^(pending|approved|rejected)$/)",
+        "status": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'maker')"
+        },
+        "$other": { ".validate": true }
+      }
+    },
+
+    "pendingDeposits": {
+      ".read": "auth != null",
+      "$depositId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['id','memberId','amount'])"
+      }
+    },
+
+    "approvals": {
+      ".read": "auth != null",
+      "$approvalId": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'maker')"
+      }
+    },
+
+    "notifications": {
+      ".read": "auth != null",
+      ".indexOn": ["audience", "memberId", "createdAt"],
+      "$notifId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['id','title','audience','createdAt'])",
+        "readBy": { ".write": "auth != null" }
+      }
+    },
+
+    "activityLogs": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'maker' || query.orderByChild === 'userId')",
+      ".indexOn": ["userId", "action", "createdAt", "role"],
+      "$logId": {
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'maker')",
+        ".write": "auth != null && !data.exists() && newData.child('userId').val() === auth.uid",
+        ".validate": "newData.hasChildren(['id','action','createdAt','userId'])"
+      }
+    },
+
+    "settings": {
+      ".read": "auth != null",
+      "$key": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        ".validate": "$key !== 'firebaseConfig'"
+      }
+    },
+
+    "syncMetadata": {
+      ".read": "auth != null",
+      "$deviceId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['deviceId','lastSyncAt'])"
+      }
+    }
+  }
+}

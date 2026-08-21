@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#16a34a">
+<meta name="description" content="ধ্রুব সংসদ — Offline-first member, deposit, due, advance and reporting management system">
+<title>ধ্রুব সংসদ | Dhruvo Sangsad</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/firebase-app-compat.js" defer></script>
+<script src="vendor/firebase-auth-compat.js" defer></script>
+<script src="vendor/firebase-database-compat.js" defer></script>
+<script src="vendor/jspdf.umd.min.js" defer></script>
+<script src="vendor/jspdf.plugin.autotable.min.js" defer></script>
+<script src="vendor/html2canvas.min.js" defer></script>
+<script src="vendor/xlsx.full.min.js" defer></script>
+</head>
+<body>
+
+<!-- ===== GUEST: login screen is the only visible screen ===== -->
+<div id="authScreen" class="auth-wrap"></div>
+
+<!-- ===== AUTHENTICATED APP SHELL (hidden until login) ===== -->
+<div id="app" aria-hidden="true">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">ধ</div>
+      <div class="brand-txt">
+        <div class="n">ধ্রুব সংসদ</div>
+        <div class="r" id="brandRole">Dhruvo Sangsad</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <span class="chip offline" id="syncChip"><span class="dot"></span><span id="syncTxt">Offline</span></span>
+      <button class="icon-btn" id="btnNotif" type="button" aria-label="Notifications"></button>
+      <button class="icon-btn" id="btnLogout" type="button" aria-label="Logout"></button>
+    </div>
+  </header>
+  <nav class="topnav" id="topnav" aria-label="Primary navigation"></nav>
+  <main class="main" id="view"></main>
+</div>
+
+<noscript><p style="padding:20px;font-family:sans-serif">This application requires JavaScript.</p></noscript>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
