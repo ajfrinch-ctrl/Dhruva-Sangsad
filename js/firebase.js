@@ -10,12 +10,12 @@ import { nowISO, deviceId } from './util.js';
 export const DEFAULT_FIREBASE_CONFIG = {
   apiKey: 'AIzaSyBig1Ajmtb4wBSQI3B0Ie16DoSODeIZiDs',
   authDomain: 'dhruvo-sangsad.firebaseapp.com',
-  databaseURL: 'https://dhruvo-sangsad-default-rtdb.firebaseio.com',
+  databaseURL: 'https://dhruvo-sangsad-default-rtdb.asia-southeast1.firebasedatabase.app',
   projectId: 'dhruvo-sangsad',
   storageBucket: 'dhruvo-sangsad.firebasestorage.app',
   messagingSenderId: '262988571932',
-  appId: '1:262988571932:web:9481147725a42ff71986d9',
-  measurementId: 'G-V1ZFDHKEPY',
+  appId: '1:262988571932:web:8b41c05dae55b9721986d9',
+  measurementId: 'G-CLZC2174EX',
 };
 
 const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings'];

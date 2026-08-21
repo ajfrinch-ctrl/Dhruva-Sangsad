@@ -61,7 +61,7 @@ Any deposit amount is accepted — there is no multiple-of-installment restricti
 All data lives in IndexedDB (`dhruvo_sangsad`). Every write is also appended to a sync queue.
 
 The app is pre-configured to sync to the production Firebase project **`dhruvo-sangsad`**
-(Realtime Database `https://dhruvo-sangsad-default-rtdb.firebaseio.com`). It connects
+(Realtime Database `https://dhruvo-sangsad-default-rtdb.asia-southeast1.firebasedatabase.app`). It connects
 automatically and keeps every device in sync; a different config can be set in
 **Settings → Firebase**. The queue flushes automatically (on reconnect, on queue change,
 and every 30 s). The topbar chip shows `Online / Offline / Syncing / Synced / Sync Error`.

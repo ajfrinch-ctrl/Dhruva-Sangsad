@@ -88,7 +88,7 @@ function bypass(url, request) {
   if (request.method !== 'GET') return true;
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
   if (url.origin !== self.location.origin) return true;
-  if (/firebaseio\.com|googleapis\.com|firebaseapp\.com/.test(url.host)) return true;
+  if (/firebaseio\.com|firebasedatabase\.app|googleapis\.com|firebaseapp\.com/.test(url.host)) return true;
   return false;
 }
 
