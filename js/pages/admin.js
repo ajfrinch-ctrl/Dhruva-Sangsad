@@ -612,7 +612,7 @@ async function firebaseSection(session, host) {
     <div class="banner info">${icon('info')}<span>Firebase কনফিগার করলে সব ডিভাইসের ডাটা রিয়েল-টাইমে সিঙ্ক হবে। কনফিগার না করলেও অ্যাপটি সম্পূর্ণ অফলাইনে (IndexedDB) কাজ করবে।</span></div>
     <div class="grid g2">
       ${g('apiKey', 'AIza…')}${g('authDomain', 'project.firebaseapp.com')}
-      ${g('databaseURL', 'https://project-default-rtdb.firebaseio.com')}${g('projectId', 'project-id')}
+      ${g('databaseURL', 'https://dhruvo-sangsad-default-rtdb.firebaseio.com')}${g('projectId', 'project-id')}
       ${g('storageBucket', 'project.appspot.com')}${g('messagingSenderId', '1234567890')}
       ${g('appId', '1:123:web:abc')}
     </div>

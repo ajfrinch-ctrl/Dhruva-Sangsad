@@ -15,6 +15,7 @@ export const DEFAULT_FIREBASE_CONFIG = {
   storageBucket: 'dhruvo-sangsad.firebasestorage.app',
   messagingSenderId: '262988571932',
   appId: '1:262988571932:web:9481147725a42ff71986d9',
+  measurementId: 'G-V1ZFDHKEPY',
 };
 
 const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings'];

@@ -1,7 +1,7 @@
 # ধ্রুব সংসদ — Dhruvo Sangsad
 
-Member, Deposit, Due, Advance & Reporting Management System.
-Offline-first PWA (HTML5 · CSS3 · vanilla JS · IndexedDB · Service Worker) with optional
+Member, Deposit, Withdrawal, Due, Advance & Reporting Management System.
+Offline-first PWA (HTML5 · CSS3 · vanilla JS · IndexedDB · Service Worker) with
 real-time Firebase Realtime Database + Authentication sync.
 
 ---
@@ -59,19 +59,23 @@ Any deposit amount is accepted — there is no multiple-of-installment restricti
 ## Offline & sync
 
 All data lives in IndexedDB (`dhruvo_sangsad`). Every write is also appended to a sync queue.
-When a Firebase config is saved in **Settings → Firebase** and the device is online, the queue
-flushes automatically (on reconnect, on queue change, and every 30 s). The topbar chip shows
-`Online / Offline / Syncing / Synced / Sync Error`.
+
+The app is pre-configured to sync to the production Firebase project **`dhruvo-sangsad`**
+(Realtime Database `https://dhruvo-sangsad-default-rtdb.firebaseio.com`). It connects
+automatically and keeps every device in sync; a different config can be set in
+**Settings → Firebase**. The queue flushes automatically (on reconnect, on queue change,
+and every 30 s). The topbar chip shows `Online / Offline / Syncing / Synced / Sync Error`.
 
 Conflicts are resolved per record using `updatedAt`: if the server copy is newer than the
 queued local payload, the remote record is applied locally instead of overwriting the server.
 Every record carries `createdAt`, `updatedAt`, `updatedBy`, `deviceId` and `syncStatus`.
 
-Firebase paths written: `users/ members/ deposits/ pendingDeposits/ approvals/ notifications/
-activityLogs/ settings/ syncMetadata/`. Security rules live in
-[`firebase/database.rules.json`](firebase/database.rules.json) — deny-by-default at the root,
-role checks read from `users/$uid/role`, Member IDs are immutable, activity logs are
-append-only, and `settings/firebaseConfig` is never pushed.
+Firebase paths written: `authIndex/ users/ members/ deposits/ withdrawals/
+pendingDeposits/ approvals/ notifications/ activityLogs/ settings/ syncMetadata/`.
+Security rules live in [`firebase/database.rules.json`](firebase/database.rules.json) —
+deny-by-default at the root, role checks read from `authIndex/$uid/role` (published on
+Firebase Auth sign-in), Member IDs are immutable, activity logs are append-only, and
+`settings/firebaseConfig` is never pushed.
 
 ## Exports
 
@@ -86,13 +90,26 @@ append-only, and `settings/firebaseConfig` is never pushed.
 ## Reports
 
 Member Statement · Overall · Daily · Monthly · Due · Advance · Collection · Payment Method ·
-Date Range · Member-wise. Each has Clear / PDF / Excel / CSV / Print.
+Date Range · Member-wise · Withdrawal. Reports generate on demand via the **Generate Report**
+button and open in a modal with Download (PDF / Excel / CSV) and Close actions.
 
 Statement columns are exactly `SL | Date | Deposit Type | Payment Method | Amount |
 Cumulative Amount`. The overall report is exactly `Member Name | Monthly Installment |
 Total Deposit | Total Due` with Total Collection and Total Due footers.
 
 All dates display as `DD-MM-YYYY`.
+
+## Balance & withdrawals
+
+Balance is never hard-coded — it is derived from transactions:
+
+```
+available balance = total approved deposits − total approved withdrawals
+```
+
+Withdrawals are validated against available balance (cannot exceed it), follow the same
+pending → approved/rejected workflow, and appear on the dashboard, Authorization Pending,
+and the Withdrawal report.
 
 ## Backup & restore
 
