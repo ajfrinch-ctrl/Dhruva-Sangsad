@@ -13,7 +13,7 @@ import {
   resetUserPassword, deleteUser, logActivity, invalidate, getMember, statementRows,
 } from '../store.js';
 import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
-import { firebase } from '../firebase.js';
+import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
 import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
@@ -565,8 +565,10 @@ async function organisationSection(session, host) {
 
 async function firebaseSection(session, host) {
   const fbCfg = await getSetting('firebaseConfig', null);
+  // Show the active config: a saved override, otherwise the built-in project default.
+  const shown = (fbCfg && fbCfg.databaseURL) ? fbCfg : DEFAULT_FIREBASE_CONFIG;
   const fb = el('form', { class: 'grid', novalidate: true });
-  const g = (k, ph) => `<div class="field"><label>${k}</label><input name="${k}" value="${esc((fbCfg && fbCfg[k]) || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
+  const g = (k, ph) => `<div class="field"><label>${k}</label><input name="${k}" value="${esc((shown && shown[k]) || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
   fb.innerHTML = `
     <div class="banner info">${icon('info')}<span>Firebase কনফিগার করলে সব ডিভাইসের ডাটা রিয়েল-টাইমে সিঙ্ক হবে। কনফিগার না করলেও অ্যাপটি সম্পূর্ণ অফলাইনে (IndexedDB) কাজ করবে।</span></div>
     <div class="grid g2">

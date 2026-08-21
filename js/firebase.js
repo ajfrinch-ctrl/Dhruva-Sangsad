@@ -4,6 +4,19 @@
 import { queueAll, queueRemove, applyRemote, dbGet, dbPutRaw, getSetting, setSetting } from './db.js';
 import { nowISO, deviceId } from './util.js';
 
+/* Primary cloud backend — ধ্রুব সংসদ Firebase project.
+   When no custom config has been saved (Settings → Firebase), the app connects
+   to this project automatically so every device shares the same data. */
+export const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBig1Ajmtb4wBSQI3B0Ie16DoSODeIZiDs',
+  authDomain: 'dhruvo-sangsad.firebaseapp.com',
+  databaseURL: 'https://dhruvo-sangsad-default-rtdb.firebaseio.com',
+  projectId: 'dhruvo-sangsad',
+  storageBucket: 'dhruvo-sangsad.firebasestorage.app',
+  messagingSenderId: '262988571932',
+  appId: '1:262988571932:web:9481147725a42ff71986d9',
+};
+
 const SYNCED_STORES = ['users', 'members', 'deposits', 'notifications', 'activityLogs', 'settings'];
 const PATHS = {
   users: 'users', members: 'members', deposits: 'deposits',
@@ -14,6 +27,9 @@ const PATHS = {
 const PENDING_PATH = 'pendingDeposits';
 const APPROVALS_PATH = 'approvals';
 const SYNCMETA_PATH = 'syncMetadata';
+/* Maps a Firebase Auth uid → app account (localId + role) so security rules can
+   enforce admin/maker/member separation without storing plaintext credentials. */
+const AUTH_INDEX_PATH = 'authIndex';
 
 class FirebaseBridge extends EventTarget {
   constructor() {
@@ -32,13 +48,17 @@ class FirebaseBridge extends EventTarget {
   }
 
   async loadConfig() {
-    const cfg = await getSetting('firebaseConfig', null);
+    const saved = await getSetting('firebaseConfig', null);
+    // An explicit "Disconnect" is stored as a marker so we don't silently re-attach.
+    if (saved && saved.__disabled) { this.config = null; return null; }
+    const cfg = (saved && saved.databaseURL) ? saved : DEFAULT_FIREBASE_CONFIG;
     this.config = cfg && cfg.databaseURL ? cfg : null;
     return this.config;
   }
 
   async saveConfig(cfg) {
-    await setSetting('firebaseConfig', cfg, { queue: false });
+    if (cfg && cfg.databaseURL) await setSetting('firebaseConfig', cfg, { queue: false });
+    else await setSetting('firebaseConfig', { __disabled: true }, { queue: false });
     this.config = cfg && cfg.databaseURL ? cfg : null;
     await this.teardown();
     if (this.config) await this.init();
@@ -193,13 +213,26 @@ class FirebaseBridge extends EventTarget {
   async signIn(user, password) {
     if (!this.ready || !this.auth) return null;
     const email = user.email && /@/.test(user.email) ? user.email : `${user.username}@dhruvo-sangsad.local`;
-    try { return await this.auth.signInWithEmailAndPassword(email, password); }
+    let cred;
+    try { cred = await this.auth.signInWithEmailAndPassword(email, password); }
     catch (e) {
       if (e && (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential')) {
-        try { return await this.auth.createUserWithEmailAndPassword(email, password); } catch { return null; }
-      }
-      return null;
+        try { cred = await this.auth.createUserWithEmailAndPassword(email, password); } catch { return null; }
+      } else { return null; }
     }
+    // Publish a uid → role index so security rules can resolve the app account.
+    if (cred && cred.user && this.db) {
+      try {
+        await this.db.ref(`${AUTH_INDEX_PATH}/${cred.user.uid}`).set({
+          localId: user.id || user.username || email,
+          role: user.role || 'member',
+          username: user.username || '',
+          updatedAt: nowISO(),
+        });
+        this.flush(); // now that rules can resolve the role, push any queued writes
+      } catch { /* non-fatal — rules may still be in test mode */ }
+    }
+    return cred;
   }
   async signOut() { if (this.auth) { try { await this.auth.signOut(); } catch {} } }
   async updatePassword(pw) {
