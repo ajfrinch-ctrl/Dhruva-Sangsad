@@ -2,117 +2,172 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "authIndex": {
       "$uid": {
         ".read": "auth != null && $uid === auth.uid",
-        ".write": "auth != null && $uid === auth.uid && (newData.child('role').val() === 'member' || (root.child('authIndex').child(auth.uid).exists() && root.child('authIndex').child(auth.uid).child('role').val() === newData.child('role').val()))",
-        ".validate": "newData.hasChildren(['role','username']) && newData.child('role').val().matches(/^(admin|maker|member)$/)",
-        "$other": { ".validate": true }
+        ".write": "auth != null && $uid === auth.uid && ( !data.exists() && newData.child('role').val() === 'member' || !data.exists() && root.child('authIndexSeeds').child(auth.uid).child('role').val() === newData.child('role').val() && root.child('authIndexSeeds').child(auth.uid).child('localId').val() === newData.child('localId').val() || data.exists() && !newData.exists() || data.exists() && newData.child('role').val() === data.child('role').val() && newData.child('localId').val() === data.child('localId').val() && (!data.hasChild('memberDocId') || newData.child('memberDocId').val() === data.child('memberDocId').val()) )",
+        ".validate": "newData.hasChildren(['localId','role','username']) && newData.child('role').val().matches(/^(admin|maker|member)$/) && newData.child('localId').isString() && newData.child('localId').val().length > 0",
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
+    "authIndexSeeds": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid && (!newData.exists() || newData.child('token').val() === 'BOOTSTRAP-ADMIN-KEY-CHANGE-ME')",
+        ".validate": "newData.hasChildren(['token','role','localId']) && newData.child('role').val().matches(/^(admin|maker)$/) && newData.child('localId').isString() && newData.child('localId').val().length > 0",
+        "$other": {
+          ".validate": true
+        }
+      }
+    },
     "users": {
       ".read": "auth != null && root.child('authIndex').child(auth.uid).child('role').val() === 'admin'",
       "$userId": {
         ".read": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('localId').val() === $userId)",
-        ".write": "auth != null && root.child('authIndex').child(auth.uid).child('role').val() === 'admin'",
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || (root.child('authIndex').child(auth.uid).child('localId').val() === $userId && (!data.exists() && newData.child('role').val() === 'member' || data.exists() && newData.child('role').val() === data.child('role').val() && newData.child('username').val() === data.child('username').val() && (!data.hasChild('memberDocId') || newData.child('memberDocId').val() === data.child('memberDocId').val()))))",
         ".validate": "newData.hasChildren(['id','username','role','createdAt','updatedAt']) && newData.child('role').val().matches(/^(admin|maker|member)$/)",
-        "password": { ".validate": "newData.isString() && newData.val().length > 20" },
-        "$other": { ".validate": true }
+        "password": {
+          ".validate": "newData.isString() && newData.val().length > 20"
+        },
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "members": {
       ".read": "auth != null",
-      ".indexOn": ["memberId", "mobile", "status", "nameEn"],
+      ".indexOn": [
+        "memberId",
+        "mobile",
+        "status",
+        "nameEn"
+      ],
       "$memberDocId": {
-        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker' || (!data.exists() && newData.child('status').val() === 'pending') || (root.child('authIndex').child(auth.uid).child('localId').val() === newData.child('id').val() && newData.child('memberId').val() === data.child('memberId').val() && newData.child('status').val() === data.child('status').val()))",
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker' || (!data.exists() && newData.child('status').val() === 'pending') || (root.child('authIndex').child(auth.uid).child('memberDocId').val() === $memberDocId && newData.child('memberId').val() === data.child('memberId').val() && newData.child('status').val() === data.child('status').val()))",
         ".validate": "newData.hasChildren(['id','memberId','nameBn','nameEn','mobile','whatsapp','installment','status','createdAt','updatedAt']) && newData.child('status').val().matches(/^(pending|active|rejected|inactive)$/) && newData.child('memberId').val().length === 6 && newData.child('installment').isNumber() && newData.child('installment').val() >= 0",
-        "memberId": { ".validate": "!data.exists() || newData.val() === data.val()" },
-        "$other": { ".validate": true }
+        "memberId": {
+          ".validate": "!data.exists() || newData.val() === data.val()"
+        },
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "deposits": {
       ".read": "auth != null",
-      ".indexOn": ["memberId", "memberDocId", "date", "status", "type", "method"],
+      ".indexOn": [
+        "memberId",
+        "memberDocId",
+        "date",
+        "status",
+        "type",
+        "method"
+      ],
       "$depositId": {
-        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || (root.child('authIndex').child(auth.uid).child('role').val() === 'maker' && (!data.exists() || data.child('date').val() === newData.child('date').val())) || (!data.exists() && newData.child('status').val() === 'pending' && newData.child('memberDocId').val() === root.child('authIndex').child(auth.uid).child('localId').val()))",
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || (root.child('authIndex').child(auth.uid).child('role').val() === 'maker' && (!data.exists() || data.child('date').val() === newData.child('date').val())) || (!data.exists() && newData.child('status').val() === 'pending' && newData.child('memberDocId').val() === root.child('authIndex').child(auth.uid).child('memberDocId').val()))",
         ".validate": "newData.hasChildren(['id','memberId','memberDocId','date','type','method','amount','status','createdAt','updatedAt']) && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && newData.child('type').val().matches(/^(monthly|advance|special|other)$/) && newData.child('method').val().matches(/^(cash|mobile|bank)$/) && newData.child('status').val().matches(/^(pending|approved|rejected)$/)",
         "status": {
           ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker')"
         },
-        "$other": { ".validate": true }
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "withdrawals": {
       ".read": "auth != null",
-      ".indexOn": ["memberId", "memberDocId", "date", "status", "type", "method"],
+      ".indexOn": [
+        "memberId",
+        "memberDocId",
+        "date",
+        "status",
+        "type",
+        "method"
+      ],
       "$withdrawalId": {
-        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || (root.child('authIndex').child(auth.uid).child('role').val() === 'maker' && (!data.exists() || data.child('date').val() === newData.child('date').val())) || (!data.exists() && newData.child('status').val() === 'pending' && newData.child('memberDocId').val() === root.child('authIndex').child(auth.uid).child('localId').val()))",
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || (root.child('authIndex').child(auth.uid).child('role').val() === 'maker' && (!data.exists() || data.child('date').val() === newData.child('date').val())) || (!data.exists() && newData.child('status').val() === 'pending' && newData.child('memberDocId').val() === root.child('authIndex').child(auth.uid).child('memberDocId').val()))",
         ".validate": "newData.hasChildren(['id','memberId','memberDocId','date','type','method','amount','status','createdAt','updatedAt']) && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && newData.child('type').val().matches(/^(savings|advance_refund|other)$/) && newData.child('method').val().matches(/^(cash|mobile|bank)$/) && newData.child('status').val().matches(/^(pending|approved|rejected)$/)",
         "status": {
           ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker')"
         },
-        "$other": { ".validate": true }
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "pendingDeposits": {
       ".read": "auth != null",
       "$depositId": {
-        ".write": "auth != null",
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker' || !newData.exists() || newData.child('memberDocId').val() === root.child('authIndex').child(auth.uid).child('memberDocId').val())",
         ".validate": "newData.hasChildren(['id','memberId','amount'])",
-        "$other": { ".validate": true }
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "approvals": {
       ".read": "auth != null",
       "$approvalId": {
         ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker')",
-        "$other": { ".validate": true }
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "notifications": {
       ".read": "auth != null",
-      ".indexOn": ["audience", "memberId", "createdAt"],
+      ".indexOn": [
+        "audience",
+        "memberId",
+        "createdAt"
+      ],
       "$notifId": {
         ".write": "auth != null",
         ".validate": "newData.hasChildren(['id','title','audience','createdAt'])",
-        "readBy": { ".write": "auth != null" },
-        "$other": { ".validate": true }
+        "readBy": {
+          ".write": "auth != null"
+        },
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "activityLogs": {
       ".read": "auth != null",
-      ".indexOn": ["userId", "action", "createdAt", "role"],
+      ".indexOn": [
+        "userId",
+        "action",
+        "createdAt",
+        "role"
+      ],
       "$logId": {
         ".write": "auth != null && !data.exists()",
         ".validate": "newData.hasChildren(['id','action','createdAt','userId'])",
-        "$other": { ".validate": true }
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "settings": {
       ".read": "auth != null",
       "$key": {
         ".write": "auth != null && root.child('authIndex').child(auth.uid).child('role').val() === 'admin'",
         ".validate": "$key !== 'firebaseConfig'",
-        "$other": { ".validate": true }
+        "$other": {
+          ".validate": true
+        }
       }
     },
-
     "syncMetadata": {
       ".read": "auth != null",
       "$deviceId": {
         ".write": "auth != null",
         ".validate": "newData.hasChildren(['deviceId','lastSyncAt'])",
-        "$other": { ".validate": true }
+        "$other": {
+          ".validate": true
+        }
       }
     }
   }

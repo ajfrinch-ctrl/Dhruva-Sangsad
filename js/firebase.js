@@ -16,6 +16,10 @@ export const DEFAULT_FIREBASE_CONFIG = {
   messagingSenderId: '262988571932',
   appId: '1:262988571932:web:8b41c05dae55b9721986d9',
   measurementId: 'G-CLZC2174EX',
+  /* First-time claim key for admin/maker roles in authIndex. Must match the token in
+     firebase/database.rules.json (authIndexSeeds). Empty = staff bootstrap disabled.
+     Only needed the very first time a uid claims a staff role. */
+  bootstrapKey: '',
 };
 
 const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings'];
@@ -28,9 +32,12 @@ const PATHS = {
 const PENDING_PATH = 'pendingDeposits';
 const APPROVALS_PATH = 'approvals';
 const SYNCMETA_PATH = 'syncMetadata';
-/* Maps a Firebase Auth uid → app account (localId + role) so security rules can
-   enforce admin/maker/member separation without storing plaintext credentials. */
+/* Maps a Firebase Auth uid → app account (localId + role + memberDocId) so security
+   rules can enforce admin/maker/member separation without storing plaintext
+   credentials. authIndexSeeds holds the one-time bootstrap claim for staff roles
+   (token must match firebase/database.rules.json). */
 const AUTH_INDEX_PATH = 'authIndex';
+const AUTH_INDEX_SEEDS_PATH = 'authIndexSeeds';
 
 class FirebaseBridge extends EventTarget {
   constructor() {
@@ -166,7 +173,7 @@ class FirebaseBridge extends EventTarget {
         done++;
       } catch (e) {
         failed++;
-        this.lastError = e.message;
+        this.lastError = (e && e.code ? e.code + ': ' : '') + e.message;
       }
     }
     this.syncing = false;
@@ -221,19 +228,50 @@ class FirebaseBridge extends EventTarget {
         try { cred = await this.auth.createUserWithEmailAndPassword(email, password); } catch { return null; }
       } else { return null; }
     }
-    // Publish a uid → role index so security rules can resolve the app account.
+    // Publish a uid → account index so security rules can resolve the app role.
     if (cred && cred.user && this.db) {
       try {
-        await this.db.ref(`${AUTH_INDEX_PATH}/${cred.user.uid}`).set({
+        const entry = {
           localId: user.id || user.username || email,
           role: user.role || 'member',
           username: user.username || '',
+          memberDocId: user.memberDocId || '', // members: 'M…' record id; staff: ''
           updatedAt: nowISO(),
-        });
+        };
+        await this.publishAuthIndex(cred.user.uid, entry);
         this.flush(); // now that rules can resolve the role, push any queued writes
-      } catch { /* non-fatal — rules may still be in test mode */ }
+      } catch (e) {
+        // Not fatal for the local app — surface it so Settings → Firebase can explain.
+        this.lastError = `authIndex: ${(e && e.code ? e.code + ': ' : '')}${e.message}`;
+        console.warn('[firebase] authIndex publish failed', e);
+      }
     }
     return cred;
+  }
+
+  /**
+   * Write (or refresh) the authIndex entry for this uid.
+   * Members may claim their own entry freely. The first claim of an admin/maker
+   * role must be unlocked by a matching authIndexSeeds entry (bootstrap key from
+   * Settings → Firebase); the seed is removed as soon as the claim lands.
+   */
+  async publishAuthIndex(uid, entry) {
+    const ref = this.db.ref(`${AUTH_INDEX_PATH}/${uid}`);
+    try {
+      await ref.set(entry);
+      return;
+    } catch (e) {
+      const isStaff = entry.role === 'admin' || entry.role === 'maker';
+      const key = (this.config && this.config.bootstrapKey) || '';
+      if (!isStaff || !key) throw e;
+      const seedRef = this.db.ref(`${AUTH_INDEX_SEEDS_PATH}/${uid}`);
+      try {
+        await seedRef.set({ token: key, role: entry.role, localId: entry.localId, updatedAt: nowISO() });
+        await ref.set(entry);
+      } finally {
+        try { await seedRef.remove(); } catch { /* seed cleanup is best-effort */ }
+      }
+    }
   }
   async signOut() { if (this.auth) { try { await this.auth.signOut(); } catch {} } }
   async updatePassword(pw) {
@@ -243,16 +281,23 @@ class FirebaseBridge extends EventTarget {
   async pullAll() {
     if (!this.ready) throw new Error('Firebase is not configured');
     let n = 0;
+    const skipped = [];
     for (const store of SYNCED_STORES) {
-      const snap = await this.db.ref(PATHS[store]).get();
-      if (!snap.exists()) continue;
-      const val = snap.val();
-      for (const rec of Object.values(val)) {
-        if (store === 'settings') { if (rec.key && rec.key !== 'firebaseConfig') await dbPutRaw('settings', rec); }
-        else await applyRemote(store, rec);
-        n++;
+      try {
+        const snap = await this.db.ref(PATHS[store]).get();
+        if (!snap.exists()) continue;
+        const val = snap.val();
+        for (const rec of Object.values(val)) {
+          if (store === 'settings') { if (rec.key && rec.key !== 'firebaseConfig') await dbPutRaw('settings', rec); }
+          else await applyRemote(store, rec);
+          n++;
+        }
+      } catch (e) {
+        // One denied store (e.g. members pulling `users`) must not abort the whole pull.
+        skipped.push(`${store}: ${e.message}`);
       }
     }
+    if (skipped.length) this.lastError = `Pull skipped: ${skipped.join('; ')}`;
     window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store: '*' } }));
     return n;
   }

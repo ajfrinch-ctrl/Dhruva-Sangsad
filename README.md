@@ -70,12 +70,52 @@ Conflicts are resolved per record using `updatedAt`: if the server copy is newer
 queued local payload, the remote record is applied locally instead of overwriting the server.
 Every record carries `createdAt`, `updatedAt`, `updatedBy`, `deviceId` and `syncStatus`.
 
-Firebase paths written: `authIndex/ users/ members/ deposits/ withdrawals/
-pendingDeposits/ approvals/ notifications/ activityLogs/ settings/ syncMetadata/`.
+Firebase paths written: `authIndex/ authIndexSeeds/ users/ members/ deposits/
+withdrawals/ pendingDeposits/ approvals/ notifications/ activityLogs/ settings/
+syncMetadata/`.
+
+### Security rules & the authIndex contract
+
 Security rules live in [`firebase/database.rules.json`](firebase/database.rules.json) —
-deny-by-default at the root, role checks read from `authIndex/$uid/role` (published on
-Firebase Auth sign-in), Member IDs are immutable, activity logs are append-only, and
-`settings/firebaseConfig` is never pushed.
+deny-by-default at the root. Roles are resolved through `authIndex/$uid`, which maps a
+Firebase Auth uid to the app account:
+
+```
+authIndex/$uid = { localId, role, username, memberDocId, updatedAt }
+  localId     → users/$localId  (the app user record id)
+  memberDocId → members/$memberDocId for members, '' for staff
+```
+
+* A uid may **only ever write its own** `authIndex` entry.
+* First claim: `role: 'member'` is allowed freely; an `admin`/`maker` first claim
+  requires a matching `authIndexSeeds/$uid` entry (bootstrap token).
+* After the first claim, `role`, `localId` and `memberDocId` are **immutable** for
+  that uid (no self-promotion, no identity re-pointing).
+* Member records sync as `pending`; members may then edit their own member profile
+  (Member ID and status locked) and submit their own `pending` deposits/withdrawals.
+* Only admins read/write `users/` wholesale; members read/write only their own user
+  record (self password changes included). `password` hashes are never exposed
+  anywhere except each account's own record.
+* Staff writes (`status` approval, `approvals`, `settings`, full member/deposit
+  management) require `authIndex/$uid/role ∈ {admin, maker}`.
+
+**Deploying rules for the first time (one-time bootstrap):**
+
+1. Replace `BOOTSTRAP-ADMIN-KEY-CHANGE-ME` in `firebase/database.rules.json` with a
+   strong random token, then deploy: `firebase deploy --only database:rules`.
+2. In the app: **Settings → Firebase → Bootstrap Key** — enter the *same* token and
+   Save & Connect. (The key lives only in the local `firebaseConfig` setting, which
+   is never pushed to the database.)
+3. The first time the admin/maker account logs in, the app writes the seed, claims
+   the staff role in `authIndex`, and deletes the seed. Afterwards the key is not
+   needed again for that uid.
+4. **Firebase App Check:** if App Check is enforced for the Realtime Database, every
+   request is rejected with `Missing appcheck token` before rules even run. Either
+   keep App Check in *Monitor* mode for this database, or integrate the App Check SDK
+   with a reCAPTCHA provider (site key from the console).
+
+Member IDs are immutable, activity logs are append-only, and `settings/firebaseConfig`
+is never pushed.
 
 ## Exports
 

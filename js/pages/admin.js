@@ -615,6 +615,7 @@ async function firebaseSection(session, host) {
       ${g('databaseURL', 'https://dhruvo-sangsad-default-rtdb.asia-southeast1.firebasedatabase.app')}${g('projectId', 'project-id')}
       ${g('storageBucket', 'project.appspot.com')}${g('messagingSenderId', '1234567890')}
       ${g('appId', '1:123:web:abc')}
+      <div class="field"><label>Bootstrap Key (staff roles)</label><input name="bootstrapKey" type="password" value="${esc((shown && shown.bootstrapKey) || '')}" placeholder="first-time admin/maker claim" autocomplete="off"><div class="hint">Rules-এর <code>authIndexSeeds</code> token-এর সঙ্গে মিলতে হবে। শুধুমাত্র কোনো uid-এর <b>প্রথম</b> admin/maker claim-এ লাগে। খালি রাখলে staff bootstrap নিষ্ক্রিয় থাকে।</div></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-primary" type="submit">${icon('save')}<span>Save & Connect</span></button>
