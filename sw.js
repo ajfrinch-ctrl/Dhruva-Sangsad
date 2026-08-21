@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v4.0.0';
+const VERSION = 'ds-v5.0.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 

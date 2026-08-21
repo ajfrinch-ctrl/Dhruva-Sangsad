@@ -8,7 +8,7 @@ import {
 import { hashPassword } from './crypto.js';
 
 /* ---------------- cache ---------------- */
-const cache = { members: null, deposits: null, users: null, logs: null, notifs: null };
+const cache = { members: null, deposits: null, withdrawals: null, users: null, logs: null, notifs: null };
 export function invalidate(what) {
   if (!what) { Object.keys(cache).forEach(k => cache[k] = null); return; }
   cache[what] = null;
@@ -18,6 +18,7 @@ window.addEventListener('ds:data-changed', e => {
   if (!s || s === '*') invalidate();
   else if (s === 'members') invalidate('members');
   else if (s === 'deposits') invalidate('deposits');
+  else if (s === 'withdrawals') invalidate('withdrawals');
   else if (s === 'users') invalidate('users');
   else if (s === 'activityLogs') invalidate('logs');
   else if (s === 'notifications') invalidate('notifs');
@@ -25,6 +26,7 @@ window.addEventListener('ds:data-changed', e => {
 
 export async function allMembers() { if (!cache.members) cache.members = await dbAll('members'); return cache.members; }
 export async function allDeposits() { if (!cache.deposits) cache.deposits = await dbAll('deposits'); return cache.deposits; }
+export async function allWithdrawals() { if (!cache.withdrawals) cache.withdrawals = await dbAll('withdrawals'); return cache.withdrawals; }
 export async function allUsers() { if (!cache.users) cache.users = await dbAll('users'); return cache.users; }
 export async function allLogs() { if (!cache.logs) cache.logs = await dbAll('activityLogs'); return cache.logs; }
 export async function allNotifications() { if (!cache.notifs) cache.notifs = await dbAll('notifications'); return cache.notifs; }
@@ -310,13 +312,110 @@ export async function deleteDeposit(depositId, actor) {
   invalidate('deposits');
 }
 
+/* ---------------- withdrawals ---------------- */
+export const WITHDRAWAL_TYPES = [
+  { id: 'savings', bn: 'সঞ্চয় উত্তোলন', en: 'Savings Withdrawal' },
+  { id: 'advance_refund', bn: 'অগ্রিম ফেরত', en: 'Advance Refund' },
+  { id: 'other', bn: 'অন্যান্য', en: 'Other' },
+];
+export const withdrawalTypeLabel = id => (WITHDRAWAL_TYPES.find(t => t.id === id) || { bn: id, en: id });
+
+/** Net withdrawable balance for a member = approved deposits − approved withdrawals. */
+export function withdrawalBalance(member, deposits, withdrawals) {
+  const dep = approvedOf(deposits).filter(d => d.memberDocId === member.id || d.memberId === member.memberId)
+    .reduce((s, d) => s + num(d.amount), 0);
+  const wit = (withdrawals || []).filter(w => (w.memberDocId === member.id || w.memberId === member.memberId) && w.status === 'approved')
+    .reduce((s, w) => s + num(w.amount), 0);
+  return { totalDeposit: dep, totalWithdrawal: wit, available: Math.max(0, dep - wit) };
+}
+
+export async function submitWithdrawal(form, actor) {
+  const member = await dbGet('members', form.memberDocId);
+  if (!member) throw new Error('Member not found');
+  if (member.status !== 'active') {
+    throw new Error(member.status === 'pending'
+      ? 'সদস্যপদ অনুমোদনের পূর্বে উত্তোলন করা যাবে না। / Withdrawals are not allowed until the membership is approved.'
+      : 'বাতিলকৃত সদস্যের জন্য উত্তোলন করা যাবে না। / Withdrawals are not allowed for a rejected member.');
+  }
+  const amount = num(form.amount);
+  if (!(amount > 0)) throw new Error('উত্তোলনের পরিমাণ দিন / Enter withdrawal amount');
+  if (!form.date) throw new Error('তারিখ দিন / Enter withdrawal date');
+
+  const withdrawals = await allWithdrawals();
+  const deposits = await allDeposits();
+  const bal = withdrawalBalance(member, deposits, withdrawals);
+  if (amount > bal.available) {
+    throw new Error(`পর্যাপ্ত ব্যালান্স নেই / Insufficient balance — available ৳${Math.round(bal.available)}`);
+  }
+
+  const byStaff = actor && (actor.role === 'admin' || actor.role === 'maker');
+  const rec = {
+    id: uid('wit'),
+    memberDocId: member.id,
+    memberId: member.memberId,
+    memberName: member.nameBn || member.nameEn,
+    date: form.date,
+    type: form.type || 'savings',
+    description: String(form.description || '').trim(),
+    amount,
+    method: form.method,
+    comment: String(form.comment || '').trim(),
+    status: byStaff ? 'approved' : 'pending',
+    submittedAt: nowISO(),
+    submittedBy: actor ? actor.id : 'self',
+    submittedByRole: actor ? actor.role : 'member',
+    approvedAt: byStaff ? nowISO() : null,
+    approvedBy: byStaff ? actor.id : null,
+    rejectedAt: null, rejectReason: '',
+  };
+  await saveRecord('withdrawals', rec, { queue: true, actorId: actor && actor.id });
+  await logActivity('WITHDRAWAL_SUBMISSION', `Withdrawal ৳${amount} for ${member.memberId} (${rec.status})`, actor);
+  if (rec.status === 'pending') {
+    await notify({ title: 'নতুন উত্তোলন / New Withdrawal', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'withdraw' });
+  } else {
+    await notify({ title: 'উত্তোলন সম্পন্ন / Withdrawal Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'all', memberId: member.memberId, kind: 'withdraw' });
+  }
+  invalidate('withdrawals');
+  return rec;
+}
+
+export async function setWithdrawalStatus(withdrawalId, status, actor, reason = '') {
+  const w = await dbGet('withdrawals', withdrawalId);
+  if (!w) throw new Error('Withdrawal not found');
+  const next = { ...w, status };
+  if (status === 'approved') { next.approvedAt = nowISO(); next.approvedBy = actor && actor.id; next.rejectedAt = null; next.rejectReason = ''; }
+  if (status === 'rejected') { next.rejectedAt = nowISO(); next.rejectReason = reason; next.approvedAt = null; next.approvedBy = null; }
+  await saveRecord('withdrawals', next, { queue: true, actorId: actor && actor.id });
+  await logActivity(status === 'approved' ? 'WITHDRAWAL_APPROVAL' : 'WITHDRAWAL_REJECTION', `Withdrawal ${w.id} (${w.memberId}, ৳${w.amount}) → ${status}`, actor);
+  await notify({
+    title: status === 'approved' ? 'উত্তোলন অনুমোদিত / Withdrawal Approved' : 'উত্তোলন বাতিল / Withdrawal Rejected',
+    body: `${w.memberName} (${w.memberId}) — ৳${w.amount}${reason ? ' — ' + reason : ''}`,
+    audience: 'all', memberId: w.memberId, kind: status === 'approved' ? 'approve' : 'reject',
+  });
+  invalidate('withdrawals');
+  return next;
+}
+
+export function canModifyWithdrawal(w, session) {
+  if (!session) return { ok: false, msg: 'Not signed in' };
+  if (session.role === 'admin') return { ok: true };
+  if (session.role === 'maker') {
+    if (String(w.date).slice(0, 10) !== todayISO()) {
+      return { ok: false, msg: 'Maker শুধুমাত্র আজকের তারিখের উত্তোলন Edit/Delete করতে পারবেন।' };
+    }
+    return { ok: true };
+  }
+  return { ok: false, msg: 'উত্তোলন পরিবর্তনের অনুমতি নেই।' };
+}
+
 /* ---------------- calculations (APPROVED data only) ---------------- */
 export function approvedOf(deposits) { return deposits.filter(d => d.status === 'approved'); }
 
 /**
- * Member financial summary — only approved deposits count.
+ * Member financial summary — only approved deposits/withdrawals count.
  * required = installment × months from join month to current month (inclusive)
  * due = max(0, required − installmentPaid);  advance = max(0, installmentPaid − required)
+ * balance = totalDeposit − totalWithdrawal (net available savings)
  */
 export function memberSummary(member, deposits, opts = {}) {
   const asOf = opts.asOf || todayISO();
@@ -335,12 +434,19 @@ export function memberSummary(member, deposits, opts = {}) {
   for (const d of mine) byType[d.type] = (byType[d.type] || 0) + num(d.amount);
   const byMethod = {};
   for (const d of mine) byMethod[d.method] = (byMethod[d.method] || 0) + num(d.amount);
-  return { member, months, required, totalDeposit, installmentPaid, due, advance, count: mine.length, deposits: mine, byType, byMethod };
+
+  // withdrawals (approved only)
+  const mineW = (opts.withdrawals || []).filter(w => (w.memberDocId === member.id || w.memberId === member.memberId) && w.status === 'approved');
+  const totalWithdrawal = mineW.reduce((s, w) => s + num(w.amount), 0);
+  const balance = totalDeposit - totalWithdrawal;
+
+  return { member, months, required, totalDeposit, totalWithdrawal, balance, installmentPaid, due, advance, count: mine.length, withdrawals: mineW, deposits: mine, byType, byMethod };
 }
 
 export async function summariesFor(members, deposits, cfg) {
   const s = cfg || await settings();
-  return members.map(m => memberSummary(m, deposits, { countSpecialTowardsInstallment: s.countSpecialTowardsInstallment }));
+  const withdrawals = await allWithdrawals();
+  return members.map(m => memberSummary(m, deposits, { countSpecialTowardsInstallment: s.countSpecialTowardsInstallment, withdrawals }));
 }
 
 export function statementRows(summary) {
@@ -351,9 +457,11 @@ export function statementRows(summary) {
 
 export function orgTotals(summaries) {
   return summaries.reduce((acc, s) => {
-    acc.totalDeposit += s.totalDeposit; acc.totalDue += s.due; acc.totalAdvance += s.advance;
+    acc.totalDeposit += s.totalDeposit; acc.totalWithdrawal += s.totalWithdrawal;
+    acc.totalDue += s.due; acc.totalAdvance += s.advance;
+    acc.balance = acc.totalDeposit - acc.totalWithdrawal;
     acc.required += s.required; return acc;
-  }, { totalDeposit: 0, totalDue: 0, totalAdvance: 0, required: 0 });
+  }, { totalDeposit: 0, totalWithdrawal: 0, totalDue: 0, totalAdvance: 0, balance: 0, required: 0 });
 }
 
 export function dailyBreakdown(deposits, dateISO) {

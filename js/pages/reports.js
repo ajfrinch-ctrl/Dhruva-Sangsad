@@ -7,8 +7,8 @@ import {
 import { icon } from '../icons.js';
 import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
 import {
-  allMembers, allDeposits, settings, memberSummary, summariesFor, orgTotals,
-  statementRows, approvedOf, DEFAULT_SETTINGS,
+  allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals,
+  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel,
 } from '../store.js';
 import { sheetToPdf, downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { can } from '../auth.js';
@@ -99,6 +99,7 @@ const REPORTS = [
   { id: 'method', bn: 'পরিশোধ পদ্ধতি প্রতিবেদন', en: 'Payment Method Report', roles: ['admin', 'maker'] },
   { id: 'range', bn: 'তারিখ অনুযায়ী প্রতিবেদন', en: 'Date Range Report', roles: ['admin', 'maker', 'member'] },
   { id: 'memberwise', bn: 'সদস্যভিত্তিক প্রতিবেদন', en: 'Member-wise Report', roles: ['admin', 'maker'] },
+  { id: 'withdrawal', bn: 'উত্তোলন প্রতিবেদন', en: 'Withdrawal Report', roles: ['admin', 'maker', 'member'] },
 ];
 
 export async function pageReports(session, params = {}) {
@@ -123,7 +124,8 @@ export async function pageReports(session, params = {}) {
   const out = el('div');
   wrap.appendChild(out);
 
-  const ctx = { session, members, deposits, cfg, out, filterHost, render: null };
+  const ctx = { session, members, deposits, withdrawals: [], cfg, out, filterHost, render: null };
+  ctx.withdrawals = await allWithdrawals().catch(() => []);
 
   const build = () => {
     filterHost.replaceChildren();
@@ -138,6 +140,7 @@ export async function pageReports(session, params = {}) {
   genRow.appendChild(btn('Generate Report', 'report', 'primary', async () => {
     const [m2, d2, c2] = await Promise.all([allMembers(), allDeposits(), settings()]);
     ctx.members = m2; ctx.deposits = d2; ctx.cfg = c2; WA_TPL = c2.waTemplate || WA_TPL;
+    ctx.withdrawals = await allWithdrawals().catch(() => []);
     if (!ctx.render) {
       build(); // (re)initialise the builder with fresh data (e.g. members now exist)
     }
@@ -684,6 +687,64 @@ function rMemberWise(ctx, meta) {
   ctx.render = render;
 }
 
+/* ================= 11. Withdrawal report ================= */
+function rWithdrawal(ctx, meta) {
+  const { session } = ctx;
+  const own = session.role === 'member';
+  const from = el('input', { type: 'date' });
+  const to = el('input', { type: 'date' });
+  ctx.filterHost.append(mkField('হইতে / From', from, '140px'), mkField('পর্যন্ত / To', to, '140px'));
+
+  function render() {
+    let rows = (own ? ctx.withdrawals.filter(w => w.memberDocId === session.memberDocId || w.memberId === session.memberId) : ctx.withdrawals)
+      .filter(w => w.status === 'approved');
+    if (from.value) rows = rows.filter(w => String(w.date).slice(0, 10) >= from.value);
+    if (to.value) rows = rows.filter(w => String(w.date).slice(0, 10) <= to.value);
+    rows = rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.memberId).localeCompare(String(b.memberId)));
+    const total = rows.reduce((s, w) => s + num(w.amount), 0);
+    const label = `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}`;
+
+    const sheet = el('div', { class: 'print-sheet' });
+    sheet.appendChild(sheetHead(ctx.cfg, 'Withdrawal Report', label));
+    sheet.appendChild(psTable(
+      [{ label: 'SL', cls: 'c' }, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Withdrawal Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }],
+      rows.map((w, i) => [
+        { text: i + 1, cls: 'c' }, { text: fmtDate(w.date), cls: 'c' }, { text: w.memberId, cls: 'c' },
+        w.memberName, withdrawalTypeLabel(w.type).en, methodLabel(w.method).en, { text: money(w.amount), cls: 'num' },
+      ]),
+      [[{ text: 'Total Withdrawal', span: 6 }, { text: money(total), cls: 'num' }]],
+    ));
+    sheet.appendChild(sheetFoot(ctx.cfg, `${rows.length} withdrawal(s)`));
+
+    const screen = tableWrap(
+      [{ label: 'Date' }, { label: 'Member' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }],
+      rows.map(w => [
+        esc(fmtDate(w.date)),
+        `${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`,
+        esc(withdrawalTypeLabel(w.type).bn), esc(methodLabel(w.method).bn),
+        { text: money(w.amount), cls: 'num' },
+      ]),
+      {
+        empty: 'কোনো উত্তোলন পাওয়া যায়নি / No withdrawals found', emptyIcon: 'withdraw',
+        footer: rows.length ? [{ html: '' }, { html: '<b>Total</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }] : null,
+      },
+    );
+
+    outputCard(ctx, {
+      titleBn: meta.bn, titleEn: meta.en, sheet, screen,
+      criteria: label,
+      fileBase: `Dhruvo_Sangsad_Withdrawal_Report_${fmtDate(todayISO())}`,
+      excelRows: () => {
+        const out = [['SL', 'Date', 'Member ID', 'Member Name', 'Withdrawal Type', 'Payment Method', 'Amount']];
+        rows.forEach((w, i) => out.push([i + 1, fmtDate(w.date), w.memberId, w.memberName, withdrawalTypeLabel(w.type).en, methodLabel(w.method).en, num(w.amount)]));
+        out.push(['', '', '', '', '', 'Total Withdrawal', total]);
+        return out;
+      },
+    });
+  }
+  ctx.render = render;
+}
+
 const BUILDERS = {
   statement: rStatement,
   overall: rOverall,
@@ -695,4 +756,5 @@ const BUILDERS = {
   method: rMethod,
   range: (c, m) => periodReport(c, m, 'range'),
   memberwise: rMemberWise,
+  withdrawal: rWithdrawal,
 };

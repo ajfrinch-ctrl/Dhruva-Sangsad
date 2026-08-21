@@ -17,9 +17,9 @@ export const DEFAULT_FIREBASE_CONFIG = {
   appId: '1:262988571932:web:9481147725a42ff71986d9',
 };
 
-const SYNCED_STORES = ['users', 'members', 'deposits', 'notifications', 'activityLogs', 'settings'];
+const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings'];
 const PATHS = {
-  users: 'users', members: 'members', deposits: 'deposits',
+  users: 'users', members: 'members', deposits: 'deposits', withdrawals: 'withdrawals',
   notifications: 'notifications', activityLogs: 'activityLogs', settings: 'settings',
 };
 /* Derived mirrors kept in sync alongside `deposits/` so that other devices can

@@ -47,6 +47,19 @@
       }
     },
 
+    "withdrawals": {
+      ".read": "auth != null",
+      ".indexOn": ["memberId", "memberDocId", "date", "status", "type", "method"],
+      "$withdrawalId": {
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || (root.child('authIndex').child(auth.uid).child('role').val() === 'maker' && (!data.exists() || data.child('date').val() === newData.child('date').val())) || (!data.exists() && newData.child('status').val() === 'pending' && newData.child('memberDocId').val() === root.child('authIndex').child(auth.uid).child('localId').val()))",
+        ".validate": "newData.hasChildren(['id','memberId','memberDocId','date','type','method','amount','status','createdAt','updatedAt']) && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && newData.child('type').val().matches(/^(savings|advance_refund|other)$/) && newData.child('method').val().matches(/^(cash|mobile|bank)$/) && newData.child('status').val().matches(/^(pending|approved|rejected)$/)",
+        "status": {
+          ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker')"
+        },
+        "$other": { ".validate": true }
+      }
+    },
+
     "pendingDeposits": {
       ".read": "auth != null",
       "$depositId": {

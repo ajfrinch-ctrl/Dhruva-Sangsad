@@ -12,6 +12,7 @@ const P = {
   chart: '<path d="M4 20V4"/><path d="M4 20h16"/><rect x="7.5" y="12" width="3" height="5"/><rect x="12.5" y="8.5" width="3" height="8.5"/><rect x="17" y="5.5" width="3" height="11.5"/>',
   due: '<path d="M12 3.5 2.8 19.5h18.4z"/><path d="M12 9.5v4.2M12 16.6h.01"/>',
   advance: '<path d="M12 20V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>',
+  withdraw: '<path d="M12 4v11"/><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/><path d="M5 21h14"/>',
   bell: '<path d="M6 9.5a6 6 0 0 1 12 0c0 4.2 1.4 5.7 1.4 5.7H4.6S6 13.7 6 9.5Z"/><path d="M10 18.6a2.2 2.2 0 0 0 4 0"/>',
   log: '<path d="M5 4.5h14v15H5z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/>',
   approve: '<circle cx="12" cy="12" r="8.6"/><path d="m8.4 12.2 2.5 2.5 4.7-5"/>',

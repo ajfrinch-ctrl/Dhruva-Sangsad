@@ -6,19 +6,21 @@ import {
 import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage } from '../ui.js';
 import {
-  allMembers, allDeposits, settings, submitDeposit, memberSummary, setDepositStatus,
-  canModifyDeposit, updateDeposit, deleteDeposit, getMember,
+  allMembers, allDeposits, allWithdrawals, settings, submitDeposit, memberSummary, setDepositStatus,
+  canModifyDeposit, updateDeposit, deleteDeposit, getMember, submitWithdrawal, setWithdrawalStatus,
+  withdrawalBalance, WITHDRAWAL_TYPES, withdrawalTypeLabel,
 } from '../store.js';
 import { can } from '../auth.js';
 import { App } from '../app.js';
 import { rejectReason } from './members.js';
 import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
 
-/* ==================== Deposits hub (Entry / Transactions) ==================== */
+/* ==================== Deposits hub (Entry / Withdrawal / Transactions) ==================== */
 export async function pageDepositsHub(session, params = {}) {
   const wrap = page('জমা / লেনদেন', 'Deposits & Transactions', 'money');
   const TABS = [
     { id: 'entry', label: 'জমা এন্ট্রি / Deposit Entry' },
+    { id: 'withdrawal', label: 'উত্তোলন / Withdrawal' },
     { id: 'transactions', label: 'লেনদেন / Transactions' },
   ];
   let active = params.tab && TABS.some(t => t.id === params.tab) ? params.tab : 'entry';
@@ -34,9 +36,143 @@ export async function pageDepositsHub(session, params = {}) {
   async function paint() {
     host.replaceChildren();
     if (active === 'entry') await embedPage(host, pageDeposit, session);
+    else if (active === 'withdrawal') await embedPage(host, pageWithdrawal, session);
     else await embedPage(host, pageDepositHistory, session);
   }
   await paint();
+  return wrap;
+}
+
+/* ==================== Withdrawal entry + history ==================== */
+export async function pageWithdrawal(session) {
+  const [members, deposits, withdrawals, cfg] = await Promise.all([allMembers(), allDeposits(), allWithdrawals(), settings()]);
+  const staff = session.role === 'admin' || session.role === 'maker';
+  const wrap = page('উত্তোলন', 'Withdrawal', 'withdraw');
+
+  let member = null;
+  if (!staff) {
+    member = members.find(m => m.id === session.memberDocId) || null;
+    if (!member) { wrap.appendChild(banner('err', 'সদস্য প্রোফাইল পাওয়া যায়নি / Member profile not found.')); return wrap; }
+    if (member.status !== 'active') { wrap.appendChild(banner('warn', 'আপনার সদস্যপদ সক্রিয় নয়। / Your membership is not active yet.')); return wrap; }
+  }
+  const activeMembers = members.filter(m => m.status === 'active');
+  if (staff && !activeMembers.length) { wrap.appendChild(banner('warn', 'কোনো Active সদস্য নেই। / No active member yet.')); return wrap; }
+
+  const infoHost = el('div');
+  const form = el('form', { class: 'grid', novalidate: true });
+  const memberField = staff ? `
+    <div class="field"><label>সদস্য নির্বাচন / Select Member <span class="req">*</span></label>
+      <select name="memberDocId" required>
+        <option value="">— ID — Name —</option>
+        ${activeMembers.slice().sort((a, b) => a.memberId.localeCompare(b.memberId))
+          .map(m => `<option value="${esc(m.id)}">${esc(m.memberId)} — ${esc(m.nameBn || m.nameEn)}</option>`).join('')}
+      </select><div class="err" data-err="memberDocId"></div></div>`
+    : `<div class="field"><label>সদস্য / Member</label><input value="${esc(member.memberId)} — ${esc(member.nameBn)}" readonly>
+        <input type="hidden" name="memberDocId" value="${esc(member.id)}"></div>`;
+
+  form.innerHTML = `
+    <div class="grid g2">
+      ${memberField}
+      <div class="field"><label>তারিখ / Date <span class="req">*</span></label>
+        <input name="date" type="date" required value="${todayISO()}" ${session.role === 'maker' ? `max="${todayISO()}" min="${todayISO()}"` : ''}>
+        <div class="err" data-err="date"></div></div>
+      <div class="field"><label>উত্তোলনের ধরন / Withdrawal Type <span class="req">*</span></label>
+        <select name="type" required>${WITHDRAWAL_TYPES.map(t => `<option value="${t.id}">${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
+      <div class="field"><label>পরিশোধ পদ্ধতি / Payment Method <span class="req">*</span></label>
+        <select name="method" required>${PAY_METHODS.map(t => `<option value="${t.id}">${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
+      <div class="field"><label>উত্তোলনের পরিমাণ (৳) / Amount <span class="req">*</span></label>
+        <input name="amount" type="number" min="1" step="0.01" required inputmode="decimal" placeholder="0">
+        <div class="hint">উপলব্ধ ব্যালান্সের বেশি উত্তোলন করা যাবে না / Cannot exceed available balance</div>
+        <div class="err" data-err="amount"></div></div>
+      <div class="field"><label>বিবরণ / Description</label><input name="description" placeholder="ঐচ্ছিক / optional"></div>
+    </div>
+    <div class="field"><label>মন্তব্য / Comment</label><textarea name="comment" rows="2" placeholder="ঐচ্ছিক / optional"></textarea></div>
+    <div class="form-actions">
+      <button class="btn btn-danger" type="submit">${icon('upload')}<span>${staff ? 'Save Withdrawal / উত্তোলন সংরক্ষণ' : 'Submit / উত্তোলনের আবেদন'}</span></button>
+      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>Clear</span></button>
+    </div>`;
+
+  const paintInfo = async () => {
+    infoHost.replaceChildren();
+    const id = form.elements.memberDocId.value;
+    if (!id) return;
+    const m = await getMember(id);
+    if (!m) return;
+    const bal = withdrawalBalance(m, deposits, withdrawals);
+    const stats = el('div', { class: 'stats' });
+    stats.append(
+      statCard({ label: 'মোট জমা / Total Deposit', value: taka(bal.totalDeposit), sub: 'অনুমোদিত / approved', ic: 'deposit' }),
+      statCard({ label: 'মোট উত্তোলন / Total Withdrawal', value: taka(bal.totalWithdrawal), sub: 'অনুমোদিত / approved', ic: 'upload', tone: 'red' }),
+      statCard({ label: 'উপলব্ধ ব্যালান্স / Available Balance', value: taka(bal.available), sub: 'উত্তোলনযোগ্য / withdrawable', ic: 'money', tone: 'blue' }),
+    );
+    infoHost.appendChild(card('ব্যালান্স', `Balance — ${m.memberId} · ${m.nameBn}`, stats));
+  };
+  if (staff) form.elements.memberDocId.addEventListener('change', paintInfo);
+
+  wrap.appendChild(infoHost);
+  wrap.appendChild(card(staff ? 'উত্তোলন এন্ট্রি' : 'উত্তোলনের আবেদন', staff ? 'Withdrawal Entry' : 'Withdrawal Request', form));
+  await paintInfo();
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    form.querySelectorAll('.err').forEach(x => x.textContent = '');
+    form.querySelectorAll('.field').forEach(x => x.classList.remove('bad'));
+    const setErr = (n, msg) => { const b = form.querySelector(`[data-err="${n}"]`); if (b) { b.textContent = msg; b.closest('.field').classList.add('bad'); } };
+    const v = Object.fromEntries(new FormData(form).entries());
+    let bad = false;
+    if (!v.memberDocId) { setErr('memberDocId', 'সদস্য নির্বাচন করুন'); bad = true; }
+    if (!v.date) { setErr('date', 'তারিখ দিন'); bad = true; }
+    if (!(num(v.amount) > 0)) { setErr('amount', 'উত্তোলনের পরিমাণ দিন'); bad = true; }
+    if (bad) { toast('ফর্মে ত্রুটি রয়েছে / Please fix the highlighted fields', 'error'); return; }
+    const b = form.querySelector('button[type=submit]'); b.disabled = true;
+    try {
+      const rec = await submitWithdrawal(v, session);
+      await modal({
+        title: 'WITHDRAWAL SUBMITTED', width: 380,
+        body: `<div class="success-pop"><div class="tick">${icon('check')}</div></div>
+          <div class="kv">
+            <div>Member</div><div><b>${esc(rec.memberName)}</b> (${esc(rec.memberId)})</div>
+            <div>পরিমাণ / Amount</div><div><b style="color:var(--red-dark)">${taka(rec.amount)}</b></div>
+            <div>Status</div><div>${statusTag(rec.status)}</div>
+          </div>
+          <div class="banner ${rec.status === 'approved' ? 'ok' : 'info'}" style="margin-top:9px">${icon('info')}<span>${
+            rec.status === 'approved' ? 'উত্তোলন সফলভাবে সংরক্ষিত হয়েছে।' : 'আবেদন দাখিল হয়েছে। Maker/Admin অনুমোদনের পর ব্যালান্স থেকে বাদ যাবে।'}</span></div>`,
+        actions: [{ label: 'OK', value: true, kind: 'primary' }],
+      });
+      form.reset(); form.elements.date.value = todayISO();
+      await paintInfo(); App.refresh();
+    } catch (err) { toast(err.message, 'error'); }
+    finally { b.disabled = false; }
+  });
+
+  /* --- history list --- */
+  const mine = staff ? withdrawals : withdrawals.filter(w => w.memberDocId === session.memberDocId || w.memberId === session.memberId);
+  const rows = mine.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.submittedAt).localeCompare(String(a.submittedAt)));
+  wrap.appendChild(card('উত্তোলনের ইতিহাস', 'Withdrawal History', tableWrap(
+    [{ label: 'Date' }, ...(staff ? [{ label: 'Member' }] : []), { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'বিবরণ' }, { label: 'Status' }, { label: 'Action', cls: 'nowrap' }],
+    rows.map(w => {
+      const acts = el('div', { class: 'btn-row' });
+      if (w.status === 'pending' && (session.role === 'admin' || session.role === 'maker')) {
+        acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
+          if (!(await confirmBox(`${w.memberName} — ${taka(w.amount)} উত্তোলন অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
+          await setWithdrawalStatus(w.id, 'approved', session); toast('উত্তোলন অনুমোদিত / Withdrawal approved', 'success'); App.refresh();
+        }, { size: 'xs' }));
+        acts.appendChild(btn('Reject', 'reject', 'softred', async () => {
+          const r = await rejectReason('উত্তোলন বাতিলের কারণ / Withdrawal Rejection Reason');
+          if (r === null) return;
+          await setWithdrawalStatus(w.id, 'rejected', session, r); toast('উত্তোলন বাতিল / Withdrawal rejected', 'warn'); App.refresh();
+        }, { size: 'xs' }));
+      }
+      return [
+        esc(fmtDate(w.date)),
+        ...(staff ? [`${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`] : []),
+        esc(withdrawalTypeLabel(w.type).bn), esc(methodLabel(w.method).bn),
+        { text: money(w.amount), cls: 'num' }, esc(w.description || '—'),
+        { html: statusTag(w.status) }, { node: acts, cls: 'nowrap' },
+      ];
+    }),
+    { empty: 'কোনো উত্তোলন নেই / No withdrawals', emptyIcon: 'withdraw' },
+  )));
   return wrap;
 }
 

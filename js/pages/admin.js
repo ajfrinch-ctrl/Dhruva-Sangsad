@@ -8,9 +8,9 @@ import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage } from '../ui.js';
 import { pageActivity } from './misc.js';
 import {
-  allMembers, allDeposits, allUsers, allLogs, settings, saveSettings, setMemberStatus,
-  setDepositStatus, memberSummary, summariesFor, orgTotals, createStaffUser, setUserActive,
-  resetUserPassword, deleteUser, logActivity, invalidate, getMember, statementRows,
+  allMembers, allDeposits, allWithdrawals, allUsers, allLogs, settings, saveSettings, setMemberStatus,
+  setDepositStatus, setWithdrawalStatus, memberSummary, summariesFor, orgTotals, createStaffUser, setUserActive,
+  resetUserPassword, deleteUser, logActivity, invalidate, getMember, statementRows, withdrawalTypeLabel,
 } from '../store.js';
 import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
 import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
@@ -223,21 +223,60 @@ export async function pageAuthorization(session) {
     return wrap;
   }
 
-  const [members, deposits] = await Promise.all([allMembers(), allDeposits()]);
+  const [members, deposits, withdrawals] = await Promise.all([allMembers(), allDeposits(), allWithdrawals()]);
   const pm = members.filter(m => m.status === 'pending').length;
   const pd = deposits.filter(d => d.status === 'pending').length;
+  const pw = withdrawals.filter(w => w.status === 'pending').length;
 
   const stats = el('div', { class: 'stats' });
   stats.append(
     statCard({ label: 'সদস্য অনুমোদন / Pending Members', value: String(pm), sub: 'সদস্যপদ অনুমোদনের অপেক্ষায়', ic: 'members', tone: 'amber' }),
     statCard({ label: 'জমা অনুমোদন / Pending Deposits', value: String(pd), sub: 'জমা অনুমোদনের অপেক্ষায়', ic: 'deposit', tone: 'amber' }),
-    statCard({ label: 'সর্বমোট / Total', value: String(pm + pd), sub: 'সব অনুমোদন এখানে কেন্দ্রীভূত', ic: 'pending' }),
+    statCard({ label: 'উত্তোলন অনুমোদন / Pending Withdrawals', value: String(pw), sub: 'উত্তোলন অনুমোদনের অপেক্ষায়', ic: 'withdraw', tone: 'amber' }),
+    statCard({ label: 'সর্বমোট / Total', value: String(pm + pd + pw), sub: 'সব অনুমোদন এখানে কেন্দ্রীভূত', ic: 'pending' }),
   );
   wrap.appendChild(stats);
 
   if (canApproveMember) await memberQueue(session, wrap);
   if (canApproveDeposit) await depositQueue(session, wrap);
+  if (canApproveDeposit) await withdrawalQueue(session, wrap);
   return wrap;
+}
+
+async function withdrawalQueue(session, host) {
+  const withdrawals = await allWithdrawals();
+  const pending = withdrawals.filter(w => w.status === 'pending')
+    .sort((a, b) => String(a.submittedAt || '').localeCompare(String(b.submittedAt || '')));
+  const total = pending.reduce((s, w) => s + num(w.amount), 0);
+  const c = card('উত্তোলন অনুমোদন', `Pending Withdrawal Approvals (${pending.length})`, el('div'));
+  c.body.appendChild(tableWrap(
+    [{ label: 'Date' }, { label: 'Member' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'বিবরণ' }, { label: 'Action', cls: 'nowrap' }],
+    pending.map(w => {
+      const acts = el('div', { class: 'btn-row' });
+      acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
+        if (!(await confirmBox(`${w.memberName} — ${taka(w.amount)} (${fmtDate(w.date)}) উত্তোলন অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
+        await setWithdrawalStatus(w.id, 'approved', session); toast('উত্তোলন অনুমোদিত / Withdrawal approved', 'success'); App.refresh();
+      }, { size: 'xs' }));
+      acts.appendChild(btn('Reject', 'reject', 'softred', async () => {
+        const r = await rejectReason('উত্তোলন বাতিলের কারণ / Withdrawal Rejection Reason');
+        if (r === null) return;
+        await setWithdrawalStatus(w.id, 'rejected', session, r); toast('উত্তোলন বাতিল / Withdrawal rejected', 'warn'); App.refresh();
+      }, { size: 'xs' }));
+      return [
+        esc(fmtDate(w.date)),
+        `${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`,
+        esc(withdrawalTypeLabel(w.type).bn), esc(methodLabel(w.method).bn),
+        { text: money(w.amount), cls: 'num' },
+        esc(w.description || w.comment || '—'),
+        { node: acts, cls: 'nowrap' },
+      ];
+    }),
+    {
+      empty: 'অনুমোদনের অপেক্ষায় কোনো উত্তোলন নেই / No pending withdrawals', emptyIcon: 'withdraw',
+      footer: pending.length ? [{ html: '' }, { html: '<b>সর্বমোট / Total</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }, { html: '' }, { html: '' }] : null,
+    },
+  ));
+  host.appendChild(c);
 }
 
 async function staffManager(session, host) {

@@ -2,12 +2,13 @@
 import { uid, nowISO, deviceId } from './util.js';
 
 const DB_NAME = 'dhruvo_sangsad';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORES = {
   users: { keyPath: 'id', indexes: [['username', 'username', { unique: false }], ['memberId', 'memberId'], ['role', 'role']] },
   members: { keyPath: 'id', indexes: [['mobile', 'mobile'], ['whatsapp', 'whatsapp'], ['email', 'email'], ['status', 'status']] },
   deposits: { keyPath: 'id', indexes: [['memberId', 'memberId'], ['status', 'status'], ['date', 'date']] },
+  withdrawals: { keyPath: 'id', indexes: [['memberId', 'memberId'], ['memberDocId', 'memberDocId'], ['status', 'status'], ['date', 'date']] },
   notifications: { keyPath: 'id', indexes: [['createdAt', 'createdAt'], ['audience', 'audience']] },
   activityLogs: { keyPath: 'id', indexes: [['createdAt', 'createdAt'], ['userId', 'userId']] },
   settings: { keyPath: 'key' },
