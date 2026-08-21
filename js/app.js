@@ -80,7 +80,9 @@ export const App = {
       });
       nav.appendChild(btn);
     }
-    $('#brandRole').textContent = `${s.displayName} · ${s.role.toUpperCase()}`;
+    const userName = s.displayName || s.username || s.memberId || '';
+    const brand = $('#brandRole');
+    brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc((s.role || '').toUpperCase())}</span>`;
   },
 
   async refreshNotifBadge() {

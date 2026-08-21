@@ -1,10 +1,10 @@
 /* Notifications (top-right icon popup) + Activity Log */
 import {
-  el, esc, toast, fmtDate, fmtDateTime, fmtTime, todayISO, debounce, taka, confirmBox, modal,
+  el, esc, toast, fmtDate, fmtTime, todayISO, debounce, modal,
 } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
-import { visibleNotifications, markNotificationRead, allLogs, allUsers, settings } from '../store.js';
+import { page, card, tableWrap, btn } from '../ui.js';
+import { visibleNotifications, markNotificationRead, allLogs } from '../store.js';
 import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { App } from '../app.js';
 
@@ -89,12 +89,15 @@ const ACTION_META = {
 export const actionMeta = a => ACTION_META[a] || { ic: 'log', bn: a };
 
 export async function pageActivity(session) {
-  const [logs, users] = await Promise.all([allLogs(), allUsers()]);
+  const logs = await allLogs();
   const wrap = page('কার্যক্রম লগ', 'Activity Log', 'log');
 
   const mine = session.role === 'admin' || session.role === 'maker'
     ? logs
     : logs.filter(l => l.userId === session.id);
+
+  const PAGE_SIZE = 10;
+  let currentPage = 0;
 
   const bar = el('div', { class: 'toolbar' });
   const searchBox = el('div', { class: 'search-box', html: icon('search') });
@@ -106,10 +109,14 @@ export async function pageActivity(session) {
   Array.from(new Set(mine.map(l => l.action))).sort().forEach(a => actSel.appendChild(el('option', { value: a }, [`${actionMeta(a).bn} / ${a}`])));
   const roleSel = el('select');
   [['', 'সব রোল / All roles'], ['admin', 'Admin'], ['maker', 'Maker'], ['member', 'Member']].forEach(([v, l]) => roleSel.appendChild(el('option', { value: v }, [l])));
-  const from = el('input', { type: 'date' });
-  const to = el('input', { type: 'date' });
+
+  // Default window: the most recent 7 days.
+  const sevenDaysAgo = () => { const d = new Date(); d.setDate(d.getDate() - 6); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+  const from = el('input', { type: 'date', value: sevenDaysAgo() });
+  const to = el('input', { type: 'date', value: todayISO() });
+
   bar.append(searchBox, mk('কার্যক্রম / Action', actSel, '180px'), mk('রোল / Role', roleSel, '130px'), mk('হইতে / From', from, '130px'), mk('পর্যন্ত / To', to, '130px'));
-  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; actSel.value = ''; roleSel.value = ''; from.value = ''; to.value = ''; render(); }, { size: 'xs' }));
+  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; actSel.value = ''; roleSel.value = ''; from.value = ''; to.value = ''; currentPage = 0; render(); }, { size: 'xs' }));
   wrap.appendChild(bar);
 
   const listCard = card('কার্যক্রম তালিকা', 'Activity Records', el('div'), [
@@ -141,14 +148,20 @@ export async function pageActivity(session) {
       return true;
     }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
+    const totalPages = Math.max(1, Math.ceil(current.length / PAGE_SIZE));
+    if (currentPage > totalPages - 1) currentPage = totalPages - 1;
+    if (currentPage < 0) currentPage = 0;
+    const start = currentPage * PAGE_SIZE;
+    const pageRows = current.slice(start, start + PAGE_SIZE);
+
     const body = listCard.body;
     body.replaceChildren();
-    body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-bottom:6px', text: `${current.length} record(s)` }));
+    body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-bottom:6px', text: `${current.length} record(s) — page ${currentPage + 1} of ${totalPages}` }));
     body.appendChild(tableWrap(
       [{ label: 'SL', cls: 'num' }, { label: 'তারিখ / Date' }, { label: 'সময় / Time' }, { label: 'ব্যবহারকারী / User' },
        { label: 'রোল / Role' }, { label: 'কার্যক্রম / Action' }, { label: 'বিবরণ / Details' }],
-      current.slice(0, 500).map((l, i) => [
-        { text: String(i + 1), cls: 'num' },
+      pageRows.map((l, i) => [
+        { text: String(start + i + 1), cls: 'num' },
         esc(fmtDate(l.createdAt)),
         esc(fmtTime(l.createdAt)),
         esc(l.displayName || l.userId || '—'),
@@ -158,10 +171,20 @@ export async function pageActivity(session) {
       ]),
       { empty: 'কোনো কার্যক্রম পাওয়া যায়নি / No activity found', emptyIcon: 'log' },
     ));
-    if (current.length > 500) body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-top:6px', text: `সর্বশেষ ৫০০টি দেখানো হয়েছে (মোট ${current.length}) — সম্পূর্ণ তালিকার জন্য Export করুন।` }));
+
+    // Pagination controls
+    if (current.length > PAGE_SIZE) {
+      const nav = el('div', { class: 'btn-row', style: 'margin-top:10px;align-items:center' });
+      nav.appendChild(btn('পূর্ববর্তী / Previous', '', 'ghost', () => { if (currentPage > 0) { currentPage--; render(); } }, { size: 'xs', attrs: currentPage <= 0 ? { disabled: true } : {} }));
+      nav.appendChild(el('span', { class: 'fs8 muted', text: `Page ${currentPage + 1} / ${totalPages}` }));
+      nav.appendChild(btn('পরবর্তী / Next', '', 'ghost', () => { if (currentPage < totalPages - 1) { currentPage++; render(); } }, { size: 'xs', attrs: currentPage >= totalPages - 1 ? { disabled: true } : {} }));
+      body.appendChild(nav);
+    }
   };
-  q.addEventListener('input', debounce(render, 180));
-  [actSel, roleSel, from, to].forEach(x => x.addEventListener('change', render));
+
+  const onFilterChange = () => { currentPage = 0; render(); };
+  q.addEventListener('input', debounce(onFilterChange, 180));
+  [actSel, roleSel, from, to].forEach(x => x.addEventListener('change', onFilterChange));
   render();
   return wrap;
 }

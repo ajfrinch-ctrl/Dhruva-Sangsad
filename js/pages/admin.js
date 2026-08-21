@@ -6,7 +6,7 @@ import {
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage } from '../ui.js';
-import { pageActivity, actionMeta } from './misc.js';
+import { pageActivity } from './misc.js';
 import {
   allMembers, allDeposits, allUsers, allLogs, settings, saveSettings, setMemberStatus,
   setDepositStatus, memberSummary, summariesFor, orgTotals, createStaffUser, setUserActive,
@@ -440,7 +440,6 @@ export async function pageSettings(session, params = {}) {
   const TABS = [
     { id: 'account', label: 'আমার অ্যাকাউন্ট / Account' },
     { id: 'activity', label: 'কার্যক্রম লগ / Activity Log' },
-    { id: 'privacy', label: 'গোপনীয়তা / Privacy' },
   ];
   if (can(session, 'settings:manage')) {
     TABS.push({ id: 'organisation', label: 'সংগঠন সেটিংস / Organisation' });
@@ -468,7 +467,6 @@ export async function pageSettings(session, params = {}) {
     host.replaceChildren();
     if (active === 'account') accountSection(session, host);
     else if (active === 'activity') await embedPage(host, pageActivity, session);
-    else if (active === 'privacy') await privacySection(session, host);
     else if (active === 'organisation') await organisationSection(session, host);
     else if (active === 'firebase') await firebaseSection(session, host);
     else if (active === 'staff') await staffManager(session, host);
@@ -507,36 +505,6 @@ function accountSection(session, host) {
     ['ব্যাকআপ / Data safety', 'Admin → Settings → Backup & Restore'],
   ]);
   host.appendChild(card('অ্যাপ সম্পর্কে', 'About', about));
-}
-
-/* Settings → Privacy: hosts "Today's Activity" (moved from the dashboard). */
-async function privacySection(session, host) {
-  const logs = await allLogs();
-  const todayLogs = logs.filter(l => String(l.createdAt).slice(0, 10) === todayISO())
-    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  const mine = session.role === 'member' ? todayLogs.filter(l => l.userId === session.id) : todayLogs;
-
-  const body = el('div');
-  if (!mine.length) {
-    body.appendChild(el('div', { class: 'empty', html: `${icon('log')}আজ কোনো কার্যক্রম নেই / No activity today` }));
-  } else {
-    const list = el('div', { class: 'list' });
-    mine.slice(0, 50).forEach(l => list.appendChild(el('div', {
-      class: 'li',
-      html: `<div class="ic">${icon(actionMeta(l.action).ic)}</div>
-        <div class="bd"><div class="t">${esc(actionMeta(l.action).bn)}</div><div class="s">${esc(l.details || '')}</div></div>
-        <div class="w">${esc(fmtTime(l.createdAt))}</div>`,
-    })));
-    body.appendChild(list);
-    if (mine.length > 50) body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-top:6px', text: `সর্বশেষ ৫০টি দেখানো হয়েছে (মোট ${mine.length}) — সম্পূর্ণ তালিকা Settings → Activity Log-এ।` }));
-  }
-  host.appendChild(card('আজকের কার্যক্রম', "Today's Activity", body));
-  host.appendChild(card('ডিভাইস ও সেশন', 'Device & Session', kv([
-    ['Device ID', esc(deviceId())],
-    ['রোল / Role', esc(session.role.toUpperCase())],
-    ['লগইন সময় / Login at', esc(fmtDateTime(session.loginAt))],
-    ['অটো লগআউট / Auto logout', '৩০ মিনিট নিষ্ক্রিয় থাকলে / after 30 minutes of inactivity'],
-  ])));
 }
 
 async function organisationSection(session, host) {
