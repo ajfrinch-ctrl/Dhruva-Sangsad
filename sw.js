@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v1.0.0';
+const VERSION = 'ds-v2.0.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -68,6 +68,9 @@ self.addEventListener('activate', event => {
       try { await self.registration.navigationPreload.enable(); } catch (_) {}
     }
     await self.clients.claim();
+    /* Tell open pages a new version was installed so they can refresh once. */
+    const wins = await self.clients.matchAll({ type: 'window' });
+    wins.forEach(c => c.postMessage({ type: 'VERSION_CHANGED', version: VERSION }));
   })());
 });
 

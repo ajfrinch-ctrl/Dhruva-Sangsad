@@ -211,6 +211,13 @@ async function boot() {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
+    /* Reload once when a new service worker version takes control, so stale cached assets are dropped. */
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data && e.data.type === 'VERSION_CHANGED') {
+        const seen = sessionStorage.getItem('ds_sw_reload');
+        if (!seen) { sessionStorage.setItem('ds_sw_reload', '1'); location.reload(); }
+      }
+    });
   }
 }
 boot();
