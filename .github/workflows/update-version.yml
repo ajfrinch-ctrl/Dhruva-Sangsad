@@ -1,4 +1,4 @@
-name: Update VERSION with build time
+name: Update VERSION with build time and create release
 
 on:
   push:
@@ -42,6 +42,7 @@ jobs:
           echo "new=$new_version" >> "$GITHUB_OUTPUT"
 
       - name: Write VERSION and commit
+        id: write_version
         run: |
           BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "Version: ${{ steps.bump.outputs.new }} (build: $BUILD_TIME)" > VERSION
@@ -50,6 +51,27 @@ jobs:
           git add VERSION
           git commit -m "chore: bump version to ${{ steps.bump.outputs.new }} (build: $BUILD_TIME)" || echo "no changes to commit"
           git push
+          NEW_COMMIT=$(git rev-parse HEAD)
+          echo "new_commit=$NEW_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "build_time=$BUILD_TIME" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          TAG=v${{ steps.bump.outputs.new }}
+          git tag -a "$TAG" -m "release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        with:
+          tag_name: v${{ steps.bump.outputs.new }}
+          release_name: v${{ steps.bump.outputs.new }}
+          body: |
+            Version: ${{ steps.bump.outputs.new }}
+            Build time: ${{ steps.write_version.outputs.build_time }}
+            Commit: ${{ steps.write_version.outputs.new_commit }}
+          draft: false
+          prerelease: false
 
       - name: Show VERSION
         run: |
