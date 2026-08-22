@@ -13,7 +13,7 @@ import {
   resetUserPassword, deleteUser, logActivity, invalidate, getMember, statementRows, withdrawalTypeLabel,
 } from '../store.js';
 import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
-import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
+import { firebase, DEFAULT_FIREBASE_CONFIG, PRODUCTION_DATABASE_URL, PRODUCTION_PROJECT_ID } from '../firebase.js';
 import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
@@ -113,8 +113,9 @@ export async function pageBackup(session) {
   const cBody = el('div');
   const cfg = await settings();
   cBody.appendChild(kv([
-    ['Firebase', firebase.configured ? '<span class="tag approved">CONFIGURED</span>' : '<span class="tag gray">NOT CONFIGURED</span>'],
-    ['Status', `<span class="tag ${firebase.status === 'synced' ? 'approved' : firebase.status === 'offline' ? 'gray' : 'info'}">${esc((firebase.status || 'offline').toUpperCase())}</span>`],
+    ['Firebase', firebase.configured ? '<span class="tag approved">PRODUCTION</span>' : '<span class="tag gray">NOT CONFIGURED</span>'],
+    ['Status', `<span class="tag ${firebase.status === 'connected' ? 'approved' : firebase.status === 'offline' ? 'rejected' : 'pending'}">${esc((firebase.status || 'offline').toUpperCase())}</span>`],
+    ['Database URL', esc(PRODUCTION_DATABASE_URL)],
     ['Device ID', esc(deviceId())],
     ['Pending sync items', String(queue.length)],
   ]));
@@ -539,8 +540,9 @@ function accountSection(session, host) {
   const about = kv([
     ['অ্যাপ / Application', `${esc(APP_NAME_BN)} — ${esc(APP_NAME_EN)}`],
     ['সংস্করণ / Version', '1.0.0'],
-    ['ধরন / Type', 'Offline-first PWA · IndexedDB + Firebase Realtime Database'],
-    ['সংযোগ / Connection', navigator.onLine ? '<span class="tag approved">ONLINE</span>' : '<span class="tag gray">OFFLINE</span>'],
+    ['ধরন / Type', 'Central Firebase Realtime Database · real-time sync'],
+    ['সংযোগ / Connection', firebase.status === 'connected' ? '<span class="tag approved">🟢 CONNECTED</span>' : firebase.status === 'synchronizing' ? '<span class="tag pending">🟠 SYNCHRONIZING</span>' : '<span class="tag rejected">🔴 OFFLINE</span>'],
+    ['Database', esc(PRODUCTION_DATABASE_URL)],
     ['ব্যাকআপ / Data safety', 'Admin → Settings → Backup & Restore'],
   ]);
   host.appendChild(card('অ্যাপ সম্পর্কে', 'About', about));

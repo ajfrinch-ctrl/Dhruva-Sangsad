@@ -71,8 +71,21 @@ export async function getSetting(key, dflt = null) {
 }
 export async function setSetting(key, value, { queue = true } = {}) {
   const rec = { key, value, updatedAt: nowISO(), updatedBy: deviceId() };
+  if (queue && key !== 'firebaseConfig') {
+    const fb = await getBridge();
+    if (fb && fb.canWrite()) {
+      try {
+        const committed = await fb.commit('put', 'settings', rec);
+        const local = committed || rec;
+        await dbPutRaw('settings', local);
+        return local;
+      } catch (e) {
+        if (!(e && e.code === 'offline')) throw e;
+      }
+    }
+  }
   await dbPutRaw('settings', rec);
-  if (queue) await enqueue('settings', key, 'put', rec);
+  if (queue && key !== 'firebaseConfig') await enqueue('settings', key, 'put', rec);
   return rec;
 }
 
@@ -98,6 +111,26 @@ export async function saveRecord(store, record, { queue = true, actorId = null, 
     deviceId: deviceId(),
     syncStatus: navigator.onLine ? 'pending' : 'local',
   };
+
+  if (queue) {
+    const fb = await getBridge();
+    if (fb && fb.canWrite()) {
+      try {
+        const committed = await fb.commit('put', store, rec);
+        const local = { ...normalizeRecord(committed || rec), syncStatus: 'synced' };
+        await dbPutRaw(store, local);
+        window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store, id: local.id, remote: false } }));
+        return local;
+      } catch (e) {
+        if (e && e.code === 'offline') {
+          /* fall through to local queue */
+        } else {
+          throw e;
+        }
+      }
+    }
+  }
+
   await dbPutRaw(store, rec);
   if (queue) await enqueue(store, rec.id, 'put', rec);
   window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store, id: rec.id } }));
@@ -105,25 +138,40 @@ export async function saveRecord(store, record, { queue = true, actorId = null, 
 }
 
 export async function removeRecord(store, id, { queue = true } = {}) {
+  const existing = await dbGet(store, id);
+  if (queue) {
+    const fb = await getBridge();
+    if (fb && fb.canWrite()) {
+      try {
+        await fb.commit('delete', store, existing || { id });
+        await dbDeleteRaw(store, id);
+        window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store, id, deleted: true } }));
+        return;
+      } catch (e) {
+        if (!(e && e.code === 'offline')) throw e;
+      }
+    }
+  }
   await dbDeleteRaw(store, id);
   if (queue) await enqueue(store, id, 'delete', { id });
   window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store, id, deleted: true } }));
 }
 
-/** Apply a record that arrived from the server. Last-write-wins by updatedAt, never blind overwrite. */
+/** Apply a record that arrived from the central database.
+    Server is the source of truth unless a local unsynced write is newer. */
 export async function applyRemote(store, record) {
   if (!record || !record.id) return null;
-  const local = await dbGet(store, record.id);
-  if (local) {
-    const lu = Date.parse(local.updatedAt || 0) || 0;
-    const ru = Date.parse(record.updatedAt || 0) || 0;
+  const incoming = normalizeRecord(record);
+  const local = await dbGet(store, incoming.id);
+  if (local && (local.syncStatus === 'pending' || local.syncStatus === 'local')) {
+    const lu = toMillis(local.updatedAt);
+    const ru = toMillis(incoming.updatedAt || incoming.serverTime);
     if (lu > ru) {
-      // local is newer — keep local, keep a conflict copy for audit
-      await dbPutRaw('meta', { key: `conflict_${store}_${record.id}_${ru}`, value: record, at: nowISO() });
+      await dbPutRaw('meta', { key: `conflict_${store}_${incoming.id}_${ru}`, value: incoming, at: nowISO() });
       return local;
     }
   }
-  const rec = { ...record, syncStatus: 'synced' };
+  const rec = { ...incoming, syncStatus: 'synced' };
   await dbPutRaw(store, rec);
   window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store, id: rec.id, remote: true } }));
   return rec;

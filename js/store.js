@@ -6,6 +6,22 @@ import {
   uid, nowISO, todayISO, num, normalizeMobile, memberIdFromMobile, monthsBetweenInclusive, monthKey,
 } from './util.js';
 import { hashPassword } from './crypto.js';
+import { firebase } from './firebase.js';
+
+/** Members only see their own rows from the local cache. Staff see everything
+    that security rules allowed the listener to download. */
+function scopeRows(rows, kind) {
+  const s = typeof window !== 'undefined' ? window.DS_SESSION : null;
+  if (!s || s.role === 'admin' || s.role === 'maker') return rows;
+  if (s.role !== 'member') return rows;
+  if (kind === 'members') return rows.filter(m => m.id === s.memberDocId || m.memberId === s.memberId);
+  if (kind === 'deposits' || kind === 'withdrawals') {
+    return rows.filter(r => r.memberDocId === s.memberDocId || r.memberId === s.memberId);
+  }
+  if (kind === 'users') return rows.filter(u => u.id === s.id);
+  if (kind === 'logs') return rows.filter(l => l.userId === s.id);
+  return rows;
+}
 
 /* ---------------- cache ---------------- */
 const cache = { members: null, deposits: null, withdrawals: null, users: null, logs: null, notifs: null };
@@ -24,11 +40,11 @@ window.addEventListener('ds:data-changed', e => {
   else if (s === 'notifications') invalidate('notifs');
 });
 
-export async function allMembers() { if (!cache.members) cache.members = await dbAll('members'); return cache.members; }
-export async function allDeposits() { if (!cache.deposits) cache.deposits = await dbAll('deposits'); return cache.deposits; }
-export async function allWithdrawals() { if (!cache.withdrawals) cache.withdrawals = await dbAll('withdrawals'); return cache.withdrawals; }
-export async function allUsers() { if (!cache.users) cache.users = await dbAll('users'); return cache.users; }
-export async function allLogs() { if (!cache.logs) cache.logs = await dbAll('activityLogs'); return cache.logs; }
+export async function allMembers() { if (!cache.members) cache.members = await dbAll('members'); return scopeRows(cache.members, 'members'); }
+export async function allDeposits() { if (!cache.deposits) cache.deposits = await dbAll('deposits'); return scopeRows(cache.deposits, 'deposits'); }
+export async function allWithdrawals() { if (!cache.withdrawals) cache.withdrawals = await dbAll('withdrawals'); return scopeRows(cache.withdrawals, 'withdrawals'); }
+export async function allUsers() { if (!cache.users) cache.users = await dbAll('users'); return scopeRows(cache.users, 'users'); }
+export async function allLogs() { if (!cache.logs) cache.logs = await dbAll('activityLogs'); return scopeRows(cache.logs, 'logs'); }
 export async function allNotifications() { if (!cache.notifs) cache.notifs = await dbAll('notifications'); return cache.notifs; }
 
 export const getMember = id => dbGet('members', id);
@@ -113,6 +129,12 @@ export async function checkUnique({ memberId, mobile, whatsapp, email }, exclude
     if (wa && normalizeMobile(m.whatsapp) === wa) errs.push({ field: 'whatsapp', msg: 'এই WhatsApp নম্বর ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
     if (em && (m.email || '').trim().toLowerCase() === em) errs.push({ field: 'email', msg: 'এই Email ID ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
   }
+  if (firebase.canWrite()) {
+    try {
+      const remote = await firebase.checkUniques({ memberId, mobile, whatsapp, email }, excludeId);
+      for (const e of remote) errs.push(e);
+    } catch {}
+  }
   // de-dup by field
   const seen = new Set();
   return errs.filter(e => (seen.has(e.field) ? false : (seen.add(e.field), true)));
@@ -153,8 +175,6 @@ export async function registerMember(form, opts = {}) {
     joinDate: todayISO(),
     approvedAt: null, approvedBy: null, rejectedAt: null, rejectReason: '',
   };
-  await saveRecord('members', member, { queue: true });
-
   const user = {
     id: 'U' + memberDocId,
     username: mobile,
@@ -167,6 +187,14 @@ export async function registerMember(form, opts = {}) {
     mustChangePassword: useDefaultPassword,
     createdAt: nowISO(),
   };
+
+  /* Self-registration must open a Firebase Auth session first so security
+     rules allow the central members/ + users/ write. Staff are already signed in. */
+  if (firebase.canWrite() && !opts.defaultPassword) {
+    try { await firebase.signIn(user, rawPassword); } catch {}
+  }
+
+  await saveRecord('members', member, { queue: true });
   await saveRecord('users', user, { queue: true });
 
   await logActivity('REGISTRATION', `New member registration: ${mid} — ${member.nameBn}`, { id: user.id, role: 'member', displayName: member.nameBn });

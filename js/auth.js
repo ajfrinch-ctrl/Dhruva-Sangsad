@@ -1,4 +1,4 @@
-/* Authentication & session — offline-first local credential vault, optionally mirrored to Firebase Auth. */
+/* Authentication & session — local credential cache, signed in against the central Firebase project. */
 import { dbAll, dbGet, saveRecord, getSetting, setSetting } from './db.js';
 import { hashPassword, verifyPassword, passwordIssues } from './crypto.js';
 import { nowISO, normalizeMobile, uid } from './util.js';
@@ -8,7 +8,8 @@ import { firebase } from './firebase.js';
 const SESSION_KEY = 'ds_session';
 export const ROLES = { ADMIN: 'admin', MAKER: 'maker', MEMBER: 'member' };
 
-/** Ensure the bootstrap admin (admin/admin) exists on a fresh install. */
+/** Ensure the bootstrap admin (admin/admin) exists on a fresh install.
+    Never treat this local seed as production data — it is not queued to Firebase. */
 export async function ensureBootstrapAdmin() {
   const users = await dbAll('users');
   if (users.some(u => u.role === 'admin')) return null;
@@ -62,25 +63,25 @@ export function clearSession() {
   window.dispatchEvent(new CustomEvent('ds:session', { detail: null }));
 }
 
-async function findUser(identifier) {
+async function findUsers(identifier) {
   const raw = String(identifier || '').trim();
   const lower = raw.toLowerCase();
   const mob = normalizeMobile(raw);
   const users = await dbAll('users');
-  return users.find(u => (u.username || '').toLowerCase() === lower)
-    || users.find(u => u.role === 'member' && normalizeMobile(u.username) === mob && mob)
-    || users.find(u => u.memberId && u.memberId === raw)
-    || null;
+  return users.filter(u =>
+    (u.username || '').toLowerCase() === lower
+    || (u.role === 'member' && mob && normalizeMobile(u.username) === mob)
+    || (u.memberId && u.memberId === raw)
+  );
 }
 
-export async function login(identifier, password, { remember = false } = {}) {
-  await ensureBootstrapAdmin();
-  const u = await findUser(identifier);
-  if (!u) throw new Error('ভুল User ID অথবা Password / Invalid user ID or password');
-  if (u.active === false) throw new Error('আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে। / Your account has been deactivated.');
-  const ok = await verifyPassword(password, u.password);
-  if (!ok) throw new Error('ভুল User ID অথবা Password / Invalid user ID or password');
+async function findUser(identifier) {
+  const list = await findUsers(identifier);
+  return list.find(u => !u.isBootstrap) || list[0] || null;
+}
 
+async function finishLogin(u, { remember = false } = {}) {
+  if (u.active === false) throw new Error('আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে। / Your account has been deactivated.');
   let member = null;
   if (u.role === ROLES.MEMBER && u.memberDocId) {
     member = await dbGet('members', u.memberDocId);
@@ -91,10 +92,61 @@ export async function login(identifier, password, { remember = false } = {}) {
   const session = publicUser(u);
   if (member) { session.memberStatus = member.status; session.displayName = member.nameBn || member.nameEn; }
   setSession(session, remember);
+  return session;
+}
 
-  // Best-effort mirror to Firebase Auth when configured & online
-  firebase.signIn(u, password).catch(() => {});
+export async function login(identifier, password, { remember = false } = {}) {
+  try { await firebase.init(); } catch {}
 
+  /* 1. Central Firebase Auth is the authority whenever we are online. */
+  if (firebase.ready && navigator.onLine) {
+    try {
+      const central = await firebase.signInIdentifier(identifier, password);
+      if (central && central.denied) throw central.denied;
+      if (central && central.user) {
+        const cu = central.user;
+        if (cu.role === 'member' && cu.memberDocId && firebase.db) {
+          try {
+            const ms = await firebase.db.ref(`members/${cu.memberDocId}`).get();
+            if (ms.exists()) {
+              const { applyRemote } = await import('./db.js');
+              await applyRemote('members', ms.val());
+            }
+          } catch {}
+        }
+        const session = await finishLogin(cu, { remember });
+        try { await firebase.hydrate(session); } catch {}
+        await logActivity('LOGIN', `${session.role} ${session.username} signed in`, session);
+        return session;
+      }
+    } catch (e) {
+      if (e && e.fatal) throw e;
+      if (e && /Invalid user ID or password|ভুল User ID|নিষ্ক্রিয়|বাতিল/.test(e.message || '')) throw e;
+    }
+  }
+
+  /* 2. Local cache / first-run bootstrap (offline or empty central project). */
+  await ensureBootstrapAdmin();
+  const matches = await findUsers(identifier);
+  let u = null;
+  for (const cand of matches) {
+    if (await verifyPassword(password, cand.password)) { u = cand; break; }
+  }
+  if (!u) throw new Error('ভুল User ID অথবা Password / Invalid user ID or password');
+
+  if (u.isBootstrap && navigator.onLine && firebase.ready) {
+    const email = `${(u.username || 'admin')}@dhruvo-sangsad.local`;
+    try {
+      if (await firebase.emailInUse(email)) {
+        throw new Error('ডিফল্ট admin/admin এই প্রজেক্টে নিষ্ক্রিয়। আপনার সংগঠনের অ্যাকাউন্ট ব্যবহার করুন। / Default bootstrap login is disabled. Use your organisation account.');
+      }
+    } catch (e) {
+      if (/bootstrap|নিষ্ক্রিয়/.test(e.message || '')) throw e;
+    }
+  }
+
+  const session = await finishLogin(u, { remember });
+  try { await firebase.signIn(u, password); } catch {}
   await logActivity('LOGIN', `${u.role} ${u.username} signed in`, session);
   return session;
 }
@@ -145,10 +197,15 @@ export async function completeAdminSetup({ displayName, username, mobile, email,
     mobile: normalizeMobile(mobile), email: (email || '').trim(), address: (address || '').trim(),
     password: pw, isBootstrap: false, mustChangePassword: false, profileComplete: true, passwordChangedAt: nowISO(),
   };
+  try {
+    if (firebase.auth && firebase.auth.currentUser) await firebase.updatePassword(newPassword);
+    else await firebase.signIn({ ...next, isBootstrap: false }, newPassword);
+  } catch {}
   await saveRecord('users', next, { queue: true, actorId: u.id });
   invalidate('users');
   const ns = { ...publicUser(next) };
   setSession(ns, false);
+  try { await firebase.publishAuthIndex(next); } catch {}
   await logActivity('ADMIN_SETUP', 'First-time admin setup completed', ns);
   return ns;
 }
@@ -156,7 +213,22 @@ export async function completeAdminSetup({ displayName, username, mobile, email,
 /** Step 1 of password recovery: does a valid registered member exist for this identifier? */
 export async function memberAccountExists(identifier) {
   const u = await findUser(identifier);
-  return !!(u && u.role === ROLES.MEMBER && u.active !== false);
+  if (u && u.role === ROLES.MEMBER && u.active !== false) return true;
+  if (firebase.ready && firebase.auth) {
+    const raw = String(identifier || '').trim();
+    const emails = [];
+    if (/@/.test(raw)) emails.push(raw);
+    emails.push(`${raw.toLowerCase()}@dhruvo-sangsad.local`);
+    const mob = normalizeMobile(raw);
+    if (mob) emails.push(`${mob}@dhruvo-sangsad.local`);
+    for (const email of emails) {
+      try {
+        const methods = await firebase.auth.fetchSignInMethodsForEmail(email);
+        if (methods && methods.length) return true;
+      } catch {}
+    }
+  }
+  return false;
 }
 
 const RECOVERY_FIELDS = ['mobile', 'whatsapp', 'email', 'nid', 'dob'];

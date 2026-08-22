@@ -1,8 +1,8 @@
 # ধ্রুব সংসদ — Dhruvo Sangsad
 
 Member, Deposit, Withdrawal, Due, Advance & Reporting Management System.
-Offline-first PWA (HTML5 · CSS3 · vanilla JS · IndexedDB · Service Worker) with
-real-time Firebase Realtime Database + Authentication sync.
+PWA (HTML5 · CSS3 · vanilla JS · Service Worker) with a single central
+Firebase Realtime Database + Authentication. IndexedDB is only a cache.
 
 ---
 
@@ -56,25 +56,39 @@ advance   = max(0, paid − required)
 
 Any deposit amount is accepted — there is no multiple-of-installment restriction.
 
-## Offline & sync
+## Central Real-Time Database
 
-All data lives in IndexedDB (`dhruvo_sangsad`). Every write is also appended to a sync queue.
+The **single source of truth** is the production Firebase Realtime Database
+`https://dhruvo-sangsad-default-rtdb.firebaseio.com` (project **`dhruvo-sangsad`**).
+Every Admin, Maker and Member reads and writes that one database. Other Firebase
+project URLs are rejected. IndexedDB is only a cache / offline buffer — it is never
+treated as authoritative production data.
 
-The app is pre-configured to sync to the production Firebase project **`dhruvo-sangsad`**
-(Realtime Database `https://dhruvo-sangsad-default-rtdb.firebaseio.com`). It connects
-automatically and keeps every device in sync; a different config can be set in
-**Settings → Firebase**. The queue flushes automatically (on reconnect, on queue change,
-and every 30 s). The topbar chip shows `Online / Offline / Syncing / Synced / Sync Error`.
+While online, a user action is written to Firebase first
+(`User Action → Validation → Firebase write → success → UI`). Failed writes surface
+an error and never show a false success. Authoritative timestamps use
+`firebase.database.ServerValue.TIMESTAMP`. Deposits, withdrawals, members and users
+are committed with transactions; unique `memberId` / mobile / WhatsApp / email keys
+and a per-member `balances/` node prevent overwrites and overdrafts.
 
-Conflicts are resolved per record using `updatedAt`: if the server copy is newer than the
-queued local payload, the remote record is applied locally instead of overwriting the server.
-Every record carries `createdAt`, `updatedAt`, `updatedBy`, `deviceId` and `syncStatus`.
+Native listeners (`onValue` / `onChildAdded` / `onChildChanged` / `onChildRemoved`)
+keep every authorized screen in sync — there is no `setInterval` polling. Members
+only receive their own rows (query-based security rules). After login the app
+connects, hydrates the current central snapshot, then leaves the listeners running.
 
-Firebase paths written: `authIndex/ users/ members/ deposits/ withdrawals/
-pendingDeposits/ approvals/ notifications/ activityLogs/ settings/ syncMetadata/`.
+If the network drops, the chip shows **🔴 Offline**. Firebase reconnects automatically;
+queued offline writes flush without creating duplicate ids. The chip states are:
+
+* 🟢 Connected
+* 🟠 Synchronizing
+* 🔴 Offline
+
+Firebase paths: `authIndex/ loginIndex/ uniques/ users/ members/ deposits/ withdrawals/
+balances/ pendingDeposits/ approvals/ notifications/ activityLogs/ settings/
+syncMetadata/ metadata/`.
 Security rules live in [`firebase/database.rules.json`](firebase/database.rules.json) —
-deny-by-default at the root, role checks read from `authIndex/$uid/role` (published on
-Firebase Auth sign-in), Member IDs are immutable, activity logs are append-only, and
+deny-by-default at the root, role checks from `authIndex/$uid`, members scoped to
+their own `memberId`, Member IDs immutable, activity logs append-only, and
 `settings/firebaseConfig` is never pushed.
 
 ## Exports

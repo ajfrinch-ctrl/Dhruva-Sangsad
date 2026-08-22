@@ -123,6 +123,9 @@ export const App = {
       if (!done) { await logout(); this.session = null; this.showAuth(); return; }
       this.session = done;
     }
+    try {
+      if (firebase.configured) await firebase.hydrate(this.session);
+    } catch (e) { console.warn('central hydrate', e); }
     await this.refreshNotifBadge();
     const hash = (location.hash || '').replace('#', '');
     await this.go(hash && PAGES[hash] && can(this.session, hash) ? hash : 'home');
@@ -142,11 +145,22 @@ export const App = {
 window.App = App;
 
 /* ---------------- sync status chip ---------------- */
-const SYNC_LABEL = { online: 'Online', offline: 'Offline', syncing: 'Syncing…', synced: 'Synced', 'sync-error': 'Sync Error' };
+const SYNC_LABEL = {
+  connected: '🟢 Connected',
+  online: '🟢 Connected',
+  synced: '🟢 Connected',
+  synchronizing: '🟠 Synchronizing',
+  syncing: '🟠 Synchronizing',
+  offline: '🔴 Offline',
+  'sync-error': '🔴 Offline',
+};
 function paintSync(status) {
   const chip = $('#syncChip'); if (!chip) return;
-  chip.className = 'chip ' + status;
-  const ic = status === 'offline' ? 'offline' : status === 'syncing' ? 'sync' : status === 'sync-error' ? 'warn' : 'online';
+  const cls = status === 'connected' || status === 'online' || status === 'synced' ? 'connected'
+    : status === 'synchronizing' || status === 'syncing' ? 'synchronizing'
+    : 'offline';
+  chip.className = 'chip ' + cls;
+  const ic = cls === 'offline' ? 'offline' : cls === 'synchronizing' ? 'sync' : 'online';
   chip.innerHTML = `${icon(ic)}<span>${SYNC_LABEL[status] || status}</span>`;
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail.status));
@@ -180,9 +194,9 @@ async function onIdleTimeout() {
 /* ---------------- boot ---------------- */
 async function boot() {
   await openDB();
+  paintSync(navigator.onLine ? 'synchronizing' : 'offline');
+  try { await firebase.init(); } catch {}
   await ensureBootstrapAdmin();
-  paintSync(navigator.onLine ? 'online' : 'offline');
-  firebase.init();
 
   $('#btnLogout').innerHTML = icon('logout');
   $('#btnLogout').addEventListener('click', () => App.doLogout());

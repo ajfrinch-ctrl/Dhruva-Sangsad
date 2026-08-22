@@ -48,6 +48,50 @@ export function todayISO(d = new Date()) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 export function nowISO() { return new Date().toISOString(); }
+
+/** Firebase ServerValue.TIMESTAMP placeholder, or a numeric fallback when the SDK is absent. */
+export function serverTimestamp() {
+  try {
+    if (typeof window !== 'undefined' && window.firebase && window.firebase.database) {
+      return window.firebase.database.ServerValue.TIMESTAMP;
+    }
+  } catch {}
+  return Date.now();
+}
+
+/** Coerce a client ISO string, epoch-ms number, or ServerValue placeholder to milliseconds. */
+export function toMillis(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number' && isFinite(v)) return v;
+  if (typeof v === 'object' && v && v['.sv']) return Date.now();
+  const n = Date.parse(v);
+  return isNaN(n) ? 0 : n;
+}
+
+/** Normalize a timestamp field to an ISO-8601 string for the rest of the UI. */
+export function toISOTime(v) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return v;
+  const ms = toMillis(v);
+  return ms ? new Date(ms).toISOString() : '';
+}
+
+const STAMP_KEYS = /(?:At|Time)$/;
+/** Walk a record and convert Firebase numeric / ServerValue timestamps to ISO strings. */
+export function normalizeRecord(rec) {
+  if (!rec || typeof rec !== 'object') return rec;
+  const out = { ...rec };
+  for (const [k, v] of Object.entries(out)) {
+    if (v == null) continue;
+    if (STAMP_KEYS.test(k) || k === 'serverTime' || k === 'lastSyncAt') {
+      if (typeof v === 'number' || (typeof v === 'object' && v['.sv'])) {
+        const iso = toISOTime(v);
+        if (iso) out[k] = iso;
+      }
+    }
+  }
+  return out;
+}
 /** ISO (YYYY-MM-DD) or timestamp -> DD-MM-YYYY */
 export function fmtDate(v) {
   if (!v) return '';

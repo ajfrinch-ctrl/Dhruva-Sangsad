@@ -75,13 +75,12 @@ p{margin:0 0 8px}
 .top-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none}
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:#fff;white-space:nowrap}
 .chip .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
-.chip.online{background:var(--green-soft);border-color:var(--green-line);color:var(--green-dark)}
-.chip.online .dot{background:var(--green)}
-.chip.offline{background:#f3f4f6;color:var(--muted)}
-.chip.syncing{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-dark)}
-.chip.syncing .dot{background:var(--amber-dark);animation:pulse 1s infinite}
-.chip.synced{background:var(--green-soft);border-color:var(--green-line);color:var(--green-dark)}
-.chip.sync-error{background:var(--red-soft);border-color:var(--red-line);color:var(--red-dark)}
+.chip.online,.chip.connected,.chip.synced{background:var(--green-soft);border-color:var(--green-line);color:var(--green-dark)}
+.chip.online .dot,.chip.connected .dot,.chip.synced .dot{background:var(--green)}
+.chip.offline,.chip.sync-error{background:#fee2e2;border-color:var(--red-line);color:var(--red-dark)}
+.chip.offline .dot,.chip.sync-error .dot{background:var(--red)}
+.chip.syncing,.chip.synchronizing{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-dark)}
+.chip.syncing .dot,.chip.synchronizing .dot{background:var(--amber-dark);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .icon-btn{position:relative;display:grid;place-items:center;width:38px;height:38px;border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);cursor:pointer;color:var(--text);font-size:17px;flex:none;transition:.15s}
 .icon-btn:hover{background:#f9fafb}
