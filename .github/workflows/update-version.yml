@@ -1,0 +1,57 @@
+name: Update VERSION with build time
+
+on:
+  push:
+    paths:
+      - 'VERSION'
+      - '.github/workflows/update-version.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Read current version or set default
+        id: vars
+        run: |
+          if [ -f VERSION ]; then
+            line=$(head -n1 VERSION || true)
+            ver=$(echo "$line" | sed -E 's/^Version: ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+            if [ -z "$ver" ]; then
+              ver="0.1.0"
+            fi
+          else
+            ver="0.1.0"
+          fi
+          echo "current=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Bump patch
+        id: bump
+        run: |
+          IFS='.' read -r major minor patch <<< "${{ steps.vars.outputs.current }}"
+          patch=$((patch + 1))
+          new_version="$major.$minor.$patch"
+          echo "new=$new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Write VERSION and commit
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "Version: ${{ steps.bump.outputs.new }} (build: $BUILD_TIME)" > VERSION
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.new }} (build: $BUILD_TIME)" || echo "no changes to commit"
+          git push
+
+      - name: Show VERSION
+        run: |
+          echo "----- VERSION file -----"
+          cat VERSION
