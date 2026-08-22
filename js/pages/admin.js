@@ -20,6 +20,7 @@ import { App } from '../app.js';
 import { formModal, changePasswordDialog } from './account.js';
 import { rejectReason, viewMember } from './members.js';
 import { downloadExcel } from '../pdf.js';
+import { pageFiles, filesSection } from '../storage.js';
 
 /* ==================== Backup & Restore ==================== */
 export async function pageBackup(session) {
@@ -444,6 +445,10 @@ export async function pageMemberPanel(session) {
   pc.body.appendChild(pRow);
   pc.body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-top:6px', text: 'প্রোফাইল সংশোধনের প্রয়োজন হলে Maker/Admin-এর সাথে যোগাযোগ করুন।' }));
   wrap.appendChild(pc);
+  wrap.appendChild(filesSection(session, {
+    memberId: m.memberId, memberDocId: m.id,
+    titleBn: 'আমার ফাইল', titleEn: 'My Files',
+  }));
 
   /* my deposits */
   const rows = statementRows(s).reverse();
@@ -478,6 +483,7 @@ export async function pageSettings(session, params = {}) {
 
   const TABS = [
     { id: 'account', label: 'আমার অ্যাকাউন্ট / Account' },
+    { id: 'files', label: 'ফাইল / Files' },
     { id: 'activity', label: 'কার্যক্রম লগ / Activity Log' },
   ];
   if (can(session, 'settings:manage')) {
@@ -505,6 +511,7 @@ export async function pageSettings(session, params = {}) {
   async function paint() {
     host.replaceChildren();
     if (active === 'account') accountSection(session, host);
+    else if (active === 'files') await embedPage(host, pageFiles, session);
     else if (active === 'activity') await embedPage(host, pageActivity, session);
     else if (active === 'organisation') await organisationSection(session, host);
     else if (active === 'firebase') await firebaseSection(session, host);
@@ -539,7 +546,7 @@ function accountSection(session, host) {
   const about = kv([
     ['অ্যাপ / Application', `${esc(APP_NAME_BN)} — ${esc(APP_NAME_EN)}`],
     ['সংস্করণ / Version', '1.0.0'],
-    ['ধরন / Type', 'Offline-first PWA · IndexedDB + Firebase Realtime Database'],
+    ['ধরন / Type', 'Offline-first PWA · IndexedDB + Firebase Realtime Database + Storage'],
     ['সংযোগ / Connection', navigator.onLine ? '<span class="tag approved">ONLINE</span>' : '<span class="tag gray">OFFLINE</span>'],
     ['ব্যাকআপ / Data safety', 'Admin → Settings → Backup & Restore'],
   ]);

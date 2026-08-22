@@ -2,7 +2,7 @@
 
 Member, Deposit, Withdrawal, Due, Advance & Reporting Management System.
 Offline-first PWA (HTML5 · CSS3 · vanilla JS · IndexedDB · Service Worker) with
-real-time Firebase Realtime Database + Authentication sync.
+real-time Firebase Realtime Database + Authentication + Storage sync.
 
 ---
 
@@ -71,8 +71,11 @@ queued local payload, the remote record is applied locally instead of overwritin
 Every record carries `createdAt`, `updatedAt`, `updatedBy`, `deviceId` and `syncStatus`.
 
 Firebase paths written: `authIndex/ users/ members/ deposits/ withdrawals/
-pendingDeposits/ approvals/ notifications/ activityLogs/ settings/ syncMetadata/`.
-Security rules live in [`firebase/database.rules.json`](firebase/database.rules.json) —
+pendingDeposits/ approvals/ notifications/ activityLogs/ settings/ filesData/ syncMetadata/`.
+File binaries live in Firebase Storage at `uploads/{uid}/{uniqueFileId}_{safeFileName}`;
+only metadata is stored in Realtime Database `filesData/{fileId}` and cached in IndexedDB.
+Security rules live in [`firebase/database.rules.json`](firebase/database.rules.json) and
+[`firebase/storage.rules`](firebase/storage.rules) —
 deny-by-default at the root, role checks read from `authIndex/$uid/role` (published on
 Firebase Auth sign-in), Member IDs are immutable, activity logs are append-only, and
 `settings/firebaseConfig` is never pushed.
@@ -124,12 +127,34 @@ manifest.webmanifest    PWA manifest
 sw.js                   service worker (precaches shell, vendor, fonts, all modules)
 css/app.css             theme, layout, print sheets
 icons/                  192 / 512 / maskable-512
-firebase/               Realtime Database security rules
+firebase/               Realtime Database + Storage security rules (`database.rules.json`, `storage.rules`)
 js/
-  util.js crypto.js db.js store.js auth.js firebase.js pdf.js icons.js ui.js ui-auth.js app.js
+  util.js crypto.js db.js store.js auth.js firebase.js storage.js pdf.js icons.js ui.js ui-auth.js app.js
   pages/ account.js dashboard.js members.js deposits.js reports.js misc.js admin.js
-vendor/                 jsPDF, html2canvas, SheetJS, Firebase compat SDK, Noto Sans Bengali
+vendor/                 jsPDF, html2canvas, SheetJS, Firebase compat SDK (app/auth/database/storage), Noto Sans Bengali
 ```
+
+## Files (Firebase Storage)
+
+Authenticated users can upload JPEG / PNG / WebP / PDF files up to 10 MB from
+**Settings → Files**, a member profile, or the member panel.
+
+* Storage path: `uploads/{firebaseAuthUid}/{uniqueFileId}_{safeFileName}`
+* Metadata path: Realtime Database `filesData/{fileId}` (also cached in IndexedDB)
+* Offline uploads are refused with “ইন্টারনেট সংযোগ প্রয়োজন / Internet connection required”
+* Activity log actions: `FILE_UPLOAD`, `FILE_DELETE`, `FILE_VIEW`
+
+Deploy rules (requires the [Firebase CLI](https://firebase.google.com/docs/cli) and
+access to project `dhruvo-sangsad`):
+
+```bash
+firebase deploy --only database,storage
+```
+
+If Storage has never been enabled on the project, open Firebase Console → Storage
+and click **Get started**. The app shows a clear error until that is done. Allowed
+MIME types and the 10 MB cap can later be overridden from Admin settings keys
+`allowedFileTypes` and `maxFileSizeBytes`.
 
 `vendor/` is committed on purpose: the app must work with no network and there is no
 package install or bundling step.

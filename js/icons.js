@@ -47,6 +47,7 @@ const P = {
   filter: '<path d="M3.5 5h17l-6.6 7.8v5.4l-3.8 2v-7.4z"/>',
   print: '<path d="M7 9V3.5h10V9"/><rect x="3.5" y="9" width="17" height="7.5" rx="2"/><path d="M7 14h10v6.5H7z"/>',
   key: '<circle cx="8" cy="14" r="4.2"/><path d="m11.2 11 8.3-8.3M16.5 5.5l2.2 2.2M14.2 7.8l2.2 2.2"/>',
+  file: '<path d="M6.5 3.5h7l4.5 4.5v12H6.5z"/><path d="M13.5 3.5V8H18"/><path d="M9 12.5h6M9 16h4"/>',
   upload: '<path d="M12 16.5v-11"/><path d="m7.5 9.5 4.5-4 4.5 4"/><path d="M4.5 15v3.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V15"/>',
   download: '<path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4.5 15v3.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V15"/>',
   pending: '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.5V12l3 1.8"/>',

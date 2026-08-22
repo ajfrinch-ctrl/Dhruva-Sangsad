@@ -107,6 +107,16 @@
       }
     },
 
+    "filesData": {
+      ".read": "auth != null",
+      ".indexOn": ["uploadedByUid", "uploadedBy", "memberId", "status"],
+      "$fileId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('uploadedByUid').val() === auth.uid) || (data.exists() && !newData.exists() && (data.child('uploadedByUid').val() === auth.uid || root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker')) || (data.exists() && newData.exists() && (data.child('uploadedByUid').val() === auth.uid || root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker')))",
+        ".validate": "newData.hasChildren(['id','path','url','fileName','contentType','size','uploadedBy','uploadedByUid','uploadedAt','status']) && newData.child('size').isNumber() && newData.child('size').val() > 0 && newData.child('size').val() <= 10485760 && newData.child('status').val().matches(/^(active|deleted)$/)",
+        "$other": { ".validate": true }
+      }
+    },
+
     "syncMetadata": {
       ".read": "auth != null",
       "$deviceId": {

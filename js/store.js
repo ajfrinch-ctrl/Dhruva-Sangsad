@@ -8,7 +8,7 @@ import {
 import { hashPassword } from './crypto.js';
 
 /* ---------------- cache ---------------- */
-const cache = { members: null, deposits: null, withdrawals: null, users: null, logs: null, notifs: null };
+const cache = { members: null, deposits: null, withdrawals: null, users: null, logs: null, notifs: null, files: null };
 export function invalidate(what) {
   if (!what) { Object.keys(cache).forEach(k => cache[k] = null); return; }
   cache[what] = null;
@@ -22,6 +22,7 @@ window.addEventListener('ds:data-changed', e => {
   else if (s === 'users') invalidate('users');
   else if (s === 'activityLogs') invalidate('logs');
   else if (s === 'notifications') invalidate('notifs');
+  else if (s === 'filesData') invalidate('files');
 });
 
 export async function allMembers() { if (!cache.members) cache.members = await dbAll('members'); return cache.members; }
@@ -30,6 +31,7 @@ export async function allWithdrawals() { if (!cache.withdrawals) cache.withdrawa
 export async function allUsers() { if (!cache.users) cache.users = await dbAll('users'); return cache.users; }
 export async function allLogs() { if (!cache.logs) cache.logs = await dbAll('activityLogs'); return cache.logs; }
 export async function allNotifications() { if (!cache.notifs) cache.notifs = await dbAll('notifications'); return cache.notifs; }
+export async function allFiles() { if (!cache.files) cache.files = await dbAll('filesData'); return cache.files; }
 
 export const getMember = id => dbGet('members', id);
 export const getUser = id => dbGet('users', id);
@@ -48,6 +50,8 @@ export const DEFAULT_SETTINGS = {
   countSpecialTowardsInstallment: false,
   currency: '৳',
   waTemplate: 'প্রিয় [Member Name],\nআসসালামু আলাইকুম।\nআপনার মাসিক জমা বকেয়া রয়েছে। অনুগ্রহ করে দ্রুত সময়ের মধ্যে বকেয়া পরিশোধ করার জন্য বিনীতভাবে অনুরোধ করা হলো।\nধন্যবাদ।\nধ্রুব সংসদ',
+  allowedFileTypes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+  maxFileSizeBytes: 10485760,
 };
 export async function settings() {
   const out = { ...DEFAULT_SETTINGS };

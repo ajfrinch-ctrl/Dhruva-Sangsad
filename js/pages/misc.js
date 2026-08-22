@@ -88,6 +88,9 @@ const ACTION_META = {
   BACKUP: { ic: 'backup', bn: 'ব্যাকআপ' },
   RESTORE: { ic: 'restore', bn: 'রিস্টোর' },
   SETTINGS_UPDATE: { ic: 'settings', bn: 'সেটিংস হালনাগাদ' },
+  FILE_UPLOAD: { ic: 'upload', bn: 'ফাইল আপলোড' },
+  FILE_DELETE: { ic: 'trash', bn: 'ফাইল মুছে ফেলা' },
+  FILE_VIEW: { ic: 'eye', bn: 'ফাইল দেখা' },
 };
 export const actionMeta = a => ACTION_META[a] || { ic: 'log', bn: a };
 

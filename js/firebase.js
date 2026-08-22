@@ -18,10 +18,11 @@ export const DEFAULT_FIREBASE_CONFIG = {
   measurementId: 'G-V1ZFDHKEPY',
 };
 
-const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings'];
+const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings', 'filesData'];
 const PATHS = {
   users: 'users', members: 'members', deposits: 'deposits', withdrawals: 'withdrawals',
   notifications: 'notifications', activityLogs: 'activityLogs', settings: 'settings',
+  filesData: 'filesData',
 };
 /* Derived mirrors kept in sync alongside `deposits/` so that other devices can
    watch the approval workflow cheaply, plus the per-device sync heartbeat. */
@@ -35,9 +36,27 @@ const AUTH_INDEX_PATH = 'authIndex';
 class FirebaseBridge extends EventTarget {
   constructor() {
     super();
-    this.app = null; this.auth = null; this.db = null;
+    this.app = null; this.auth = null; this.db = null; this.storage = null;
     this.config = null; this.status = 'offline'; this.listeners = [];
     this.ready = false; this.lastError = null; this.syncing = false;
+  }
+
+  /** Firebase Auth uid of the signed-in user, or null. */
+  getAuthUid() {
+    return (this.auth && this.auth.currentUser && this.auth.currentUser.uid) || null;
+  }
+
+  /** Existing Firebase app Storage instance. Does not create a second app. */
+  getStorage() {
+    if (this.storage) return this.storage;
+    if (!this.app || typeof this.app.storage !== 'function') return null;
+    try {
+      this.storage = this.app.storage();
+      return this.storage;
+    } catch (e) {
+      this.lastError = e && e.message ? e.message : String(e);
+      return null;
+    }
   }
 
   get configured() { return !!this.config && !!this.config.databaseURL; }
@@ -71,7 +90,7 @@ class FirebaseBridge extends EventTarget {
     this.listeners.forEach(off => { try { off(); } catch {} });
     this.listeners = [];
     if (this.app) { try { await this.app.delete(); } catch {} }
-    this.app = null; this.auth = null; this.db = null; this.ready = false;
+    this.app = null; this.auth = null; this.db = null; this.storage = null; this.ready = false;
   }
 
   async init() {
@@ -82,6 +101,8 @@ class FirebaseBridge extends EventTarget {
       this.app = window.firebase.initializeApp(this.config, 'ds-' + Date.now());
       this.auth = this.app.auth();
       this.db = this.app.database();
+      try { this.storage = (typeof this.app.storage === 'function') ? this.app.storage() : null; }
+      catch (storageErr) { this.storage = null; }
       this.ready = true;
       this.watchConnection();
       this.attachListeners();

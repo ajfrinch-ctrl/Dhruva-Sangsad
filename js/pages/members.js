@@ -13,6 +13,7 @@ import { can } from '../auth.js';
 import { App } from '../app.js';
 import { formModal } from './account.js';
 import { dueMessage } from './reports.js';
+import { filesSection } from '../storage.js';
 
 /* ============ Members hub (Register / Update / Search) ============ */
 export async function pageMembersHub(session, params = {}) {
@@ -273,6 +274,10 @@ export function memberEditor(session, m, deposits, cfg, onSaved) {
   });
 
   box.appendChild(card('সদস্য তথ্য', `Member Information — ${m.memberId}`, f));
+  box.appendChild(filesSection(session, {
+    memberId: m.memberId, memberDocId: m.id,
+    titleBn: 'সদস্যের ফাইল', titleEn: `Member files — ${m.memberId}`,
+  }));
   return box;
 }
 

@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.0.0';
+const VERSION = 'ds-v6.1.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -16,6 +16,7 @@ const PRECACHE = [
   'vendor/firebase-app-compat.js',
   'vendor/firebase-auth-compat.js',
   'vendor/firebase-database-compat.js',
+  'vendor/firebase-storage-compat.js',
   'vendor/jspdf.umd.min.js',
   'vendor/jspdf.plugin.autotable.min.js',
   'vendor/html2canvas.min.js',
@@ -31,6 +32,7 @@ const PRECACHE = [
   'js/crypto.js',
   'js/db.js',
   'js/firebase.js',
+  'js/storage.js',
   'js/icons.js',
   'js/pdf.js',
   'js/store.js',
@@ -88,7 +90,7 @@ function bypass(url, request) {
   if (request.method !== 'GET') return true;
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
   if (url.origin !== self.location.origin) return true;
-  if (/firebaseio\.com|googleapis\.com|firebaseapp\.com/.test(url.host)) return true;
+  if (/firebaseio\.com|googleapis\.com|firebaseapp\.com|firebasestorage\.app/.test(url.host)) return true;
   return false;
 }
 
