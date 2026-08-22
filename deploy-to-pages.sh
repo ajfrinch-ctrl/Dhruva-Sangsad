@@ -329,9 +329,14 @@ else
   step "Verifying the live site"
   sleep 3   # Pages' CDN needs a moment to expose the new build.
 
-  probe() { # path -> prints HTTP status, empty on network failure
-    curl -fsS -o /dev/null -w '%{http_code}' --max-time 20 \
-      -H 'Cache-Control: no-cache' "${SITE_URL%/}/$1" 2>/dev/null || printf ''
+  probe() { # path -> prints HTTP status, or empty when the host is unreachable.
+    # curl still writes '000' on a connection/TLS failure, so that value must be
+    # treated as "no response" rather than as a failing HTTP status.
+    local code
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+      -H 'Cache-Control: no-cache' "${SITE_URL%/}/$1" 2>/dev/null)" || code=""
+    [[ "$code" == "000" ]] && code=""
+    printf '%s' "$code"
   }
 
   reachable=1
