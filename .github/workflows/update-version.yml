@@ -1,4 +1,4 @@
-name: Update VERSION with build time and create release
+name: Update VERSION with build time, build artifacts, and create release
 
 on:
   push:
@@ -55,6 +55,25 @@ jobs:
           echo "new_commit=$NEW_COMMIT" >> "$GITHUB_OUTPUT"
           echo "build_time=$BUILD_TIME" >> "$GITHUB_OUTPUT"
 
+      - name: Install dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          fi
+
+      - name: Build (if available)
+        run: |
+          if [ -f package.json ]; then
+            npm run build || true
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            dist/**
+
       - name: Create and push tag
         run: |
           TAG=v${{ steps.bump.outputs.new }}
@@ -62,16 +81,26 @@ jobs:
           git push origin "$TAG"
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
+        id: create_release
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: v${{ steps.bump.outputs.new }}
-          release_name: v${{ steps.bump.outputs.new }}
+          tag: v${{ steps.bump.outputs.new }}
+          name: v${{ steps.bump.outputs.new }}
           body: |
             Version: ${{ steps.bump.outputs.new }}
             Build time: ${{ steps.write_version.outputs.build_time }}
             Commit: ${{ steps.write_version.outputs.new_commit }}
           draft: false
           prerelease: false
+
+      - name: Upload artifacts to release
+        if: always()
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.bump.outputs.new }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Show VERSION
         run: |
