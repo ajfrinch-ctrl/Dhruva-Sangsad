@@ -6,7 +6,7 @@ import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
-import { applyRole } from './theme.js';
+import { applyRole, getTheme, toggleTheme } from './theme.js';
 import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
@@ -219,6 +219,16 @@ async function boot() {
   $('#btnLogout').addEventListener('click', () => App.doLogout());
   $('#btnNotif').innerHTML = icon('bell');
   $('#btnNotif').addEventListener('click', () => { if (App.session) openNotifications(App.session); });
+  const paintThemeBtn = () => {
+    const b = $('#btnTheme'); if (!b) return;
+    const dark = getTheme() === 'amoled';
+    b.innerHTML = icon(dark ? 'sun' : 'moon');
+    b.setAttribute('aria-label', dark ? 'Light mode' : 'Hard dark');
+    b.title = dark ? 'লাইট মোড / Light' : 'হার্ড ডার্ক / Hard dark';
+  };
+  paintThemeBtn();
+  $('#btnTheme').addEventListener('click', () => { toggleTheme(); paintThemeBtn(); });
+  window.addEventListener('ds:theme', paintThemeBtn);
 
   // Reset the idle timer on any meaningful user interaction.
   ['mousemove', 'mousedown', 'keydown', 'touchstart', 'touchmove', 'scroll', 'click', 'wheel']

@@ -6,6 +6,7 @@ import { icon } from './icons.js';
 import { login, recoverPassword, memberAccountExists } from './auth.js';
 import { registerMember, settings } from './store.js';
 import { passwordIssues } from './crypto.js';
+import { getTheme, toggleTheme } from './theme.js';
 
 let mode = 'login';
 
@@ -31,6 +32,15 @@ export function renderAuth(root, onLoggedIn) {
     <div class="auth-foot">
       ${t('ধ্রুব সংসদ · সদস্য ও জমা ব্যবস্থাপনা', 'Dhruvo Sangsad · Member & Deposit Management')}
     </div>`;
+  const themeBtn = el('button', { class: 'icon-btn auth-theme-btn', type: 'button' });
+  const paint = () => {
+    const dark = getTheme() === 'amoled';
+    themeBtn.innerHTML = icon(dark ? 'sun' : 'moon');
+    themeBtn.title = dark ? 'লাইট মোড / Light' : 'হার্ড ডার্ক / Hard dark';
+  };
+  paint();
+  themeBtn.addEventListener('click', () => { toggleTheme(); paint(); });
+  root.appendChild(themeBtn);
   root.appendChild(card);
   card.querySelectorAll('#authTabs button').forEach(b => b.addEventListener('click', () => {
     mode = b.dataset.m; renderAuth(root, onLoggedIn);

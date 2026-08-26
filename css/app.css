@@ -375,6 +375,65 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   .topbar{padding:0 8px}
 }
 
+.auth-theme-btn{position:fixed;top:12px;right:12px;z-index:80}
+
+/* ===================== HARD DARK (AMOLED) ===================== */
+html[data-theme="amoled"],html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#000; --card:#000; --line:#222; --line-2:#1a1a1a;
+  --text:#f2f2f2; --muted:#a3a3a3; --faint:#737373;
+  --green-soft:#052e16; --green-line:#14532d;
+  --red-soft:#1c0508; --red-line:#4c0519;
+  --amber-soft:#1c1403; --amber-line:#713f12;
+  --blue-soft:#0a1628;
+  --shadow:none;
+}
+html[data-theme="amoled"] body,html[data-theme="dark"] body{background:#000;color:var(--text)}
+html[data-theme="amoled"] .topbar,html[data-theme="dark"] .topbar,
+html[data-theme="amoled"] .topnav,html[data-theme="dark"] .topnav,
+html[data-theme="amoled"] .app-footer,html[data-theme="dark"] .app-footer,
+html[data-theme="amoled"] .card,html[data-theme="dark"] .card,
+html[data-theme="amoled"] .stat,html[data-theme="dark"] .stat,
+html[data-theme="amoled"] .modal,html[data-theme="dark"] .modal,
+html[data-theme="amoled"] .auth-card,html[data-theme="dark"] .auth-card,
+html[data-theme="amoled"] .li,html[data-theme="dark"] .li,
+html[data-theme="amoled"] table.tbl,html[data-theme="dark"] table.tbl{background:#000;border-color:var(--line);color:var(--text)}
+html[data-theme="amoled"] .auth-wrap,html[data-theme="dark"] .auth-wrap{background:#000}
+html[data-theme="amoled"] .main,html[data-theme="dark"] .main{background:#000}
+html[data-theme="amoled"] .icon-btn,html[data-theme="dark"] .icon-btn,
+html[data-theme="amoled"] .btn-ghost,html[data-theme="dark"] .btn-ghost,
+html[data-theme="amoled"] .chip,html[data-theme="dark"] .chip,
+html[data-theme="amoled"] .auth-tabs,html[data-theme="dark"] .auth-tabs{background:#000;border-color:#333;color:var(--text)}
+html[data-theme="amoled"] .icon-btn:hover,html[data-theme="dark"] .icon-btn:hover,
+html[data-theme="amoled"] .btn-ghost:hover,html[data-theme="dark"] .btn-ghost:hover,
+html[data-theme="amoled"] .nav-tab:hover,html[data-theme="dark"] .nav-tab:hover{background:#111}
+html[data-theme="amoled"] input,html[data-theme="dark"] input,
+html[data-theme="amoled"] select,html[data-theme="dark"] select,
+html[data-theme="amoled"] textarea,html[data-theme="dark"] textarea{background:#000;color:var(--text);border-color:#333}
+html[data-theme="amoled"] input:focus,html[data-theme="dark"] input:focus,
+html[data-theme="amoled"] select:focus,html[data-theme="dark"] select:focus,
+html[data-theme="amoled"] textarea:focus,html[data-theme="dark"] textarea:focus{border-color:var(--green);box-shadow:0 0 0 2px #052e16}
+html[data-theme="amoled"] input[readonly],html[data-theme="dark"] input[readonly],
+html[data-theme="amoled"] input:disabled,html[data-theme="dark"] input:disabled{background:#0a0a0a;color:var(--muted)}
+html[data-theme="amoled"] table.tbl th,html[data-theme="dark"] table.tbl th,
+html[data-theme="amoled"] table.tbl tfoot td,html[data-theme="dark"] table.tbl tfoot td,
+html[data-theme="amoled"] .card-head,html[data-theme="dark"] .card-head,
+html[data-theme="amoled"] .kv > div:nth-child(odd),html[data-theme="dark"] .kv > div:nth-child(odd){background:#050505;color:var(--muted);border-color:var(--line)}
+html[data-theme="amoled"] table.tbl td,html[data-theme="dark"] table.tbl td{border-color:#1a1a1a}
+html[data-theme="amoled"] table.tbl tbody tr:hover,html[data-theme="dark"] table.tbl tbody tr:hover{background:#0a0a0a}
+html[data-theme="amoled"] .nav-tab.on,html[data-theme="dark"] .nav-tab.on{background:#052e16;color:#86efac;border-bottom-color:var(--green)}
+html[data-theme="amoled"] .auth-tabs button.on,html[data-theme="dark"] .auth-tabs button.on{background:#111;color:#86efac}
+html[data-theme="amoled"] .modal-back,html[data-theme="dark"] .modal-back{background:rgba(0,0,0,.78)}
+html[data-theme="amoled"] .modal-head,html[data-theme="dark"] .modal-head,
+html[data-theme="amoled"] .modal-foot,html[data-theme="dark"] .modal-foot{border-color:#222}
+html[data-theme="amoled"] fieldset,html[data-theme="dark"] fieldset{border-color:#222}
+html[data-theme="amoled"] .brand-txt .r .brand-role-tag,html[data-theme="dark"] .brand-txt .r .brand-role-tag{background:#111;border-color:#333;color:var(--muted)}
+html[data-theme="amoled"] .li.unread,html[data-theme="dark"] .li.unread{background:#1c1403;border-color:#713f12}
+html[data-theme="amoled"] .li.wa-msg,html[data-theme="dark"] .li.wa-msg{background:#052e16;border-color:#14532d}
+html[data-theme="amoled"] .li.wa-msg .bd .t,html[data-theme="dark"] .li.wa-msg .bd .t{color:#86efac}
+html[data-theme="amoled"] .print-sheet,html[data-theme="dark"] .print-sheet,
+html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{color:#000 !important;background:#fff}
+
 @media print{
   body{background:#fff}
   .topbar,.topnav,.app-footer,.sheet-bar,.toast-wrap,.no-print,.tabs,.toolbar{display:none !important}
