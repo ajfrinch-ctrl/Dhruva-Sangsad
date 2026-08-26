@@ -6,44 +6,91 @@
 <meta name="theme-color" content="#16a34a">
 <meta name="description" content="ধ্রুব সংসদ — Offline-first member, deposit, due, advance and reporting management system">
 <title>ধ্রুব সংসদ | Dhruvo Sangsad</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/app.css">
-<script src="vendor/firebase-app-compat.js" defer></script>
-<script src="vendor/firebase-auth-compat.js" defer></script>
-<script src="vendor/firebase-database-compat.js" defer></script>
-<script src="vendor/jspdf.umd.min.js" defer></script>
-<script src="vendor/jspdf.plugin.autotable.min.js" defer></script>
-<script src="vendor/html2canvas.min.js" defer></script>
-<script src="vendor/xlsx.full.min.js" defer></script>
+<script>
+(function () {
+  var p = location.pathname || '/';
+  if (p && !/\/$/.test(p) && !/\.[a-z0-9]+$/i.test(p)) {
+    location.replace(p + '/' + (location.search || '') + (location.hash || ''));
+    return;
+  }
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) {
+      rs.forEach(function (r) { r.unregister(); });
+    });
+  }
+  if (window.caches) {
+    caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
+  }
+})();
+</script>
+<link rel="manifest" href="./manifest.webmanifest?v=6.5.12">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch.png">
+<link rel="stylesheet" href="./css/app.css?v=6.5.12">
+<script src="./vendor/firebase-app-compat.js" defer></script>
+<script src="./vendor/firebase-auth-compat.js" defer></script>
+<script src="./vendor/firebase-database-compat.js" defer></script>
+<script src="./vendor/jspdf.umd.min.js" defer></script>
+<script src="./vendor/jspdf.plugin.autotable.min.js" defer></script>
+<script src="./vendor/html2canvas.min.js" defer></script>
+<script src="./vendor/xlsx.full.min.js" defer></script>
 </head>
 <body>
 
-<!-- ===== GUEST: login screen is the only visible screen ===== -->
-<div id="authScreen" class="auth-wrap"></div>
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-logo"><img src="./icons/logo.png" alt="ধ্রুব সংসদ"></div>
+      <h1>ধ্রুব সংসদ</h1>
+      <div class="sub">Dhruvo Sangsad</div>
+    </div>
+    <p class="auth-title" id="bootMsg">লোড হচ্ছে… / Loading…</p>
+    <p class="auth-foot">v6.5.12</p>
+  </div>
+</div>
 
-<!-- ===== AUTHENTICATED APP SHELL (hidden until login) ===== -->
 <div id="app" aria-hidden="true">
   <header class="topbar">
     <div class="brand">
-      <div class="brand-logo">ধ</div>
+      <div class="brand-logo" id="brandLogo"><img src="./icons/logo.png" alt=""></div>
       <div class="brand-txt">
         <div class="n">ধ্রুব সংসদ</div>
         <div class="r" id="brandRole">—</div>
       </div>
     </div>
     <div class="top-right">
-      <span class="chip offline" id="syncChip"><span class="dot"></span><span id="syncTxt">Offline</span></span>
+      <button class="icon-btn" id="btnSettings" type="button" aria-label="Settings" hidden></button>
+      <button class="icon-btn" id="btnTheme" type="button" aria-label="Dark mode" title="হার্ড ডার্ক / Hard dark"></button>
       <button class="icon-btn" id="btnNotif" type="button" aria-label="Notifications"></button>
       <button class="icon-btn" id="btnLogout" type="button" aria-label="Logout"></button>
     </div>
   </header>
   <nav class="topnav" id="topnav" aria-label="Primary navigation"></nav>
   <main class="main" id="view"></main>
+  <nav class="bottom-nav" id="bottomnav" hidden aria-label="Member navigation"></nav>
+  <footer class="app-footer" id="appFooter">
+    <div class="app-footer-org" id="appFooterOrg"></div>
+  </footer>
 </div>
 
 <noscript><p style="padding:20px;font-family:sans-serif">This application requires JavaScript.</p></noscript>
-<script type="module" src="js/app.js"></script>
+<script type="module" src="./js/app.js?v=6.5.12"></script>
+<script>
+window.addEventListener('error', function (e) {
+  var el = document.getElementById('bootMsg');
+  if (el) el.textContent = 'লোড ব্যর্থ: ' + (e.message || 'script error');
+});
+window.addEventListener('unhandledrejection', function (e) {
+  var el = document.getElementById('bootMsg');
+  if (el) el.textContent = 'লোড ব্যর্থ: ' + ((e.reason && e.reason.message) || e.reason || 'promise');
+});
+setTimeout(function () {
+  var app = document.getElementById('app');
+  var el = document.getElementById('bootMsg');
+  if (el && app && !app.classList.contains('on') && /লোড হচ্ছে/.test(el.textContent || '')) {
+    el.textContent = 'লগইন লোড হচ্ছে না। পেজ রিফ্রেশ করুন অথবা ইনকগনিটোতে খুলুন।';
+  }
+}, 10000);
+</script>
 </body>
 </html>

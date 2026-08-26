@@ -264,6 +264,7 @@ export async function pageDeposit(session, params = {}) {
   if (staff) form.elements.memberDocId.addEventListener('change', paintInfo);
 
   wrap.appendChild(infoHost);
+  wrap.appendChild(banner('info', 'প্রতি মাসের <b>১২ তারিখের</b> মধ্যে জমা না দিলে বকেয়া দেখাবে। মাসের যেকোনো দিন জমা নেওয়া যাবে। / Due after the 12th if unpaid. Deposits are accepted any day of the month.'));
   wrap.appendChild(card(staff ? 'জমা এন্ট্রি' : 'জমা দাখিল', staff ? 'Deposit Entry' : 'Submit Deposit', form));
   await paintInfo();
 
