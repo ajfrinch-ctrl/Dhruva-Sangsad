@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#16a34a">
 <meta name="description" content="ধ্রুব সংসদ — Offline-first member, deposit, due, advance and reporting management system">
 <title>ধ্রুব সংসদ | Dhruvo Sangsad</title>
-<link rel="manifest" href="manifest.webmanifest?v=6.5.8">
+<link rel="manifest" href="manifest.webmanifest?v=6.5.9">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch.png">
 <link rel="stylesheet" href="css/app.css?v=6.5.9">
@@ -21,7 +21,17 @@
 <body>
 
 <!-- ===== GUEST: login screen is the only visible screen ===== -->
-<div id="authScreen" class="auth-wrap"></div>
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-logo"><img src="icons/logo.png" alt="ধ্রুব সংসদ"></div>
+      <h1>ধ্রুব সংসদ</h1>
+      <div class="sub">Dhruvo Sangsad</div>
+    </div>
+    <p class="auth-title">লোড হচ্ছে… / Loading…</p>
+    <p class="auth-foot">v6.5.9 · GitHub Pages</p>
+  </div>
+</div>
 
 <!-- ===== AUTHENTICATED APP SHELL (hidden until login) ===== -->
 <div id="app" aria-hidden="true">
