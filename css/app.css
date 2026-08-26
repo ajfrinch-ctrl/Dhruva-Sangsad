@@ -28,50 +28,6 @@
   --header-h:60px; --nav-h:46px; --footer-h:40px; --content-max:1600px;
 }
 
-/* True-black AMOLED + dark (OLED-friendly, no gray wash) */
-html[data-theme="dark"],html[data-theme="amoled"]{
-  --bg:#0b1220; --card:#111827; --line:#1f2937; --line-2:#1a2230;
-  --text:#f3f4f6; --muted:#9ca3af; --faint:#6b7280;
-  --shadow:none;
-  --green-soft:#052e16; --green-line:#14532d;
-  --red-soft:#3f0a16; --red-line:#7f1d1d;
-  --amber-soft:#422006; --amber-line:#854d0e;
-  --blue-soft:#172554;
-}
-html[data-theme="amoled"]{
-  --bg:#000000; --card:#000000; --line:#1a1a1a; --line-2:#111111;
-}
-html[data-theme="dark"][data-role="admin"],html[data-theme="amoled"][data-role="admin"]{
-  --green-soft:#2e1065; --green-line:#5b21b6;
-}
-html[data-theme="dark"][data-role="maker"],html[data-theme="amoled"][data-role="maker"]{
-  --green-soft:#042f2e; --green-line:#0f766e;
-}
-html[data-theme="dark"][data-role="member"],html[data-theme="amoled"][data-role="member"]{
-  --green-soft:#431407; --green-line:#c2410c;
-}
-html[data-theme="dark"] body,html[data-theme="amoled"] body{background:var(--bg);color:var(--text)}
-html[data-theme="dark"] .topbar,html[data-theme="amoled"] .topbar,
-html[data-theme="dark"] .topnav,html[data-theme="amoled"] .topnav,
-html[data-theme="dark"] .app-footer,html[data-theme="amoled"] .app-footer,
-html[data-theme="dark"] .card,html[data-theme="amoled"] .card,
-html[data-theme="dark"] .stat,html[data-theme="amoled"] .stat,
-html[data-theme="dark"] .modal,html[data-theme="amoled"] .modal,
-html[data-theme="dark"] .auth-card,html[data-theme="amoled"] .auth-card,
-html[data-theme="dark"] table.tbl,html[data-theme="amoled"] table.tbl{background:var(--card);color:var(--text)}
-html[data-theme="dark"] input,html[data-theme="amoled"] input,
-html[data-theme="dark"] select,html[data-theme="amoled"] select,
-html[data-theme="dark"] textarea,html[data-theme="amoled"] textarea,
-html[data-theme="dark"] .icon-btn,html[data-theme="amoled"] .icon-btn,
-html[data-theme="dark"] .btn-ghost,html[data-theme="amoled"] .btn-ghost,
-html[data-theme="dark"] .chip,html[data-theme="amoled"] .chip{background:var(--bg);color:var(--text);border-color:var(--line)}
-html[data-theme="dark"] table.tbl th,html[data-theme="amoled"] table.tbl th,
-html[data-theme="dark"] table.tbl tfoot td,html[data-theme="amoled"] table.tbl tfoot td,
-html[data-theme="dark"] .kv > div:nth-child(odd),html[data-theme="amoled"] .kv > div:nth-child(odd){background:var(--line-2);color:var(--muted)}
-html[data-theme="dark"] .auth-wrap,html[data-theme="amoled"] .auth-wrap{background:var(--bg)}
-html[data-theme="dark"] .auth-tabs,html[data-theme="amoled"] .auth-tabs{background:var(--line-2)}
-html[data-theme="dark"] .auth-tabs button.on,html[data-theme="amoled"] .auth-tabs button.on{background:var(--card);color:var(--text)}
-html[data-theme="amoled"] .topbar,html[data-theme="amoled"] .topnav,html[data-theme="amoled"] .app-footer{background:#000;border-color:#111}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
@@ -435,18 +391,4 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   .card,.sheet-holder{border:0;box-shadow:none;padding:0;margin:0;background:#fff}
   .print-sheet{box-shadow:none;width:auto;padding:0}
   @page{size:A4;margin:10mm}
-}
-
-@media (max-width:640px){
-  body{background:
-    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--role-accent) 22%, transparent), transparent 55%),
-    radial-gradient(90% 60% at 100% 10%, color-mix(in srgb, var(--red) 16%, transparent), transparent 50%),
-    var(--bg)}
-  html[data-theme="light"] .topbar,
-  html[data-theme="light"] .topnav,
-  html[data-theme="light"] .app-footer{background:color-mix(in srgb, var(--role-soft) 70%, #fff)}
-  .nav-tab.on{background:color-mix(in srgb, var(--role-accent) 16%, transparent)}
-  html[data-theme="light"] .stat{background:linear-gradient(165deg, color-mix(in srgb, var(--role-soft) 80%, #fff), #fff)}
-  html[data-theme="light"] .card-head{background:color-mix(in srgb, var(--role-soft) 45%, #fff)}
-  .btn-primary{box-shadow:0 4px 12px color-mix(in srgb, var(--role-accent) 35%, transparent)}
 }

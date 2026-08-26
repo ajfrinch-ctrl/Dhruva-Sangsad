@@ -8,7 +8,7 @@ import { visibleNotifications, markNotificationRead, allLogs } from '../store.js
 import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { App } from '../app.js';
 
-const NOTIF_ICON = { register: 'register', deposit: 'deposit', approve: 'approve', reject: 'reject', info: 'bell', warn: 'warn' };
+const NOTIF_ICON = { register: 'register', deposit: 'deposit', approve: 'approve', reject: 'reject', info: 'bell', warn: 'warn', due: 'due' };
 
 /* ==================== Notifications (popup from top-right bell) ==================== */
 export async function openNotifications(session) {
