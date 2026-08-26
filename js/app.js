@@ -77,7 +77,8 @@ export const App = {
       const extra = [cfg.orgAddress, cfg.orgPhone].filter(Boolean).join(' · ');
       el.innerHTML = `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
-        + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '');
+        + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
+        + `<span class="app-footer-meta">v6.5.4</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
