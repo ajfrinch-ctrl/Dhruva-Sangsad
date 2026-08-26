@@ -86,7 +86,7 @@ export const App = {
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.6</span>`;
+        + `<span class="app-footer-meta">v6.5.7</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
@@ -179,22 +179,15 @@ export const App = {
 };
 window.App = App;
 
-/* ---------------- sync status chip ---------------- */
-function syncLabel(status) {
-  const map = {
-    online: t('অনলাইন', 'Online'),
-    offline: t('অফলাইন', 'Offline'),
-    syncing: t('সিঙ্ক হচ্ছে…', 'Syncing…'),
-    synced: t('সিঙ্কড', 'Synced'),
-    'sync-error': t('সিঙ্ক ত্রুটি', 'Sync Error'),
-  };
-  return map[status] || status;
-}
+/* ---------------- topbar sync border (no text chip) ---------------- */
 function paintSync(status) {
-  const chip = $('#syncChip'); if (!chip) return;
-  chip.className = 'chip ' + status;
-  const ic = status === 'offline' ? 'offline' : status === 'syncing' ? 'sync' : status === 'sync-error' ? 'warn' : 'online';
-  chip.innerHTML = `${icon(ic)}<span>${syncLabel(status)}</span>`;
+  const bar = document.querySelector('.topbar');
+  if (!bar) return;
+  const st = status || (navigator.onLine ? 'online' : 'offline');
+  bar.classList.remove('sync-online', 'sync-offline', 'sync-syncing', 'sync-synced', 'sync-error');
+  const cls = st === 'sync-error' ? 'sync-error' : `sync-${st}`;
+  bar.classList.add(cls);
+  document.documentElement.dataset.sync = st;
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail.status));
 
