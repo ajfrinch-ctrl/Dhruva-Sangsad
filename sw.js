@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.5.10';
+const VERSION = 'ds-v6.5.11';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -118,7 +118,24 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  /* Static assets: cache-first with background refresh (stale-while-revalidate). */
+  /* JS/CSS: network-first so new exports (e.g. logoSrc) are not stuck in cache. */
+  if (/\.(js|mjs|css)$/i.test(url.pathname)) {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req, { cache: 'no-store' });
+        if (fresh && fresh.ok) {
+          try { (await caches.open(SHELL)).put(url.pathname.replace(/^\//, ''), fresh.clone()); } catch (_) {}
+        }
+        return fresh;
+      } catch (_) {
+        return (await caches.match(req, { ignoreSearch: true })) ||
+          new Response('', { status: 504, statusText: 'Offline' });
+      }
+    })());
+    return;
+  }
+
+  /* Other static assets: cache-first with background refresh. */
   event.respondWith((async () => {
     const cached = await caches.match(req, { ignoreSearch: false });
     const network = fetch(req).then(async res => {

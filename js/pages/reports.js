@@ -2,13 +2,13 @@
    Payment Method, Date Range, Member-wise — with PDF / Excel / CSV export. */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, monthKey, monthLabel,
-  typeLabel, methodLabel, PAY_METHODS, waNumber, modal, t,
+  typeLabel, methodLabel, PAY_METHODS, waNumber, modal, t, logoSrc,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals,
-  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel, logoSrc,
+  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel,
 } from '../store.js';
 import { sheetToPdf, downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { can } from '../auth.js';
@@ -300,7 +300,8 @@ function rStatement(ctx, meta) {
 }
 
 /* ================= 2. Overall Report ================= */
-a('select');
+async function rOverall(ctx, meta) {
+  const stSel = el('select');
   [['active', 'শুধু Active'], ['', 'সব সদস্য / All'], ['pending', 'Pending']].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
   ctx.filterHost.append(mkField('সদস্য স্ট্যাটাস / Status', stSel, '160px'));
 

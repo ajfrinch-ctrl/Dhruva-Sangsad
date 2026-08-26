@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — application shell, router, role-based navigation guard, idle timeout */
-import { $, el, clear, toast, esc, alertBox, confirmBox, t } from './util.js';
+import { $, el, clear, toast, esc, alertBox, confirmBox, t, logoSrc } from './util.js';
 import { setLang, getLang } from './i18n.js';
 import { icon } from './icons.js';
 import { openDB } from './db.js';
@@ -7,7 +7,7 @@ import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSION
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
-import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, logoSrc } from './store.js';
+import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
@@ -86,7 +86,7 @@ export const App = {
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.10</span>`;
+        + `<span class="app-footer-meta">v6.5.11</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }

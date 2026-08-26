@@ -4,6 +4,11 @@ export { t, getLang, loc, tx };
 
 export const APP_NAME_BN = 'ধ্রুব সংসদ';
 export const APP_NAME_EN = 'Dhruvo Sangsad';
+export const DEFAULT_LOGO = 'icons/logo.png';
+export function logoSrc(cfg) {
+  const v = cfg && cfg.orgLogo;
+  return (v && String(v).trim()) || DEFAULT_LOGO;
+}
 
 /* ---------------- DOM ---------------- */
 export function el(tag, attrs = {}, children = []) {

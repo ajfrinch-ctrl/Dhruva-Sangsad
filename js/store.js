@@ -4,8 +4,10 @@ import {
 } from './db.js';
 import {
   uid, nowISO, todayISO, num, normalizeMobile, memberIdFromMobile, monthsBetweenInclusive, monthKey,
+  logoSrc, DEFAULT_LOGO,
 } from './util.js';
 import { hashPassword } from './crypto.js';
+export { logoSrc, DEFAULT_LOGO };
 
 /* ---------------- cache ---------------- */
 const cache = { members: null, deposits: null, withdrawals: null, users: null, logs: null, notifs: null };
@@ -51,11 +53,6 @@ export const DEFAULT_SETTINGS = {
   orgLogo: '',
   waTemplate: 'প্রিয় [Member Name],\nআসসালামু আলাইকুম।\nআপনার মাসিক জমা বকেয়া রয়েছে। অনুগ্রহ করে দ্রুত সময়ের মধ্যে বকেয়া পরিশোধ করার জন্য বিনীতভাবে অনুরোধ করা হলো।\nধন্যবাদ।\nধ্রুব সংসদ',
 };
-export const DEFAULT_LOGO = 'icons/logo.png';
-export function logoSrc(cfg) {
-  const v = cfg && cfg.orgLogo;
-  return (v && String(v).trim()) || DEFAULT_LOGO;
-}
 export async function settings() {
   const out = { ...DEFAULT_SETTINGS };
   for (const k of Object.keys(DEFAULT_SETTINGS)) {

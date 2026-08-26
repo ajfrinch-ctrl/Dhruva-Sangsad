@@ -1,10 +1,10 @@
 /* Guest screens: Login (default), Register, Forgot Password, Registration success.
    Nothing else is rendered while unauthenticated. */
-import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
+import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t, logoSrc } from './util.js';
 import { getLang, setLang } from './i18n.js';
 import { icon } from './icons.js';
 import { login, recoverPassword, findMemberForRecovery, verifyRecoveryDob } from './auth.js';
-import { registerMember, settings, logoSrc } from './store.js';
+import { registerMember, settings } from './store.js';
 import { passwordIssues } from './crypto.js';
 import { getTheme, toggleTheme } from './theme.js';
 
