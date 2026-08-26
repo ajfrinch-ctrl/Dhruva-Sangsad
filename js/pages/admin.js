@@ -609,11 +609,18 @@ async function firebaseSection(session, host) {
   const fb = el('form', { class: 'grid', novalidate: true });
   const g = (k, ph) => `<div class="field"><label>${k}</label><input name="${k}" value="${esc((shown && shown[k]) || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
   fb.innerHTML = `
-    <div class="banner info">${icon('info')}<span>Firebase কনফিগার করলে সব ডিভাইসের ডাটা রিয়েল-টাইমে সিঙ্ক হবে। কনফিগার না করলেও অ্যাপটি সম্পূর্ণ অফলাইনে (IndexedDB) কাজ করবে।</span></div>
+    <div class="banner info">${icon('info')}<span>পুরনো Firebase প্রজেক্ট বাদ দিয়ে নতুন প্রজেক্ট ব্যবহার করুন। কনফিগ না দিলে অ্যাপ অফলাইনেই চলবে।</span></div>
+    <ol class="hint" style="margin:8px 0 12px 18px;line-height:1.55">
+      <li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a> খুলুন → Add project</li>
+      <li>Realtime Database তৈরি করুন (Start in test mode, পরে নিচের রুলস)</li>
+      <li>Authentication → Sign-in method: <b>Email/Password</b> এবং <b>Anonymous</b> চালু করুন</li>
+      <li>Project settings → Your apps → Web app → firebaseConfig কপি করে নিচে পেস্ট</li>
+      <li>Rules ট্যাবে <code>auth != null</code> দিয়ে read/write দিন (ফাইল: firebase/database.rules.starter.json)</li>
+    </ol>
     <div class="grid g2">
-      ${g('apiKey', 'AIza…')}${g('authDomain', 'project.firebaseapp.com')}
-      ${g('databaseURL', 'https://dhruvo-sangsad-default-rtdb.firebaseio.com')}${g('projectId', 'project-id')}
-      ${g('storageBucket', 'project.appspot.com')}${g('messagingSenderId', '1234567890')}
+      ${g('apiKey', 'AIza…')}${g('authDomain', 'your-project.firebaseapp.com')}
+      ${g('databaseURL', 'https://your-project-default-rtdb.firebaseio.com')}${g('projectId', 'your-project-id')}
+      ${g('storageBucket', 'your-project.appspot.com')}${g('messagingSenderId', '1234567890')}
       ${g('appId', '1:123:web:abc')}
     </div>
     <div class="form-actions">

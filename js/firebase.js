@@ -4,18 +4,17 @@
 import { queueAll, queueRemove, applyRemote, dbGet, dbPutRaw, getSetting, setSetting } from './db.js';
 import { nowISO, deviceId } from './util.js';
 
-/* Primary cloud backend — ধ্রুব সংসদ Firebase project.
-   When no custom config has been saved (Settings → Firebase), the app connects
-   to this project automatically so every device shares the same data. */
+/* Empty until an Admin pastes a new Firebase web-app config
+   (Settings → Cloud Sync). The old dhruvo-sangsad / rtd-ds projects are not used. */
 export const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyBig1Ajmtb4wBSQI3B0Ie16DoSODeIZiDs',
-  authDomain: 'dhruvo-sangsad.firebaseapp.com',
-  databaseURL: 'https://dhruvo-sangsad-default-rtdb.firebaseio.com',
-  projectId: 'dhruvo-sangsad',
-  storageBucket: 'dhruvo-sangsad.firebasestorage.app',
-  messagingSenderId: '262988571932',
-  appId: '1:262988571932:web:9481147725a42ff71986d9',
-  measurementId: 'G-V1ZFDHKEPY',
+  apiKey: 'AIzaSyBI0y3gYts4GWsr0UCO1D3L7uA8e3UlJPI',
+  authDomain: 'dhruva-sangsad-app.firebaseapp.com',
+  databaseURL: 'https://dhruva-sangsad-app-default-rtdb.asia-southeast1.firebasedatabase.app',
+  projectId: 'dhruva-sangsad-app',
+  storageBucket: 'dhruva-sangsad-app.firebasestorage.app',
+  messagingSenderId: '680083781116',
+  appId: '1:680083781116:web:ef68766a3e9fc90fc6ae79',
+  measurementId: 'G-GPSXWCKFQV',
 };
 
 const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings'];
@@ -83,6 +82,7 @@ class FirebaseBridge extends EventTarget {
       this.auth = this.app.auth();
       this.db = this.app.database();
       this.ready = true;
+      await this.ensureSignedIn();
       this.watchConnection();
       this.attachListeners();
       this.setStatus(navigator.onLine ? 'online' : 'offline');
@@ -91,6 +91,19 @@ class FirebaseBridge extends EventTarget {
     } catch (e) {
       this.setStatus('sync-error', e.message);
       return false;
+    }
+  }
+
+  /** Prefer email/password after app login; otherwise anonymous so RTDB rules
+      that require `auth != null` still allow sync on a fresh project. */
+  async ensureSignedIn() {
+    if (!this.auth) return;
+    if (this.auth.currentUser) return;
+    try { await this.auth.signInAnonymously(); }
+    catch (e) {
+      /* Anonymous provider not enabled yet — flush will fail until the user
+         logs in or they enable Email/Anonymous in Firebase Console. */
+      this.lastError = e.message;
     }
   }
 
@@ -213,7 +226,9 @@ class FirebaseBridge extends EventTarget {
 
   async signIn(user, password) {
     if (!this.ready || !this.auth) return null;
-    const email = user.email && /@/.test(user.email) ? user.email : `${user.username}@dhruvo-sangsad.local`;
+    const domain = (this.config && this.config.authDomain) || 'dhruvo-sangsad.firebaseapp.com';
+    const safe = String(user.username || user.id || 'user').toLowerCase().replace(/[^a-z0-9._+-]/g, '.');
+    const email = user.email && /@/.test(user.email) ? user.email : `${safe}@${domain}`;
     let cred;
     try { cred = await this.auth.signInWithEmailAndPassword(email, password); }
     catch (e) {
