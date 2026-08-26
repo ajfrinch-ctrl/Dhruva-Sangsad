@@ -72,25 +72,24 @@ export function psTable(headers, rows, footer) {
   return t;
 }
 function psInfo(pairs) {
-  const d = el('div', { class: 'ps-info' });
-  const left = el('div', { class: 'ps-col ps-col-l' });
-  const right = el('div', { class: 'ps-col ps-col-r' });
-  const row = (host, k, v, side) => {
-    const r = el('div', { class: 'ps-row' });
-    r.appendChild(el('span', { class: 'ps-k', text: k }));
-    r.appendChild(el('span', { class: 'ps-v', text: v == null || v === '' ? '—' : String(v) }));
-    host.appendChild(r);
+  const tbl = el('table', { class: 'ps-info-tbl' });
+  const tb = el('tbody');
+  const cell = (k, v) => {
+    const td = el('td');
+    td.appendChild(el('span', { class: 'ps-k', text: k }));
+    td.appendChild(document.createTextNode(' '));
+    td.appendChild(el('span', { class: 'ps-v', text: v == null || v === '' ? '—' : String(v) }));
+    return td;
   };
   for (let i = 0; i < pairs.length; i += 2) {
-    const [k1, v1] = pairs[i];
-    row(left, k1, v1);
-    if (pairs[i + 1]) {
-      const [k2, v2] = pairs[i + 1];
-      row(right, k2, v2);
-    }
+    const tr = el('tr');
+    tr.appendChild(cell(pairs[i][0], pairs[i][1]));
+    if (pairs[i + 1]) tr.appendChild(cell(pairs[i + 1][0], pairs[i + 1][1]));
+    else tr.appendChild(el('td'));
+    tb.appendChild(tr);
   }
-  d.append(left, right);
-  return d;
+  tbl.appendChild(tb);
+  return tbl;
 }
 function sechead(text) { return el('div', { class: 'ps-sechead', text }); }
 
@@ -247,7 +246,7 @@ function rStatement(ctx, meta) {
     const sheet = el('div', { class: 'print-sheet' });
     sheet.appendChild(sheetHead(ctx.cfg, 'Member Statement', (from.value || to.value) ? `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}` : ''));
     sheet.appendChild(psInfo([
-      ['Status', (m.status || '').toUpperCase()], ['Member ID', m.memberId],
+      ['Member ID', m.memberId], ['Status', (m.status || '').toUpperCase()],
       ['Name (Bangla)', m.nameBn], ['Name (English)', m.nameEn],
       ['Join Date', fmtDate(m.joinDate)], ['Mobile', m.mobile],
       ["Father's Name", m.fatherBn || m.fatherEn || '-'], ['Address', m.address || '-'],

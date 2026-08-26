@@ -301,17 +301,10 @@ table.tbl .nowrap{white-space:nowrap}
 .ps-sub{font-size:10pt;font-weight:700;text-align:center;margin-top:1mm;text-transform:uppercase;letter-spacing:.6px}
 .ps-org{font-size:7pt;text-align:center;margin-top:.6mm}
 .ps-rule{border:0;border-top:.5pt solid #000;margin:2.5mm 0}
-.ps-info{font-size:8.5pt;margin-bottom:2.5mm;display:flex;justify-content:space-between;align-items:flex-start;gap:8mm}
-.ps-col{width:48%;display:flex;flex-direction:column;gap:.6mm}
-.ps-row{display:flex;align-items:baseline;gap:2mm;width:100%}
+.ps-info,.ps-info-tbl{font-size:8.5pt;margin:0 0 2.5mm;width:100%;border-collapse:collapse}
+.ps-info-tbl td{border:0;padding:0.4mm 4mm 0.4mm 0;vertical-align:baseline;width:50%;text-align:left}
 .ps-k{font-weight:700;white-space:nowrap}
-.ps-v{flex:1;min-width:0}
-.ps-col-l .ps-row{justify-content:flex-start;text-align:left}
-.ps-col-l .ps-k{text-align:left}
-.ps-col-l .ps-v{text-align:left}
-.ps-col-r .ps-row{justify-content:flex-end;text-align:right;flex-direction:row}
-.ps-col-r .ps-k{text-align:right;order:1}
-.ps-col-r .ps-v{text-align:right;flex:0 1 auto;order:2}
+.ps-v{font-weight:400}
 .ps-sechead{font-size:8.5pt;font-weight:700;margin:2mm 0 1.2mm;text-transform:uppercase;letter-spacing:.4px;border-bottom:.5pt solid #000;padding-bottom:.6mm}
 table.ps-tbl{width:100%;border-collapse:collapse;margin-bottom:2mm}
 table.ps-tbl th{font-size:8pt;font-weight:700;border:.5pt solid #000;padding:1.1mm 1.4mm;text-align:left;background:#fff}

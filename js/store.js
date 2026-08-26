@@ -98,11 +98,15 @@ export async function markNotificationRead(id, userId) {
 }
 export async function visibleNotifications(session) {
   const all = await allNotifications();
+  const myId = String(session.memberId || '');
   return all.filter(n => {
+    const owner = n.memberId != null && n.memberId !== '' ? String(n.memberId) : '';
     if (session.role === 'member') {
+      if (!myId) return false;
       if (n.audience === 'staff') return false;
-      return n.memberId && n.memberId === session.memberId;
+      return owner === myId;
     }
+    if (n.audience === 'member' || n.kind === 'due') return false;
     return n.audience === 'staff' || n.audience === 'all';
   }).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 }
