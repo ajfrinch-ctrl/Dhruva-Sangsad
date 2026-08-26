@@ -73,16 +73,23 @@ export function psTable(headers, rows, footer) {
 }
 function psInfo(pairs) {
   const d = el('div', { class: 'ps-info' });
-  const t = el('table');
+  const left = el('div', { class: 'ps-col ps-col-l' });
+  const right = el('div', { class: 'ps-col ps-col-r' });
+  const row = (host, k, v, side) => {
+    const r = el('div', { class: 'ps-row' });
+    r.appendChild(el('span', { class: 'ps-k', text: k }));
+    r.appendChild(el('span', { class: 'ps-v', text: v == null || v === '' ? '—' : String(v) }));
+    host.appendChild(r);
+  };
   for (let i = 0; i < pairs.length; i += 2) {
-    const tr = el('tr');
     const [k1, v1] = pairs[i];
-    tr.appendChild(el('td', { class: 'k', text: k1 })); tr.appendChild(el('td', { text: ': ' + (v1 ?? '') }));
-    if (pairs[i + 1]) { const [k2, v2] = pairs[i + 1]; tr.appendChild(el('td', { class: 'k2', text: k2 })); tr.appendChild(el('td', { text: ': ' + (v2 ?? '') })); }
-    else { tr.appendChild(el('td', { class: 'k2', text: '' })); tr.appendChild(el('td', { text: '' })); }
-    t.appendChild(tr);
+    row(left, k1, v1);
+    if (pairs[i + 1]) {
+      const [k2, v2] = pairs[i + 1];
+      row(right, k2, v2);
+    }
   }
-  d.appendChild(t);
+  d.append(left, right);
   return d;
 }
 function sechead(text) { return el('div', { class: 'ps-sechead', text }); }

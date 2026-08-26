@@ -6,6 +6,7 @@ import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
+import { applyRole } from './theme.js';
 import { visibleNotifications, invalidate, logActivity, settings } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
@@ -124,6 +125,7 @@ export const App = {
   async enter(session) {
     this.session = session;
     window.DS_SESSION = session;
+    applyRole(session.role);
     $('#authScreen').classList.add('hidden');
     clear($('#authScreen'));
     $('#app').classList.add('on');
@@ -149,6 +151,7 @@ export const App = {
     if (!(await confirmBox(t('আপনি কি লগআউট করতে চান?', 'Do you want to log out?'), { title: t('লগআউট', 'Logout'), okLabel: t('লগআউট', 'Logout') }))) return;
     await logout();
     this.session = null; window.DS_SESSION = null;
+    applyRole('');
     clearIdleTimer();
     setAuthMode('login');
     location.hash = '';
@@ -193,6 +196,7 @@ async function onIdleTimeout() {
   if (!App.session) return;
   const s = App.session;
   App.session = null; window.DS_SESSION = null;
+  applyRole('');
   clearIdleTimer();
   try { await logActivity('SESSION_TIMEOUT', `${s.role} ${s.username || s.displayName} — 30 minutes of inactivity`, s); } catch {}
   try { firebase.signOut().catch(() => {}); } catch {}

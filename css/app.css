@@ -26,7 +26,65 @@
   --f-sm:12px; --f-xs:11px;
   /* shell metrics */
   --header-h:60px; --nav-h:46px; --footer-h:40px; --content-max:1600px;
+  --role-accent:#16a34a; --role-soft:#dcfce7; --role-ink:#15803d;
 }
+html[data-role="admin"]{
+  --role-accent:#7c3aed; --role-soft:#ede9fe; --role-ink:#5b21b6;
+  --green:#7c3aed; --green-soft:#ede9fe; --green-line:#c4b5fd; --green-dark:#5b21b6;
+}
+html[data-role="maker"]{
+  --role-accent:#0d9488; --role-soft:#ccfbf1; --role-ink:#0f766e;
+  --green:#0d9488; --green-soft:#ccfbf1; --green-line:#5eead4; --green-dark:#0f766e;
+}
+html[data-role="member"]{
+  --role-accent:#ea580c; --role-soft:#ffedd5; --role-ink:#c2410c;
+  --green:#ea580c; --green-soft:#ffedd5; --green-line:#fdba74; --green-dark:#c2410c;
+}
+
+/* True-black AMOLED + dark (OLED-friendly, no gray wash) */
+html[data-theme="dark"],html[data-theme="amoled"]{
+  --bg:#0b1220; --card:#111827; --line:#1f2937; --line-2:#1a2230;
+  --text:#f3f4f6; --muted:#9ca3af; --faint:#6b7280;
+  --shadow:none;
+  --green-soft:#052e16; --green-line:#14532d;
+  --red-soft:#3f0a16; --red-line:#7f1d1d;
+  --amber-soft:#422006; --amber-line:#854d0e;
+  --blue-soft:#172554;
+}
+html[data-theme="amoled"]{
+  --bg:#000000; --card:#000000; --line:#1a1a1a; --line-2:#111111;
+}
+html[data-theme="dark"][data-role="admin"],html[data-theme="amoled"][data-role="admin"]{
+  --green-soft:#2e1065; --green-line:#5b21b6;
+}
+html[data-theme="dark"][data-role="maker"],html[data-theme="amoled"][data-role="maker"]{
+  --green-soft:#042f2e; --green-line:#0f766e;
+}
+html[data-theme="dark"][data-role="member"],html[data-theme="amoled"][data-role="member"]{
+  --green-soft:#431407; --green-line:#c2410c;
+}
+html[data-theme="dark"] body,html[data-theme="amoled"] body{background:var(--bg);color:var(--text)}
+html[data-theme="dark"] .topbar,html[data-theme="amoled"] .topbar,
+html[data-theme="dark"] .topnav,html[data-theme="amoled"] .topnav,
+html[data-theme="dark"] .app-footer,html[data-theme="amoled"] .app-footer,
+html[data-theme="dark"] .card,html[data-theme="amoled"] .card,
+html[data-theme="dark"] .stat,html[data-theme="amoled"] .stat,
+html[data-theme="dark"] .modal,html[data-theme="amoled"] .modal,
+html[data-theme="dark"] .auth-card,html[data-theme="amoled"] .auth-card,
+html[data-theme="dark"] table.tbl,html[data-theme="amoled"] table.tbl{background:var(--card);color:var(--text)}
+html[data-theme="dark"] input,html[data-theme="amoled"] input,
+html[data-theme="dark"] select,html[data-theme="amoled"] select,
+html[data-theme="dark"] textarea,html[data-theme="amoled"] textarea,
+html[data-theme="dark"] .icon-btn,html[data-theme="amoled"] .icon-btn,
+html[data-theme="dark"] .btn-ghost,html[data-theme="amoled"] .btn-ghost,
+html[data-theme="dark"] .chip,html[data-theme="amoled"] .chip{background:var(--bg);color:var(--text);border-color:var(--line)}
+html[data-theme="dark"] table.tbl th,html[data-theme="amoled"] table.tbl th,
+html[data-theme="dark"] table.tbl tfoot td,html[data-theme="amoled"] table.tbl tfoot td,
+html[data-theme="dark"] .kv > div:nth-child(odd),html[data-theme="amoled"] .kv > div:nth-child(odd){background:var(--line-2);color:var(--muted)}
+html[data-theme="dark"] .auth-wrap,html[data-theme="amoled"] .auth-wrap{background:var(--bg)}
+html[data-theme="dark"] .auth-tabs,html[data-theme="amoled"] .auth-tabs{background:var(--line-2)}
+html[data-theme="dark"] .auth-tabs button.on,html[data-theme="amoled"] .auth-tabs button.on{background:var(--card);color:var(--text)}
+html[data-theme="amoled"] .topbar,html[data-theme="amoled"] .topnav,html[data-theme="amoled"] .app-footer{background:#000;border-color:#111}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
@@ -297,11 +355,17 @@ table.tbl .nowrap{white-space:nowrap}
 .ps-sub{font-size:10pt;font-weight:700;text-align:center;margin-top:1mm;text-transform:uppercase;letter-spacing:.6px}
 .ps-org{font-size:7pt;text-align:center;margin-top:.6mm}
 .ps-rule{border:0;border-top:.5pt solid #000;margin:2.5mm 0}
-.ps-info{font-size:8.5pt;margin-bottom:2.5mm}
-.ps-info table{width:100%;border-collapse:collapse}
-.ps-info td{padding:.5mm 0;vertical-align:top;font-size:8.5pt}
-.ps-info td.k{width:26mm;font-weight:700}
-.ps-info td.k2{width:26mm;font-weight:700;padding-left:6mm}
+.ps-info{font-size:8.5pt;margin-bottom:2.5mm;display:flex;justify-content:space-between;align-items:flex-start;gap:8mm}
+.ps-col{width:48%;display:flex;flex-direction:column;gap:.6mm}
+.ps-row{display:flex;align-items:baseline;gap:2mm;width:100%}
+.ps-k{font-weight:700;white-space:nowrap}
+.ps-v{flex:1;min-width:0}
+.ps-col-l .ps-row{justify-content:flex-start;text-align:left}
+.ps-col-l .ps-k{text-align:left}
+.ps-col-l .ps-v{text-align:left}
+.ps-col-r .ps-row{justify-content:flex-end;text-align:right;flex-direction:row}
+.ps-col-r .ps-k{text-align:right;order:1}
+.ps-col-r .ps-v{text-align:right;flex:0 1 auto;order:2}
 .ps-sechead{font-size:8.5pt;font-weight:700;margin:2mm 0 1.2mm;text-transform:uppercase;letter-spacing:.4px;border-bottom:.5pt solid #000;padding-bottom:.6mm}
 table.ps-tbl{width:100%;border-collapse:collapse;margin-bottom:2mm}
 table.ps-tbl th{font-size:8pt;font-weight:700;border:.5pt solid #000;padding:1.1mm 1.4mm;text-align:left;background:#fff}
@@ -381,4 +445,18 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   .card,.sheet-holder{border:0;box-shadow:none;padding:0;margin:0;background:#fff}
   .print-sheet{box-shadow:none;width:auto;padding:0}
   @page{size:A4;margin:10mm}
+}
+
+@media (max-width:640px){
+  body{background:
+    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--role-accent) 22%, transparent), transparent 55%),
+    radial-gradient(90% 60% at 100% 10%, color-mix(in srgb, var(--red) 16%, transparent), transparent 50%),
+    var(--bg)}
+  html[data-theme="light"] .topbar,
+  html[data-theme="light"] .topnav,
+  html[data-theme="light"] .app-footer{background:color-mix(in srgb, var(--role-soft) 70%, #fff)}
+  .nav-tab.on{background:color-mix(in srgb, var(--role-accent) 16%, transparent)}
+  html[data-theme="light"] .stat{background:linear-gradient(165deg, color-mix(in srgb, var(--role-soft) 80%, #fff), #fff)}
+  html[data-theme="light"] .card-head{background:color-mix(in srgb, var(--role-soft) 45%, #fff)}
+  .btn-primary{box-shadow:0 4px 12px color-mix(in srgb, var(--role-accent) 35%, transparent)}
 }

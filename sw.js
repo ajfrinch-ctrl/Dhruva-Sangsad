@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.2.1';
+const VERSION = 'ds-v6.4.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -32,6 +32,7 @@ const PRECACHE = [
   'js/db.js',
   'js/firebase.js',
   'js/i18n.js',
+  'js/theme.js',
   'js/icons.js',
   'js/pdf.js',
   'js/store.js',

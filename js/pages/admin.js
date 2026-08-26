@@ -15,6 +15,7 @@ import {
 import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
 import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
 import { getLang, setLang, t } from '../i18n.js';
+import { getTheme, setTheme } from '../theme.js';
 import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
@@ -480,6 +481,7 @@ export async function pageSettings(session, params = {}) {
   const TABS = [
     { id: 'account', label: 'আমার অ্যাকাউন্ট / Account' },
     { id: 'language', label: 'ভাষা / Language' },
+    { id: 'appearance', label: 'থিম / Appearance' },
     { id: 'activity', label: 'কার্যক্রম লগ / Activity Log' },
   ];
   if (can(session, 'settings:manage')) {
@@ -508,6 +510,7 @@ export async function pageSettings(session, params = {}) {
     host.replaceChildren();
     if (active === 'account') accountSection(session, host);
     else if (active === 'language') languageSection(host);
+    else if (active === 'appearance') appearanceSection(host);
     else if (active === 'activity') await embedPage(host, pageActivity, session);
     else if (active === 'organisation') await organisationSection(session, host);
     else if (active === 'firebase') await firebaseSection(session, host);
@@ -541,6 +544,31 @@ function languageSection(host) {
   });
   wrap.appendChild(row);
   host.appendChild(card('ভাষা', 'Language', wrap));
+}
+
+function appearanceSection(host) {
+  const cur = getTheme();
+  const wrap = el('div');
+  wrap.appendChild(el('p', { class: 'muted', style: 'margin:0 0 12px', text: t(
+    'ডার্ক ও AMOLED মোড OLED স্ক্রিনে কালো পিক্সেল বন্ধ রাখে — ব্যাটারি সাশ্রয় হয়।',
+    'Dark and AMOLED modes turn pixels off on OLED screens to save battery.',
+  ) }));
+  const row = el('div', { class: 'lang-pick', style: 'grid-template-columns:repeat(3,1fr)' });
+  [
+    { id: 'light', title: t('লাইট', 'Light'), sub: t('সাদা ব্যাকগ্রাউন্ড', 'White background') },
+    { id: 'dark', title: t('ডার্ক', 'Dark'), sub: t('গাঢ় নীল-কালো', 'Deep navy') },
+    { id: 'amoled', title: 'AMOLED', sub: t('খাঁটি কালো', 'True black') },
+  ].forEach(opt => {
+    const b = el('button', {
+      type: 'button',
+      class: `lang-opt${cur === opt.id ? ' on' : ''}`,
+      onclick: () => { setTheme(opt.id); App.refresh(); },
+    });
+    b.innerHTML = `<strong>${esc(opt.title)}</strong><span>${esc(opt.sub)}</span>`;
+    row.appendChild(b);
+  });
+  wrap.appendChild(row);
+  host.appendChild(card('থিম', 'Appearance', wrap));
 }
 
 function accountSection(session, host) {
