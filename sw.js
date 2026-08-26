@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.5.7';
+const VERSION = 'ds-v6.5.8';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -13,6 +13,7 @@ const PRECACHE = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
+  'icons/apple-touch.png',
   /* vendor (classic scripts) */
   'vendor/firebase-app-compat.js',
   'vendor/firebase-auth-compat.js',

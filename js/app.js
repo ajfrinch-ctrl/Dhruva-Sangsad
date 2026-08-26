@@ -86,7 +86,7 @@ export const App = {
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.7</span>`;
+        + `<span class="app-footer-meta">v6.5.8</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
