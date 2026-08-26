@@ -5,7 +5,7 @@ import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
-import { visibleNotifications, invalidate, logActivity } from './store.js';
+import { visibleNotifications, invalidate, logActivity, settings } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
@@ -63,6 +63,22 @@ export const App = {
       view.appendChild(el('div', { class: 'banner err', html: `${icon('warn')}<span>${esc(e.message || 'Error')}</span>` }));
     }
     this.paintNav();
+    this.paintFooter();
+  },
+  async paintFooter() {
+    const el = $('#appFooterOrg');
+    if (!el) return;
+    try {
+      const cfg = await settings();
+      const bn = (cfg.orgNameBn || '').trim();
+      const en = (cfg.orgNameEn || '').trim();
+      const extra = [cfg.orgAddress, cfg.orgPhone].filter(Boolean).join(' · ');
+      el.innerHTML = `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
+        + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
+        + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '');
+    } catch {
+      el.textContent = 'ধ্রুব সংসদ';
+    }
   },
   refresh() { return this.go(this.route, this.params || {}); },
 

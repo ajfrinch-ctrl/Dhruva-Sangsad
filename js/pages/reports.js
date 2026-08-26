@@ -30,7 +30,7 @@ export async function sendWaReminder(member) {
 
 /* ---------------- print-sheet builders ---------------- */
 export function sheetHead(cfg, titleEn, subEn) {
-  const h = el('div');
+  const h = el('header', { class: 'ps-head' });
   h.innerHTML = `
     <div class="ps-title">${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}</div>
     <div class="ps-org">${esc(cfg.orgNameEn || 'Dhruvo Sangsad')}${cfg.orgAddress ? ' · ' + esc(cfg.orgAddress) : ''}${cfg.orgPhone ? ' · ' + esc(cfg.orgPhone) : ''}</div>
@@ -40,9 +40,9 @@ export function sheetHead(cfg, titleEn, subEn) {
   return h;
 }
 export function sheetFoot(cfg, extra = '') {
-  const f = el('div', { class: 'ps-foot' });
+  const f = el('footer', { class: 'ps-foot' });
   f.innerHTML = `<span>Generated: ${esc(fmtDateTime(new Date().toISOString()))}${extra ? ' · ' + esc(extra) : ''}</span>
-    <span>${esc(cfg.orgNameEn || 'Dhruvo Sangsad')} — Member, Deposit &amp; Due Management System</span>`;
+    <span>${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}${cfg.orgNameEn ? ' · ' + esc(cfg.orgNameEn) : ''}</span>`;
   return f;
 }
 export function psTable(headers, rows, footer) {

@@ -25,7 +25,7 @@
   --f-txt:14px; --f-btn:13.5px; --f-lbl:12px; --f-inp:14px;
   --f-sm:12px; --f-xs:11px;
   /* shell metrics */
-  --header-h:60px; --nav-h:46px; --content-max:1600px;
+  --header-h:60px; --nav-h:46px; --footer-h:40px; --content-max:1600px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -62,8 +62,8 @@ p{margin:0 0 8px}
 
 /* ===================== APP SHELL ===================== */
 #app{display:none;min-height:100dvh;flex-direction:column}
-#app.on{display:flex}
-.topbar{position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px solid var(--line);
+#app.on{display:flex;height:100dvh;max-height:100dvh;overflow:hidden}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:60;background:#fff;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:10px;height:var(--header-h);padding:0 18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
 .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:none}
 .brand-logo{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,var(--green-soft),var(--red-soft));border:1px solid var(--line);font-size:18px;flex:none}
@@ -88,7 +88,7 @@ p{margin:0 0 8px}
 .badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;border:2px solid #fff}
 
 /* ---- top navigation tabs ---- */
-.topnav{position:sticky;top:var(--header-h);z-index:59;background:#fff;border-bottom:1px solid var(--line);
+.topnav{position:fixed;top:var(--header-h);left:0;right:0;z-index:59;background:#fff;border-bottom:1px solid var(--line);
   display:flex;align-items:stretch;gap:2px;height:var(--nav-h);padding:0 12px;overflow-x:auto;overflow-y:hidden;
   -webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .topnav::-webkit-scrollbar{height:6px}
@@ -103,7 +103,18 @@ p{margin:0 0 8px}
 .nav-tab.on .pill{background:var(--green-dark)}
 
 /* ---- main content ---- */
-.main{flex:1;min-width:0;width:100%;max-width:var(--content-max);margin:0 auto;padding:20px 24px 48px}
+.main{flex:1;min-width:0;width:100%;max-width:var(--content-max);margin:0 auto;
+  padding:20px 24px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  margin-top:calc(var(--header-h) + var(--nav-h));margin-bottom:var(--footer-h);
+  height:calc(100dvh - var(--header-h) - var(--nav-h) - var(--footer-h));max-width:none}
+.main > *{max-width:var(--content-max);margin-left:auto;margin-right:auto}
+.app-footer{position:fixed;left:0;right:0;bottom:0;z-index:58;height:var(--footer-h);
+  display:flex;align-items:center;justify-content:center;gap:10px;padding:0 14px;
+  background:#fff;border-top:1px solid var(--line);box-shadow:0 -1px 2px rgba(16,24,40,.04);font-size:12px;color:var(--muted)}
+.app-footer-org{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;min-width:0;text-align:center}
+.app-footer-org strong{color:var(--green-dark);font-size:13px}
+.app-footer-en{color:var(--text)}
+.app-footer-meta{color:var(--faint);font-size:11px}
 .page-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .page-head h1{font-size:var(--f-h1);display:flex;align-items:center;gap:8px}
 .page-head h1 .icon{width:1.15em;height:1.15em;color:var(--green)}
@@ -295,8 +306,10 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
 .pdf-render{box-shadow:none !important;margin:0 !important}
 .sheet-bar{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
 /* scrollable A4 preview frame used by the report pages */
-.sheet-preview{background:#eceef0;border:1px solid var(--line);border-radius:var(--r);padding:14px;overflow-x:auto;overflow-y:hidden}
+.sheet-preview{background:#eceef0;border:1px solid var(--line);border-radius:var(--r);padding:14px;overflow:auto;max-height:min(70dvh,720px)}
 .sheet-preview .print-sheet{margin:0 auto}
+.print-sheet .ps-head{position:sticky;top:0;z-index:2;background:#fff;padding-bottom:1mm}
+.print-sheet .ps-foot{position:sticky;bottom:0;z-index:2;background:#fff}
 
 /* ===================== MINI BAR CHART ===================== */
 .bars{display:flex;align-items:flex-end;gap:14px;overflow-x:auto;padding:8px 2px 0;min-height:150px}
@@ -313,9 +326,9 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   :root{
     --f-h1:19px; --f-h2:14.5px; --f-sec:13px; --f-th:11px; --f-td:12.5px;
     --f-txt:13px; --f-btn:12.5px; --f-lbl:11px; --f-inp:13px;
-    --header-h:54px; --nav-h:44px;
+    --header-h:54px; --nav-h:44px; --footer-h:38px;
   }
-  .main{padding:16px 14px 40px}
+  .main{padding:16px 14px 12px}
   .stats{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
   .stat .val{font-size:20px}
   .topbar{padding:0 12px}
@@ -324,9 +337,9 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   :root{
     --f-h1:17px; --f-h2:13px; --f-sec:12px; --f-th:10px; --f-td:11.5px;
     --f-txt:12px; --f-btn:12px; --f-lbl:10.5px; --f-inp:12px;
-    --header-h:50px; --nav-h:42px;
+    --header-h:50px; --nav-h:42px; --footer-h:44px;
   }
-  .main{padding:12px 10px 32px}
+  .main{padding:12px 10px 10px}
   .brand-logo{width:32px;height:32px;font-size:15px}
   .brand-txt .n{font-size:14px}
   .brand-txt .r{font-size:10px;max-width:130px}
@@ -355,8 +368,10 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
 
 @media print{
   body{background:#fff}
-  .topbar,.topnav,.sheet-bar,.toast-wrap,.no-print,.tabs,.toolbar{display:none !important}
-  .main{padding:0;max-width:none}
+  .topbar,.topnav,.app-footer,.sheet-bar,.toast-wrap,.no-print,.tabs,.toolbar{display:none !important}
+  #app.on{height:auto;max-height:none;overflow:visible}
+  .main{padding:0;max-width:none;margin:0;height:auto;overflow:visible}
+  .print-sheet .ps-head,.print-sheet .ps-foot{position:static}
   .card,.sheet-holder{border:0;box-shadow:none;padding:0;margin:0;background:#fff}
   .print-sheet{box-shadow:none;width:auto;padding:0}
   @page{size:A4;margin:10mm}
