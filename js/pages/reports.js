@@ -2,7 +2,7 @@
    Payment Method, Date Range, Member-wise — with PDF / Excel / CSV export. */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, monthKey, monthLabel,
-  typeLabel, methodLabel, PAY_METHODS, waNumber, modal,
+  typeLabel, methodLabel, PAY_METHODS, waNumber, modal, t,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
@@ -109,11 +109,11 @@ export async function pageReports(session, params = {}) {
   const list = REPORTS.filter(r => r.roles.includes(session.role));
 
   const picker = el('select', { name: 'report' });
-  list.forEach(r => picker.appendChild(el('option', { value: r.id }, [`${r.bn} / ${r.en}`])));
+  list.forEach(r => picker.appendChild(el('option', { value: r.id }, [t(r.bn, r.en)])));
   if (params.report && list.some(r => r.id === params.report)) picker.value = params.report;
 
   const pf = el('div', { class: 'field', style: 'flex:1 1 240px' });
-  pf.appendChild(el('label', { text: 'প্রতিবেদন নির্বাচন / Select Report' }));
+  pf.appendChild(el('label', { text: t('প্রতিবেদন নির্বাচন', 'Select Report') }));
   pf.appendChild(picker);
 
   const filterHost = el('div', { class: 'toolbar', style: 'flex:1 1 100%' });
@@ -137,7 +137,7 @@ export async function pageReports(session, params = {}) {
 
   // "Generate Report" button — the report is rendered only on click, using fresh data.
   const genRow = el('div', { class: 'btn-row', style: 'margin-bottom:10px' });
-  genRow.appendChild(btn('Generate Report', 'report', 'primary', async () => {
+  genRow.appendChild(btn(t('রিপোর্ট তৈরি করুন', 'Generate Report'), 'report', 'primary', async () => {
     const [m2, d2, c2] = await Promise.all([allMembers(), allDeposits(), settings()]);
     ctx.members = m2; ctx.deposits = d2; ctx.cfg = c2; WA_TPL = c2.waTemplate || WA_TPL;
     ctx.withdrawals = await allWithdrawals().catch(() => []);

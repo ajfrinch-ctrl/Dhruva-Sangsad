@@ -57,6 +57,15 @@ p{margin:0 0 8px}
 .auth-tabs button.on{background:#fff;color:var(--green-dark);box-shadow:var(--shadow)}
 .auth-title{font-size:15px;font-weight:700;text-align:center;margin-bottom:14px;color:var(--text)}
 .auth-foot{margin-top:16px;text-align:center;font-size:11.5px;color:var(--faint);line-height:1.6}
+.auth-lang{display:flex;gap:6px;justify-content:center;margin-top:14px}
+.auth-lang button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted)}
+.auth-lang button.on{background:var(--green-soft);border-color:var(--green-line);color:var(--green-dark)}
+.lang-pick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lang-opt{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:16px;border:1px solid var(--line);border-radius:var(--r);background:#fff;cursor:pointer;text-align:left;font:inherit}
+.lang-opt strong{font-size:18px}
+.lang-opt span{font-size:12px;color:var(--muted)}
+.lang-opt.on{border-color:var(--green);background:var(--green-soft);box-shadow:0 0 0 2px var(--green-line)}
+@media (max-width:430px){.lang-pick{grid-template-columns:1fr}}
 .auth-note{background:var(--green-soft);border:1px solid var(--green-line);border-radius:var(--r-sm);padding:8px 10px;font-size:12px;color:var(--green-dark);margin-bottom:12px}
 .link-btn{background:none;border:0;color:var(--green-dark);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px;text-decoration:underline}
 

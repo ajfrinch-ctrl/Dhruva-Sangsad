@@ -14,6 +14,7 @@ import {
 } from '../store.js';
 import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
 import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
+import { getLang, setLang, t } from '../i18n.js';
 import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
@@ -478,6 +479,7 @@ export async function pageSettings(session, params = {}) {
 
   const TABS = [
     { id: 'account', label: 'আমার অ্যাকাউন্ট / Account' },
+    { id: 'language', label: 'ভাষা / Language' },
     { id: 'activity', label: 'কার্যক্রম লগ / Activity Log' },
   ];
   if (can(session, 'settings:manage')) {
@@ -505,6 +507,7 @@ export async function pageSettings(session, params = {}) {
   async function paint() {
     host.replaceChildren();
     if (active === 'account') accountSection(session, host);
+    else if (active === 'language') languageSection(host);
     else if (active === 'activity') await embedPage(host, pageActivity, session);
     else if (active === 'organisation') await organisationSection(session, host);
     else if (active === 'firebase') await firebaseSection(session, host);
@@ -514,6 +517,30 @@ export async function pageSettings(session, params = {}) {
   }
   await paint();
   return wrap;
+}
+
+function languageSection(host) {
+  const cur = getLang();
+  const wrap = el('div');
+  wrap.appendChild(el('p', { class: 'muted', style: 'margin:0 0 12px', text: t(
+    'অ্যাপের ভাষা বেছে নিন। বাংলা নির্বাচন করলে সবকিছু বাংলায় দেখাবে, ইংরেজি নির্বাচন করলে সবকিছু ইংরেজিতে।',
+    'Choose the app language. Bangla shows the whole interface in Bangla; English shows it in English.',
+  ) }));
+  const row = el('div', { class: 'lang-pick' });
+  [
+    { id: 'bn', title: 'বাংলা', sub: 'Bangla' },
+    { id: 'en', title: 'English', sub: 'ইংরেজি' },
+  ].forEach(opt => {
+    const b = el('button', {
+      type: 'button',
+      class: `lang-opt${cur === opt.id ? ' on' : ''}`,
+      onclick: () => { setLang(opt.id); },
+    });
+    b.innerHTML = `<strong>${esc(opt.title)}</strong><span>${esc(opt.sub)}</span>`;
+    row.appendChild(b);
+  });
+  wrap.appendChild(row);
+  host.appendChild(card('ভাষা', 'Language', wrap));
 }
 
 function accountSection(session, host) {

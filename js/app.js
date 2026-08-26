@@ -1,5 +1,6 @@
 /* ধ্রুব সংসদ — application shell, router, role-based navigation guard, idle timeout */
-import { $, el, clear, toast, esc, alertBox, confirmBox } from './util.js';
+import { $, el, clear, toast, esc, alertBox, confirmBox, t } from './util.js';
+import { setLang, getLang } from './i18n.js';
 import { icon } from './icons.js';
 import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS } from './auth.js';
@@ -17,9 +18,9 @@ import { openNotifications } from './pages/misc.js';
 
 const NAV = [
   { id: 'home', bn: 'ড্যাশবোর্ড', en: 'Dashboard', icon: 'dashboard' },
-  { id: 'members', bn: 'সদস্য ব্যবস্থাপনা', en: 'Members', icon: 'members' },
+  { id: 'members', bn: 'সদস্য ব্যবস্থাপনা', en: 'Member Management', icon: 'members' },
   { id: 'deposit', bn: 'জমা / লেনদেন', en: 'Deposits', icon: 'money' },
-  { id: 'authorization', bn: 'অনুমোদন অপেক্ষমাণ', en: 'Authorization Pending', icon: 'approve' },
+  { id: 'authorization', bn: 'অনুমোদন অপেক্ষমাণ', en: 'Pending Approval', icon: 'approve' },
   { id: 'reports', bn: 'রিপোর্ট', en: 'Reports', icon: 'report' },
   { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings' },
 ];
@@ -42,7 +43,7 @@ export const App = {
     const s = this.session;
     if (!s) { this.showAuth(); return; }
     if (!PAGES[route] || !can(s, route)) {
-      toast('এই মডিউলে প্রবেশাধিকার নেই / You do not have access to this module', 'error');
+      toast(t('এই মডিউলে প্রবেশাধিকার নেই', 'You do not have access to this module'), 'error');
       route = 'home';
     }
     this.route = route;
@@ -51,7 +52,7 @@ export const App = {
     resetIdleTimer();
     const view = $('#view');
     clear(view);
-    view.appendChild(el('div', { class: 'empty', html: 'লোড হচ্ছে… / Loading…' }));
+    view.appendChild(el('div', { class: 'empty', html: t('লোড হচ্ছে…', 'Loading…') }));
     try {
       const node = await PAGES[route](s, params);
       clear(view);
@@ -90,8 +91,8 @@ export const App = {
       if (!can(s, item.id)) continue;
       const btn = el('button', {
         class: `nav-tab${this.route === item.id ? ' on' : ''}`, type: 'button',
-        title: `${item.bn} — ${item.en}`,
-        html: `${icon(item.icon)}<span>${item.bn}</span>`,
+        title: t(item.bn, item.en),
+        html: `${icon(item.icon)}<span>${t(item.bn, item.en)}</span>`,
         onclick: () => this.go(item.id),
       });
       nav.appendChild(btn);
@@ -145,25 +146,34 @@ export const App = {
   },
 
   async doLogout() {
-    if (!(await confirmBox('আপনি কি লগআউট করতে চান? / Do you want to log out?', { title: 'লগআউট / Logout', okLabel: 'Logout' }))) return;
+    if (!(await confirmBox(t('আপনি কি লগআউট করতে চান?', 'Do you want to log out?'), { title: t('লগআউট', 'Logout'), okLabel: t('লগআউট', 'Logout') }))) return;
     await logout();
     this.session = null; window.DS_SESSION = null;
     clearIdleTimer();
     setAuthMode('login');
     location.hash = '';
-    toast('লগআউট সম্পন্ন / Logged out', 'success');
+    toast(t('লগআউট সম্পন্ন', 'Logged out'), 'success');
     this.showAuth();
   },
 };
 window.App = App;
 
 /* ---------------- sync status chip ---------------- */
-const SYNC_LABEL = { online: 'Online', offline: 'Offline', syncing: 'Syncing…', synced: 'Synced', 'sync-error': 'Sync Error' };
+function syncLabel(status) {
+  const map = {
+    online: t('অনলাইন', 'Online'),
+    offline: t('অফলাইন', 'Offline'),
+    syncing: t('সিঙ্ক হচ্ছে…', 'Syncing…'),
+    synced: t('সিঙ্কড', 'Synced'),
+    'sync-error': t('সিঙ্ক ত্রুটি', 'Sync Error'),
+  };
+  return map[status] || status;
+}
 function paintSync(status) {
   const chip = $('#syncChip'); if (!chip) return;
   chip.className = 'chip ' + status;
   const ic = status === 'offline' ? 'offline' : status === 'syncing' ? 'sync' : status === 'sync-error' ? 'warn' : 'online';
-  chip.innerHTML = `${icon(ic)}<span>${SYNC_LABEL[status] || status}</span>`;
+  chip.innerHTML = `${icon(ic)}<span>${syncLabel(status)}</span>`;
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail.status));
 
@@ -221,8 +231,12 @@ async function boot() {
     const h = (location.hash || '').replace('#', '');
     if (App.session && h && h !== App.route && PAGES[h]) App.go(h);
   });
-  window.addEventListener('online', () => toast('ইন্টারনেট সংযোগ ফিরে এসেছে — সিঙ্ক হচ্ছে / Back online — syncing', 'success'));
-  window.addEventListener('offline', () => toast('অফলাইন মোড — ডেটা লোকালি সংরক্ষিত হবে / Offline mode — data is saved locally', 'warn'));
+  window.addEventListener('online', () => toast(t('ইন্টারনেট সংযোগ ফিরে এসেছে — সিঙ্ক হচ্ছে', 'Back online — syncing'), 'success'));
+  window.addEventListener('offline', () => toast(t('অফলাইন মোড — ডেটা লোকালি সংরক্ষিত হবে', 'Offline mode — data is saved locally'), 'warn'));
+  window.addEventListener('ds:lang', () => {
+    if (App.session) App.refresh();
+    else App.showAuth();
+  });
 
   const s = getSession();
   if (s) await App.enter(s); else App.showAuth();

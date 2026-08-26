@@ -1,11 +1,11 @@
 /* Shared page building blocks */
-import { el, esc, money, taka, fmtDate, STATUS_BN, STATUS_EN } from './util.js';
+import { el, esc, money, taka, fmtDate, STATUS_BN, STATUS_EN, t, tx } from './util.js';
 import { icon } from './icons.js';
 
 export function page(titleBn, titleEn, iconName, actions = []) {
   const wrap = el('div');
   const head = el('div', { class: 'page-head' });
-  head.innerHTML = `<h1>${icon(iconName)} ${esc(titleBn)}</h1><span class="sub">${esc(titleEn)}</span><span class="spacer"></span>`;
+  head.innerHTML = `<h1>${icon(iconName)} ${esc(t(titleBn, titleEn))}</h1><span class="spacer"></span>`;
   actions.forEach(a => head.appendChild(a));
   wrap.appendChild(head);
   return wrap;
@@ -15,7 +15,7 @@ export function card(titleBn, titleEn, bodyNode, headExtras = []) {
   const c = el('div', { class: 'card' });
   if (titleBn || titleEn) {
     const h = el('div', { class: 'card-head' });
-    h.innerHTML = `<h3>${esc(titleBn || '')}</h3>${titleEn ? `<span class="fs8 muted">${esc(titleEn)}</span>` : ''}<span class="spacer"></span>`;
+    h.innerHTML = `<h3>${esc(t(titleBn || '', titleEn || ''))}</h3><span class="spacer"></span>`;
     headExtras.forEach(x => h.appendChild(x));
     c.appendChild(h);
   }
@@ -28,9 +28,9 @@ export function card(titleBn, titleEn, bodyNode, headExtras = []) {
 
 export function statCard({ label, value, sub, tone = '', ic = 'money' }) {
   return el('div', { class: `stat ${tone}`, html: `
-    <div class="lbl">${icon(ic)} ${esc(label)}</div>
+    <div class="lbl">${icon(ic)} ${esc(tx(label))}</div>
     <div class="val">${value}</div>
-    ${sub ? `<div class="sub">${esc(sub)}</div>` : ''}` });
+    ${sub ? `<div class="sub">${esc(tx(sub))}</div>` : ''}` });
 }
 
 export function field(label, inputNode, { required = false, hint = '', name = '' } = {}) {
@@ -52,11 +52,12 @@ export function select(options, attrs = {}) {
 export function btn(label, iconName, kind = 'ghost', onclick, extra = {}) {
   return el('button', {
     type: 'button', class: `btn btn-${kind}${extra.size === 'xs' ? ' btn-xs' : ''}${extra.block ? ' btn-block' : ''}`,
-    html: `${iconName ? icon(iconName) : ''}<span>${esc(label)}</span>`, onclick, ...(extra.attrs || {}),
+    html: `${iconName ? icon(iconName) : ''}<span>${esc(tx(label))}</span>`, onclick, ...(extra.attrs || {}),
   });
 }
 
-export function tableWrap(headers, rows, { footer = null, empty = 'কোনো তথ্য পাওয়া যায়নি / No records found', emptyIcon = 'info' } = {}) {
+export function tableWrap(headers, rows, { footer = null, empty, emptyIcon = 'info' } = {}) {
+  empty = empty || t('কোনো তথ্য পাওয়া যায়নি', 'No records found');
   const wrap = el('div', { class: 'tbl-wrap' });
   if (!rows.length) {
     wrap.appendChild(el('div', { class: 'empty', html: `${icon(emptyIcon)}${esc(empty)}` }));
@@ -65,7 +66,7 @@ export function tableWrap(headers, rows, { footer = null, empty = 'কোনো 
   const t = el('table', { class: 'tbl' });
   const thead = el('thead');
   const tr = el('tr');
-  headers.forEach(h => tr.appendChild(el('th', { class: h.cls || '', text: h.label !== undefined ? h.label : h })));
+  headers.forEach(h => tr.appendChild(el('th', { class: h.cls || '', text: tx(h.label !== undefined ? h.label : h) })));
   thead.appendChild(tr); t.appendChild(thead);
   const tb = el('tbody');
   rows.forEach(r => {
@@ -95,25 +96,22 @@ export function tableWrap(headers, rows, { footer = null, empty = 'কোনো 
 
 export function statusTag(status) {
   const cls = status === 'active' || status === 'approved' ? 'approved' : status === 'pending' ? 'pending' : status === 'rejected' ? 'rejected' : 'gray';
-  return `<span class="tag ${cls}">${esc(STATUS_EN[status] || status)}</span>`;
+  return `<span class="tag ${cls}">${esc(t(STATUS_BN[status], STATUS_EN[status]) || status)}</span>`;
 }
-export function statusTagBn(status) {
-  const cls = status === 'active' || status === 'approved' ? 'approved' : status === 'pending' ? 'pending' : status === 'rejected' ? 'rejected' : 'gray';
-  return `<span class="tag ${cls}">${esc(STATUS_BN[status] || status)}</span>`;
-}
+export function statusTagBn(status) { return statusTag(status); }
 
 export function banner(kind, html) { return el('div', { class: `banner ${kind}`, html: `${icon(kind === 'err' ? 'warn' : kind === 'warn' ? 'warn' : kind === 'ok' ? 'check' : 'info')}<span>${html}</span>` }); }
 
 export function kv(pairs) {
   const k = el('div', { class: 'kv' });
-  pairs.forEach(([a, b]) => { k.appendChild(el('div', { text: a })); k.appendChild(el('div', { html: b === null || b === undefined || b === '' ? '<span class="faint">—</span>' : String(b) })); });
+  pairs.forEach(([a, b]) => { k.appendChild(el('div', { text: tx(a) })); k.appendChild(el('div', { html: b === null || b === undefined || b === '' ? '<span class="faint">—</span>' : String(b) })); });
   return k;
 }
 
 export function tabs(items, active, onPick) {
   const t = el('div', { class: 'tabs' });
   items.forEach(i => t.appendChild(el('button', {
-    type: 'button', class: i.id === active ? 'on' : '', text: i.label, onclick: () => onPick(i.id),
+    type: 'button', class: i.id === active ? 'on' : '', text: tx(i.label), onclick: () => onPick(i.id),
   })));
   return t;
 }

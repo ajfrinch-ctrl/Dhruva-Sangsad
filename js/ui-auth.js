@@ -1,6 +1,7 @@
 /* Guest screens: Login (default), Register, Forgot Password, Registration success.
    Nothing else is rendered while unauthenticated. */
-import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO } from './util.js';
+import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
+import { getLang, setLang } from './i18n.js';
 import { icon } from './icons.js';
 import { login, recoverPassword, memberAccountExists } from './auth.js';
 import { registerMember, settings } from './store.js';
@@ -19,17 +20,22 @@ export function renderAuth(root, onLoggedIn) {
       <div class="sub">Dhruvo Sangsad</div>
     </div>
     <div class="auth-tabs" id="authTabs">
-      <button type="button" data-m="login" class="${mode === 'login' ? 'on' : ''}">লগইন / Login</button>
-      <button type="button" data-m="register" class="${mode === 'register' ? 'on' : ''}">নিবন্ধন / Register</button>
+      <button type="button" data-m="login" class="${mode === 'login' ? 'on' : ''}">${t('লগইন', 'Login')}</button>
+      <button type="button" data-m="register" class="${mode === 'register' ? 'on' : ''}">${t('নিবন্ধন', 'Register')}</button>
     </div>
     <div id="authBody"></div>
+    <div class="auth-lang">
+      <button type="button" data-lang="bn" class="${getLang() === 'bn' ? 'on' : ''}">বাংলা</button>
+      <button type="button" data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">English</button>
+    </div>
     <div class="auth-foot">
-      ধ্রুব সংসদ · Member &amp; Deposit Management<br>Offline-first · Secure · v1.0
+      ${t('ধ্রুব সংসদ · সদস্য ও জমা ব্যবস্থাপনা', 'Dhruvo Sangsad · Member & Deposit Management')}
     </div>`;
   root.appendChild(card);
   card.querySelectorAll('#authTabs button').forEach(b => b.addEventListener('click', () => {
     mode = b.dataset.m; renderAuth(root, onLoggedIn);
   }));
+  card.querySelectorAll('.auth-lang button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
   const body = card.querySelector('#authBody');
   if (mode === 'login') loginForm(body, root, onLoggedIn);
   else if (mode === 'register') registerForm(body, root, onLoggedIn);
@@ -41,18 +47,18 @@ function loginForm(body, root, onLoggedIn) {
   clear(body);
   const f = el('form', { class: 'grid', novalidate: true });
   f.innerHTML = `
-    <div class="auth-title">Login / লগইন</div>
+    <div class="auth-title">${t('লগইন', 'Login')}</div>
     <div class="field">
-      <label>User ID / Mobile Number <span class="req">*</span></label>
-      <input name="identifier" autocomplete="username" placeholder="admin অথবা 01XXXXXXXXX" required>
+      <label>${t('ইউজার আইডি / মোবাইল', 'User ID / Mobile Number')} <span class="req">*</span></label>
+      <input name="identifier" autocomplete="username" placeholder="${t('admin অথবা 01XXXXXXXXX', 'admin or 01XXXXXXXXX')}" required>
     </div>
     <div class="field">
-      <label>Password <span class="req">*</span></label>
+      <label>${t('পাসওয়ার্ড', 'Password')} <span class="req">*</span></label>
       <input name="password" type="password" autocomplete="current-password" placeholder="••••••" required>
     </div>
-    <label class="check"><input type="checkbox" name="remember"> এই ডিভাইসে মনে রাখুন / Remember me</label>
-    <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('login')} Login</button>
-    <div class="center"><button class="link-btn" type="button" id="toForgot">Forgot Password?</button></div>
+    <label class="check"><input type="checkbox" name="remember"> ${t('এই ডিভাইসে মনে রাখুন', 'Remember me')}</label>
+    <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('login')} ${t('লগইন', 'Login')}</button>
+    <div class="center"><button class="link-btn" type="button" id="toForgot">${t('পাসওয়ার্ড ভুলে গেছেন?', 'Forgot Password?')}</button></div>
     <div class="err center" id="loginErr" style="min-height:12px"></div>`;
   body.appendChild(f);
   f.querySelector('#toForgot').addEventListener('click', () => { mode = 'forgot'; renderAuth(root, onLoggedIn); });

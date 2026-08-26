@@ -31,6 +31,7 @@ const PRECACHE = [
   'js/crypto.js',
   'js/db.js',
   'js/firebase.js',
+  'js/i18n.js',
   'js/icons.js',
   'js/pdf.js',
   'js/store.js',
