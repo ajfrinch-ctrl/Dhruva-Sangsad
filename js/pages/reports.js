@@ -32,6 +32,7 @@ export async function sendWaReminder(member) {
 export function sheetHead(cfg, titleEn, subEn) {
   const h = el('header', { class: 'ps-head' });
   h.innerHTML = `
+    <img class="ps-logo" src="${esc(logoSrc(cfg))}" alt="">
     <div class="ps-title">${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}</div>
     <div class="ps-org">${esc(cfg.orgNameEn || 'Dhruvo Sangsad')}${cfg.orgAddress ? ' · ' + esc(cfg.orgAddress) : ''}${cfg.orgPhone ? ' · ' + esc(cfg.orgPhone) : ''}</div>
     <div class="ps-sub">${esc(titleEn)}</div>

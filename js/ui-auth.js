@@ -4,7 +4,7 @@ import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMob
 import { getLang, setLang } from './i18n.js';
 import { icon } from './icons.js';
 import { login, recoverPassword, findMemberForRecovery, verifyRecoveryDob } from './auth.js';
-import { registerMember, settings } from './store.js';
+import { registerMember, settings, logoSrc } from './store.js';
 import { passwordIssues } from './crypto.js';
 import { getTheme, toggleTheme } from './theme.js';
 
@@ -16,7 +16,7 @@ export function renderAuth(root, onLoggedIn) {
   const card = el('div', { class: 'auth-card' });
   card.innerHTML = `
     <div class="auth-brand">
-      <div class="auth-logo">ধ</div>
+      <div class="auth-logo"><img class="js-org-logo" src="${esc(logoSrc())}" alt="ধ্রুব সংসদ"></div>
       <h1>ধ্রুব সংসদ</h1>
       <div class="sub">Dhruvo Sangsad</div>
     </div>
@@ -42,6 +42,11 @@ export function renderAuth(root, onLoggedIn) {
   themeBtn.addEventListener('click', () => { toggleTheme(); paint(); });
   root.appendChild(themeBtn);
   root.appendChild(card);
+  settings().then(cfg => {
+    const src = logoSrc(cfg);
+    root.querySelectorAll('.js-org-logo').forEach(img => { img.src = src; });
+    if (window.App && App.applyBrand) App.applyBrand(cfg);
+  }).catch(() => {});
   card.querySelectorAll('#authTabs button').forEach(b => b.addEventListener('click', () => {
     mode = b.dataset.m; renderAuth(root, onLoggedIn);
   }));

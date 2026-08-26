@@ -573,6 +573,30 @@ function accountSection(session, host) {
   host.appendChild(card('অ্যাপ সম্পর্কে', 'About', about));
 }
 
+function resizeLogoFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) return reject(new Error('ছবি ফাইল দিন / Choose an image file'));
+    if (file.size > 4 * 1024 * 1024) return reject(new Error('ফাইল খুব বড় (সর্বোচ্চ ৪ MB)'));
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 512;
+      let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      if (w > max || h > max) {
+        const s = Math.min(max / w, max / h);
+        w = Math.round(w * s); h = Math.round(h * s);
+      }
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, w); c.height = Math.max(1, h);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('ছবি খোলা যায়নি')); };
+    img.src = url;
+  });
+}
+
 async function organisationSection(session, host) {
   const cfg = await settings();
   const f = el('form', { class: 'grid', novalidate: true });
@@ -586,6 +610,17 @@ async function organisationSection(session, host) {
       <div class="field"><label>মাসিক আদায় লক্ষ্যমাত্রা (৳)</label><input name="monthlyTarget" type="number" min="0" value="${esc(cfg.monthlyTarget)}"><div class="hint">০ দিলে সক্রিয় সদস্যদের কিস্তির যোগফল লক্ষ্য ধরা হবে।</div></div>
     </div>
     <label class="check"><input type="checkbox" name="countSpecialTowardsInstallment" ${cfg.countSpecialTowardsInstallment ? 'checked' : ''}> বিশেষ চাঁদা ও অন্যান্য জমাকেও কিস্তি হিসেবে গণনা করুন</label>
+    <div class="field" style="margin-top:8px">
+      <label>প্রতিষ্ঠান / অ্যাপ লোগো</label>
+      <div class="logo-edit">
+        <img class="logo-preview" id="logoPreview" src="${esc(cfg.orgLogo || 'icons/logo.png')}" alt="logo">
+        <div>
+          <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+          <div class="hint">PNG / JPG — মোবাইল স্ক্রিনে অটোফিট হবে। সর্বোচ্চ ~৫১২px।</div>
+          <button class="btn btn-ghost btn-xs" type="button" id="logoReset">ডিফল্ট লোগো</button>
+        </div>
+      </div>
+    </div>
     <div class="field" style="margin-top:8px"><label>WhatsApp বকেয়া রিমাইন্ডার টেমপ্লেট</label>
       <textarea name="waTemplate" rows="7">${esc(cfg.waTemplate)}</textarea>
       <div class="hint"><b>[Member Name]</b> অংশটি স্বয়ংক্রিয়ভাবে সদস্যের নাম দিয়ে প্রতিস্থাপিত হবে। বার্তায় কোনো টাকার অঙ্ক থাকবে না।</div></div>

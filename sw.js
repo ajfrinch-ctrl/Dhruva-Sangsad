@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.5.5';
+const VERSION = 'ds-v6.5.6';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -9,6 +9,7 @@ const PRECACHE = [
   'index.html',
   'manifest.webmanifest',
   'css/app.css',
+  'icons/logo.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',

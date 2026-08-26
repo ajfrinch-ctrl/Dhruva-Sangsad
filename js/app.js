@@ -67,18 +67,26 @@ export const App = {
     this.paintNav();
     this.paintFooter();
   },
+  applyBrand(cfg) {
+    const src = logoSrc(cfg);
+    document.querySelectorAll('#brandLogo img, .js-org-logo').forEach(img => { img.src = src; });
+    const link = document.querySelector('link[rel="icon"]');
+    if (link && src && !String(src).startsWith('data:')) link.href = src;
+  },
   async paintFooter() {
     const el = $('#appFooterOrg');
     if (!el) return;
     try {
       const cfg = await settings();
+      this.applyBrand(cfg);
       const bn = (cfg.orgNameBn || '').trim();
       const en = (cfg.orgNameEn || '').trim();
       const extra = [cfg.orgAddress, cfg.orgPhone].filter(Boolean).join(' · ');
-      el.innerHTML = `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
+      el.innerHTML = `<img class="foot-logo js-org-logo" src="${esc(logoSrc(cfg))}" alt="">`
+        + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.5</span>`;
+        + `<span class="app-footer-meta">v6.5.6</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
