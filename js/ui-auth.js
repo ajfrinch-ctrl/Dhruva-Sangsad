@@ -3,7 +3,7 @@
 import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
 import { getLang, setLang } from './i18n.js';
 import { icon } from './icons.js';
-import { login, recoverPassword, memberAccountExists } from './auth.js';
+import { login, recoverPassword, findMemberForRecovery, verifyRecoveryDob } from './auth.js';
 import { registerMember, settings } from './store.js';
 import { passwordIssues } from './crypto.js';
 import { getTheme, toggleTheme } from './theme.js';
@@ -93,89 +93,122 @@ function loginForm(body, root, onLoggedIn) {
   });
 }
 
-/* ---------------- FORGOT PASSWORD (two-step, two-field verification) ---------------- */
+/* ---------------- FORGOT PASSWORD: mobile → profile → day+month → reset ---------------- */
 function forgotForm(body, root, onLoggedIn) {
   clear(body);
   const holder = el('div');
   body.appendChild(holder);
-  let identifier = '';
+  let found = null;
 
   const errHtml = msg => `<span class="form-err">${esc(msg)}</span>`;
-  const fieldOptions = selected => {
-    const opts = [
-      ['nid', 'NID Number / এনআইডি'],
-      ['dob', 'Date of Birth / জন্মতারিখ'],
-      ['mobile', 'Mobile Number / মোবাইল'],
-      ['whatsapp', 'WhatsApp Number'],
-      ['email', 'Email'],
-    ];
-    return opts.map(([v, l]) => `<option value="${v}"${v === selected ? ' selected' : ''}>${l}</option>`).join('');
-  };
+  const months = [
+    [1, 'জানুয়ারি / January'], [2, 'ফেব্রুয়ারি / February'], [3, 'মার্চ / March'],
+    [4, 'এপ্রিল / April'], [5, 'মে / May'], [6, 'জুন / June'],
+    [7, 'জুলাই / July'], [8, 'আগস্ট / August'], [9, 'সেপ্টেম্বর / September'],
+    [10, 'অক্টোবর / October'], [11, 'নভেম্বর / November'], [12, 'ডিসেম্বর / December'],
+  ];
 
-  /* Step 1 — identify the member. No reset option is shown yet. */
   function step1() {
+    found = null;
     holder.replaceChildren();
     const f = el('form', { class: 'grid', novalidate: true });
     f.innerHTML = `
-      <div class="auth-title">Forgot Password / পাসওয়ার্ড পুনরুদ্ধার</div>
-      <div class="banner info">${icon('info')}<span>আপনার Member ID অথবা মোবাইল নম্বর দিন। সদস্য শনাক্ত হওয়ার পর নিরাপত্তা যাচাই করতে হবে।</span></div>
-      <div class="field"><label>Member ID / Mobile Number <span class="req">*</span></label><input name="identifier" required placeholder="Member ID অথবা 01XXXXXXXXX"></div>
-      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('search')} Continue / এগিয়ে যান</button>
-      <div class="center"><button class="link-btn" type="button" data-back="1">← Back to Login</button></div>
+      <div class="auth-title">${t('পাসওয়ার্ড ভুলে গেছেন', 'Forgot Password')}</div>
+      <div class="banner info">${icon('info')}<span>${t('মোবাইল নম্বর দিন। সদস্য পাওয়া গেলে তথ্য দেখাবে।', 'Enter your mobile number. If found, your profile will be shown.')}</span></div>
+      <div class="field"><label>${t('মোবাইল নম্বর', 'Mobile Number')} <span class="req">*</span></label>
+        <input name="mobile" inputmode="numeric" maxlength="11" required placeholder="01XXXXXXXXX"></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('search')} ${t('সদস্য খুঁজুন', 'Search member')}</button>
+      <div class="center"><button class="link-btn" type="button" data-back="1">← ${t('লগইনে ফিরুন', 'Back to Login')}</button></div>
       <div class="err center js-err" style="min-height:12px"></div>`;
     holder.appendChild(f);
     f.querySelector('[data-back]').addEventListener('click', () => { mode = 'login'; renderAuth(root, onLoggedIn); });
+    f.elements.mobile.addEventListener('input', () => { f.elements.mobile.value = f.elements.mobile.value.replace(/\D/g, '').slice(0, 11); });
     f.addEventListener('submit', async e => {
       e.preventDefault();
       const errBox = f.querySelector('.js-err'); errBox.textContent = '';
-      identifier = f.elements.identifier.value.trim();
-      if (!identifier) { errBox.innerHTML = errHtml('Member ID / Mobile দিন / Enter Member ID or mobile'); return; }
-      const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Checking…';
+      const mob = f.elements.mobile.value.trim();
+      if (!isValidMobile(mob)) { errBox.innerHTML = errHtml(t('সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন', 'Enter a valid 11-digit mobile number')); return; }
+      const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
       try {
-        const exists = await memberAccountExists(identifier);
-        if (!exists) { errBox.innerHTML = errHtml('এই তথ্যে কোনো নিবন্ধিত সদস্য পাওয়া যায়নি / No registered member found'); btn.disabled = false; btn.textContent = 'Continue / এগিয়ে যান'; return; }
+        found = await findMemberForRecovery(mob);
+        if (!found) { errBox.innerHTML = errHtml(t('এই মোবাইলে কোনো সদস্য পাওয়া যায়নি', 'No member found for this mobile number')); btn.disabled = false; return; }
         step2();
       } catch (err) {
         errBox.innerHTML = errHtml(err.message);
-        btn.disabled = false; btn.textContent = 'Continue / এগিয়ে যান';
+        btn.disabled = false;
       }
     });
   }
 
-  /* Step 2 — verify two unique profile fields, then (only on success) allow reset. */
   function step2() {
     holder.replaceChildren();
+    const box = el('div', { class: 'grid' });
+    box.innerHTML = `
+      <div class="auth-title">${t('সদস্য পাওয়া গেছে', 'Member found')}</div>
+      <div class="kv">
+        <div>Member ID</div><div><b>${esc(found.memberId)}</b></div>
+        <div>${t('নাম', 'Name')}</div><div>${esc(found.nameBn || found.nameEn)}</div>
+        <div>${t('মোবাইল', 'Mobile')}</div><div>${esc(found.mobile)}</div>
+        <div>${t('স্ট্যাটাস', 'Status')}</div><div>${esc((found.status || '').toUpperCase())}</div>
+      </div>
+      <div class="banner info">${icon('info')}<span>${t('এখন জন্ম তারিখ (দিন) ও মাস দিয়ে যাচাই করুন।', 'Now verify with your date of birth (day) and month.')}</span></div>`;
     const f = el('form', { class: 'grid', novalidate: true });
     f.innerHTML = `
-      <div class="auth-title">নিরাপত্তা যাচাই / Security Verification</div>
-      <div class="banner info">${icon('info')}<span>সদস্য প্রোফাইলে সংরক্ষিত <b>দুটি ভিন্ন</b> তথ্য সঠিকভাবে দিন (যেমন NID + জন্মতারিখ)।</span></div>
       <div class="grid g2">
-        <div class="field"><label>যাচাই তথ্য ১ / Field 1 <span class="req">*</span></label><select name="field1">${fieldOptions('nid')}</select></div>
-        <div class="field"><label>মান ১ / Value 1 <span class="req">*</span></label><input name="value1" required></div>
-        <div class="field"><label>যাচাই তথ্য ২ / Field 2 <span class="req">*</span></label><select name="field2">${fieldOptions('dob')}</select></div>
-        <div class="field"><label>মান ২ / Value 2 <span class="req">*</span></label><input name="value2" required></div>
+        <div class="field"><label>${t('জন্ম তারিখ (দিন)', 'Birth day')} <span class="req">*</span></label>
+          <input name="dobDay" inputmode="numeric" maxlength="2" required placeholder="01–31"></div>
+        <div class="field"><label>${t('জন্ম মাস', 'Birth month')} <span class="req">*</span></label>
+          <select name="dobMonth" required>
+            <option value="">— ${t('মাস', 'Month')} —</option>
+            ${months.map(([n, l]) => `<option value="${n}">${l}</option>`).join('')}
+          </select></div>
       </div>
-      <div class="field"><label>New Password <span class="req">*</span></label><input name="pw1" type="password" required minlength="6"></div>
-      <div class="field"><label>Confirm New Password <span class="req">*</span></label><input name="pw2" type="password" required minlength="6"></div>
-      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('key')} Reset Password</button>
-      <div class="center"><button class="link-btn" type="button" data-back="2">← Back</button></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('check')} ${t('যাচাই করুন', 'Verify')}</button>
+      <div class="center"><button class="link-btn" type="button" data-back="2">← ${t('ফিরুন', 'Back')}</button></div>
       <div class="err center js-err" style="min-height:12px"></div>`;
-    holder.appendChild(f);
+    box.appendChild(f);
+    holder.appendChild(box);
     f.querySelector('[data-back]').addEventListener('click', step1);
     f.addEventListener('submit', async e => {
       e.preventDefault();
       const errBox = f.querySelector('.js-err'); errBox.textContent = '';
-      if (f.elements.field1.value === f.elements.field2.value) { errBox.innerHTML = errHtml('দুটি ভিন্ন তথ্য নির্বাচন করুন / Choose two different fields'); return; }
-      if (f.elements.pw1.value !== f.elements.pw2.value) { errBox.innerHTML = errHtml('Password মেলেনি / Passwords do not match'); return; }
+      const day = Number(f.elements.dobDay.value);
+      const month = Number(f.elements.dobMonth.value);
+      if (!(day >= 1 && day <= 31) || !(month >= 1 && month <= 12)) {
+        errBox.innerHTML = errHtml(t('সঠিক দিন ও মাস দিন', 'Enter a valid day and month')); return;
+      }
       const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
       try {
-        await recoverPassword({
-          identifier,
-          field1: f.elements.field1.value, value1: f.elements.value1.value,
-          field2: f.elements.field2.value, value2: f.elements.value2.value,
-          newPassword: f.elements.pw1.value,
-        });
-        await alertBox('পাসওয়ার্ড পরিবর্তন সফল হয়েছে। নতুন পাসওয়ার্ড দিয়ে লগইন করুন। / Password reset successful. Please log in.', 'সফল / Success');
+        await verifyRecoveryDob(found.identifier, day, month);
+        step3(day, month);
+      } catch (err) {
+        errBox.innerHTML = errHtml(err.message);
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function step3(dobDay, dobMonth) {
+    holder.replaceChildren();
+    const f = el('form', { class: 'grid', novalidate: true });
+    f.innerHTML = `
+      <div class="auth-title">${t('নতুন পাসওয়ার্ড', 'New Password')}</div>
+      <div class="banner ok">${icon('check')}<span>${t('যাচাই সফল। এখন নতুন পাসওয়ার্ড দিন।', 'Verified. Set a new password.')}</span></div>
+      <div class="field"><label>${t('নতুন পাসওয়ার্ড', 'New Password')} <span class="req">*</span></label><input name="pw1" type="password" required minlength="6"></div>
+      <div class="field"><label>${t('পাসওয়ার্ড নিশ্চিত', 'Confirm Password')} <span class="req">*</span></label><input name="pw2" type="password" required minlength="6"></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('key')} ${t('পাসওয়ার্ড পরিবর্তন', 'Change Password')}</button>
+      <div class="center"><button class="link-btn" type="button" data-back="3">← ${t('ফিরুন', 'Back')}</button></div>
+      <div class="err center js-err" style="min-height:12px"></div>`;
+    holder.appendChild(f);
+    f.querySelector('[data-back]').addEventListener('click', step2);
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errBox = f.querySelector('.js-err'); errBox.textContent = '';
+      if (f.elements.pw1.value !== f.elements.pw2.value) { errBox.innerHTML = errHtml(t('Password মেলেনি', 'Passwords do not match')); return; }
+      const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+      try {
+        await recoverPassword({ identifier: found.identifier, dobDay, dobMonth, newPassword: f.elements.pw1.value });
+        await alertBox(t('পাসওয়ার্ড পরিবর্তন সফল হয়েছে। নতুন পাসওয়ার্ড দিয়ে লগইন করুন।', 'Password changed. Please log in.'), t('সফল', 'Success'));
         mode = 'login'; renderAuth(root, onLoggedIn);
       } catch (err) {
         errBox.innerHTML = errHtml(err.message);

@@ -377,6 +377,67 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
 
 .auth-theme-btn{position:fixed;top:12px;right:12px;z-index:80}
 
+/* ===================== ROLE COLORS ===================== */
+html[data-role="admin"]{
+  --role:#7c3aed; --role-soft:#ede9fe; --role-line:#c4b5fd; --role-dark:#5b21b6;
+}
+html[data-role="maker"]{
+  --role:#0d9488; --role-soft:#ccfbf1; --role-line:#5eead4; --role-dark:#0f766e;
+}
+html[data-role="member"]{
+  --role:#ea580c; --role-soft:#ffedd5; --role-line:#fdba74; --role-dark:#c2410c;
+}
+html[data-role="admin"] .topbar,html[data-role="maker"] .topbar,html[data-role="member"] .topbar{border-bottom-color:var(--role-line);background:linear-gradient(180deg,var(--role-soft),#fff 70%)}
+html[data-role="admin"] .topnav,html[data-role="maker"] .topnav{border-bottom-color:var(--role-line)}
+html[data-role="admin"] .nav-tab.on,html[data-role="maker"] .nav-tab.on,html[data-role="member"] .bottom-nav .nav-tab.on{
+  color:var(--role-dark);border-bottom-color:var(--role);background:var(--role-soft)
+}
+html[data-role="admin"] .btn-primary,html[data-role="maker"] .btn-primary,html[data-role="member"] .btn-primary{background:var(--role);border-color:var(--role)}
+html[data-role="admin"] .btn-primary:hover,html[data-role="maker"] .btn-primary:hover,html[data-role="member"] .btn-primary:hover{background:var(--role-dark)}
+html[data-role="admin"] .btn-soft,html[data-role="maker"] .btn-soft,html[data-role="member"] .btn-soft{background:var(--role-soft);color:var(--role-dark);border-color:var(--role-line)}
+html[data-role="admin"] .stat::before,html[data-role="maker"] .stat::before,html[data-role="member"] .stat::before{background:var(--role)}
+html[data-role="admin"] .brand-txt .r,html[data-role="maker"] .brand-txt .r,html[data-role="member"] .brand-txt .r{color:var(--role-dark)}
+html[data-role="admin"] .app-footer-org strong,html[data-role="maker"] .app-footer-org strong,html[data-role="member"] .app-footer-org strong{color:var(--role-dark)}
+html[data-role="admin"] .page-head h1 .icon,html[data-role="maker"] .page-head h1 .icon,html[data-role="member"] .page-head h1 .icon{color:var(--role)}
+html[data-role="admin"] input:focus,html[data-role="maker"] input:focus,html[data-role="member"] input:focus,
+html[data-role="admin"] select:focus,html[data-role="maker"] select:focus,html[data-role="member"] select:focus{border-color:var(--role);box-shadow:0 0 0 3px var(--role-soft)}
+
+/* Member: hide top tabs, pin Dashboard / Deposit / Reports at the bottom */
+.bottom-nav{display:none}
+html[data-role="member"] .topnav{display:none !important}
+html[data-role="member"] .app-footer{bottom:var(--bottom-nav-h,56px)}
+html[data-role="member"]{
+  --bottom-nav-h:56px;
+}
+html[data-role="member"] .main{
+  margin-top:var(--header-h);
+  margin-bottom:calc(var(--footer-h) + var(--bottom-nav-h));
+  height:calc(100dvh - var(--header-h) - var(--footer-h) - var(--bottom-nav-h));
+}
+html[data-role="member"] .bottom-nav{
+  display:flex;position:fixed;left:0;right:0;bottom:0;z-index:61;
+  height:var(--bottom-nav-h);background:#fff;border-top:1px solid var(--role-line);
+  align-items:stretch;justify-content:space-around;padding:0 4px;
+  box-shadow:0 -2px 10px rgba(16,24,40,.06);
+}
+html[data-role="member"] .bottom-nav .nav-tab{
+  flex:1;flex-direction:column;justify-content:center;gap:2px;padding:6px 4px;
+  border-bottom:0;border-top:2.5px solid transparent;font-size:11px;
+}
+html[data-role="member"] .bottom-nav .nav-tab .icon{width:20px;height:20px}
+html[data-role="member"] .bottom-nav .nav-tab.on{border-top-color:var(--role);border-bottom:0}
+
+html[data-theme="amoled"][data-role="admin"],
+html[data-theme="dark"][data-role="admin"]{--role-soft:#1e1033;--role-line:#5b21b6}
+html[data-theme="amoled"][data-role="maker"],
+html[data-theme="dark"][data-role="maker"]{--role-soft:#042f2e;--role-line:#0f766e}
+html[data-theme="amoled"][data-role="member"],
+html[data-theme="dark"][data-role="member"]{--role-soft:#2a1005;--role-line:#c2410c}
+html[data-theme="amoled"][data-role="member"] .bottom-nav,
+html[data-theme="dark"][data-role="member"] .bottom-nav{background:#000;border-color:#222}
+html[data-theme="amoled"][data-role] .topbar,
+html[data-theme="dark"][data-role] .topbar{background:#000}
+
 /* ===================== HARD DARK (AMOLED) ===================== */
 html[data-theme="amoled"],html[data-theme="dark"]{
   color-scheme:dark;
@@ -436,7 +497,7 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 
 @media print{
   body{background:#fff}
-  .topbar,.topnav,.app-footer,.sheet-bar,.toast-wrap,.no-print,.tabs,.toolbar{display:none !important}
+  .topbar,.topnav,.bottom-nav,.app-footer,.sheet-bar,.toast-wrap,.no-print,.tabs,.toolbar{display:none !important}
   #app.on{height:auto;max-height:none;overflow:visible}
   .main{padding:0;max-width:none;margin:0;height:auto;overflow:visible}
   .print-sheet .ps-head,.print-sheet .ps-foot{position:static}

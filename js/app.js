@@ -78,7 +78,7 @@ export const App = {
       el.innerHTML = `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.4</span>`;
+        + `<span class="app-footer-meta">v6.5.5</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
@@ -88,8 +88,14 @@ export const App = {
   paintNav() {
     const s = this.session; if (!s) return;
     const nav = $('#topnav');
+    const bottom = $('#bottomnav');
     clear(nav);
-    for (const item of NAV) {
+    if (bottom) { clear(bottom); bottom.hidden = s.role !== 'member'; }
+    const items = s.role === 'member'
+      ? NAV.filter(i => i.id === 'home' || i.id === 'deposit' || i.id === 'reports')
+      : NAV;
+    const host = s.role === 'member' ? bottom : nav;
+    for (const item of items) {
       if (!can(s, item.id)) continue;
       const btn = el('button', {
         class: `nav-tab${this.route === item.id ? ' on' : ''}`, type: 'button',
@@ -97,8 +103,10 @@ export const App = {
         html: `${icon(item.icon)}<span>${t(item.bn, item.en)}</span>`,
         onclick: () => this.go(item.id),
       });
-      nav.appendChild(btn);
+      host.appendChild(btn);
     }
+    const setBtn = $('#btnSettings');
+    if (setBtn) setBtn.hidden = s.role !== 'member';
     const userName = s.displayName || s.username || s.memberId || '';
     const brand = $('#brandRole');
     brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc((s.role || '').toUpperCase())}</span>`;
@@ -218,6 +226,11 @@ async function boot() {
 
   $('#btnLogout').innerHTML = icon('logout');
   $('#btnLogout').addEventListener('click', () => App.doLogout());
+  const setBtn = $('#btnSettings');
+  if (setBtn) {
+    setBtn.innerHTML = icon('settings');
+    setBtn.addEventListener('click', () => { if (App.session) App.go('settings'); });
+  }
   $('#btnNotif').innerHTML = icon('bell');
   $('#btnNotif').addEventListener('click', () => { if (App.session) openNotifications(App.session); });
   const paintThemeBtn = () => {
