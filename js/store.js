@@ -99,7 +99,10 @@ export async function markNotificationRead(id, userId) {
 export async function visibleNotifications(session) {
   const all = await allNotifications();
   return all.filter(n => {
-    if (session.role === 'member') return n.audience === 'all' || (n.audience === 'member' && n.memberId === session.memberId);
+    if (session.role === 'member') {
+      if (n.audience === 'staff') return false;
+      return n.memberId && n.memberId === session.memberId;
+    }
     return n.audience === 'staff' || n.audience === 'all';
   }).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 }
@@ -184,6 +187,11 @@ export async function updateMember(memberDocId, patch, actor) {
   const next = { ...m };
   const fields = ['nameBn', 'nameEn', 'fatherBn', 'fatherEn', 'motherBn', 'motherEn', 'mobile', 'whatsapp', 'email', 'nid', 'dob', 'profession', 'address', 'installment'];
   for (const f of fields) if (f in patch) next[f] = f === 'installment' ? num(patch[f]) : (typeof patch[f] === 'string' ? patch[f].trim() : patch[f]);
+  if ('joinDate' in patch && actor && actor.role === 'admin') {
+    const jd = String(patch.joinDate || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(jd)) throw new Error('সঠিক যোগদানের তারিখ দিন / Enter a valid join date');
+    next.joinDate = jd;
+  }
   next.mobile = normalizeMobile(next.mobile);
   next.whatsapp = normalizeMobile(next.whatsapp);
   next.memberId = m.memberId; // never changes
@@ -192,8 +200,11 @@ export async function updateMember(memberDocId, patch, actor) {
   if (errs.length) { const e = new Error(errs[0].msg); e.fieldErrors = errs; throw e; }
 
   await saveRecord('members', next, { queue: true, actorId: actor && actor.id });
-  await logActivity('MEMBER_UPDATE', `Member ${m.memberId} updated`, actor);
+  await logActivity('MEMBER_UPDATE', `Member ${m.memberId} updated${next.joinDate !== m.joinDate ? ` (join date ${m.joinDate} → ${next.joinDate})` : ''}`, actor);
   invalidate('members');
+  if (next.joinDate !== m.joinDate) {
+    try { await syncDueNotifications(); } catch {}
+  }
   return next;
 }
 
@@ -207,7 +218,7 @@ export async function setMemberStatus(memberDocId, status, actor, reason = '') {
   await logActivity(status === 'active' ? 'MEMBER_APPROVAL' : status === 'rejected' ? 'MEMBER_REJECTION' : 'MEMBER_STATUS', `Member ${m.memberId} → ${status}${reason ? ' (' + reason + ')' : ''}`, actor);
   await notify({
     title: status === 'active' ? 'সদস্য অনুমোদিত / Member Approved' : status === 'rejected' ? 'সদস্য বাতিল / Member Rejected' : 'সদস্য স্ট্যাটাস',
-    body: `${m.nameBn} (${m.memberId}) — ${status}`, audience: 'all', memberId: m.memberId,
+    body: `${m.nameBn} (${m.memberId}) — ${status}`, audience: 'member', memberId: m.memberId,
     kind: status === 'active' ? 'approve' : 'reject',
   });
   invalidate('members');
@@ -254,7 +265,7 @@ export async function submitDeposit(form, actor) {
   if (rec.status === 'pending') {
     await notify({ title: 'নতুন জমা / New Deposit', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'deposit' });
   } else {
-    await notify({ title: 'জমা যুক্ত হয়েছে / Deposit Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'all', memberId: member.memberId, kind: 'approve' });
+    await notify({ title: 'জমা যুক্ত হয়েছে / Deposit Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'approve' });
   }
   invalidate('deposits');
   try { await syncDueNotifications(); } catch {}
@@ -273,7 +284,7 @@ export async function setDepositStatus(depositId, status, actor, reason = '') {
   await notify({
     title: status === 'approved' ? 'জমা অনুমোদিত / Deposit Approved' : 'জমা বাতিল / Deposit Rejected',
     body: `${d.memberName} (${d.memberId}) — ৳${d.amount}${reason ? ' — ' + reason : ''}`,
-    audience: 'all', memberId: d.memberId, kind: status === 'approved' ? 'approve' : 'reject',
+    audience: 'member', memberId: d.memberId, kind: status === 'approved' ? 'approve' : 'reject',
   });
   invalidate('deposits');
   return next;
@@ -378,7 +389,7 @@ export async function submitWithdrawal(form, actor) {
   if (rec.status === 'pending') {
     await notify({ title: 'নতুন উত্তোলন / New Withdrawal', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'withdraw' });
   } else {
-    await notify({ title: 'উত্তোলন সম্পন্ন / Withdrawal Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'all', memberId: member.memberId, kind: 'withdraw' });
+    await notify({ title: 'উত্তোলন সম্পন্ন / Withdrawal Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'withdraw' });
   }
   invalidate('withdrawals');
   return rec;
@@ -395,7 +406,7 @@ export async function setWithdrawalStatus(withdrawalId, status, actor, reason = 
   await notify({
     title: status === 'approved' ? 'উত্তোলন অনুমোদিত / Withdrawal Approved' : 'উত্তোলন বাতিল / Withdrawal Rejected',
     body: `${w.memberName} (${w.memberId}) — ৳${w.amount}${reason ? ' — ' + reason : ''}`,
-    audience: 'all', memberId: w.memberId, kind: status === 'approved' ? 'approve' : 'reject',
+    audience: 'member', memberId: w.memberId, kind: status === 'approved' ? 'approve' : 'reject',
   });
   invalidate('withdrawals');
   return next;

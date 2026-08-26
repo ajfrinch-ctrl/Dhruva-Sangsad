@@ -247,10 +247,10 @@ function rStatement(ctx, meta) {
     const sheet = el('div', { class: 'print-sheet' });
     sheet.appendChild(sheetHead(ctx.cfg, 'Member Statement', (from.value || to.value) ? `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}` : ''));
     sheet.appendChild(psInfo([
-      ['Member ID', m.memberId], ['Status', (m.status || '').toUpperCase()],
+      ['Status', (m.status || '').toUpperCase()], ['Member ID', m.memberId],
       ['Name (Bangla)', m.nameBn], ['Name (English)', m.nameEn],
-      ["Father's Name", m.fatherBn || m.fatherEn || '-'], ['Mobile', m.mobile],
-      ['Address', m.address || '-'], ['Join Date', fmtDate(m.joinDate)],
+      ['Join Date', fmtDate(m.joinDate)], ['Mobile', m.mobile],
+      ["Father's Name", m.fatherBn || m.fatherEn || '-'], ['Address', m.address || '-'],
       ['Monthly Installment', money(m.installment) + ' Tk'], ['Statement Date', fmtDate(todayISO())],
     ]));
     sheet.appendChild(sechead('Deposit Statement'));
