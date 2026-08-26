@@ -86,7 +86,7 @@ export const App = {
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.9</span>`;
+        + `<span class="app-footer-meta">v6.5.10</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
@@ -221,10 +221,17 @@ async function onIdleTimeout() {
 
 /* ---------------- boot ---------------- */
 async function boot() {
-  await openDB();
-  await ensureBootstrapAdmin();
+  try {
+    await Promise.race([
+      openDB(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('IndexedDB timeout')), 8000)),
+    ]);
+    await ensureBootstrapAdmin();
+  } catch (e) {
+    console.error('boot db', e);
+  }
   paintSync(navigator.onLine ? 'online' : 'offline');
-  firebase.init();
+  try { firebase.init(); } catch (e) { console.error('firebase', e); }
 
   $('#btnLogout').innerHTML = icon('logout');
   $('#btnLogout').addEventListener('click', () => App.doLogout());
@@ -269,8 +276,15 @@ async function boot() {
     else App.showAuth();
   });
 
-  const s = getSession();
-  if (s) await App.enter(s); else App.showAuth();
+  try {
+    const s = getSession();
+    if (s) await App.enter(s); else App.showAuth();
+  } catch (e) {
+    console.error('boot enter', e);
+    App.showAuth();
+    const t = document.querySelector('#authScreen .auth-title');
+    if (t) t.textContent = 'লোড সমস্যা: ' + (e.message || e);
+  }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

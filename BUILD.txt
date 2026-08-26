@@ -1,4 +1,2 @@
-Dhruva Sangsad v6.5.9
-branch: arena/01a03dd7-dhruva-sangsad
-commit: 73cfb81+
+Dhruva Sangsad v6.5.10
 pages: https://ajfrinch-ctrl.github.io/Dhruva-Sangsad/
