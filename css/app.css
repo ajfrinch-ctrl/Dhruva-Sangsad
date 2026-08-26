@@ -306,10 +306,7 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
 .pdf-render{box-shadow:none !important;margin:0 !important}
 .sheet-bar{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
 /* scrollable A4 preview frame used by the report pages */
-.sheet-preview{background:#eceef0;border:1px solid var(--line);border-radius:var(--r);padding:14px;overflow:auto;max-height:min(70dvh,720px)}
-.sheet-preview .print-sheet{margin:0 auto}
-.print-sheet .ps-head{position:sticky;top:0;z-index:2;background:#fff;padding-bottom:1mm}
-.print-sheet .ps-foot{position:sticky;bottom:0;z-index:2;background:#fff}
+.sheet-offscreen{position:absolute;left:-99999px;top:0;pointer-events:none}
 
 /* ===================== MINI BAR CHART ===================== */
 .bars{display:flex;align-items:flex-end;gap:14px;overflow-x:auto;padding:8px 2px 0;min-height:150px}

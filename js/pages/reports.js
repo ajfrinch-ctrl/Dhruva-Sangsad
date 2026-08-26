@@ -163,10 +163,8 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
     body.appendChild(el('div', { class: 'banner info', html: `${icon('filter')}<span>${esc(criteria)}</span>` }));
   }
   if (screen) body.appendChild(screen);
-  body.appendChild(el('div', { class: 'fs8 muted', style: 'margin:12px 0 4px', text: 'প্রিন্ট প্রিভিউ / Print preview (A4 · black & white)' }));
-  const prev = el('div', { class: 'sheet-preview' });
-  prev.appendChild(sheet);
-  body.appendChild(prev);
+  sheet.classList.add('sheet-offscreen');
+  body.appendChild(sheet);
 
   const doPdf = async () => {
     toast('PDF তৈরি হচ্ছে… / Generating PDF…', 'info', 1600);
@@ -192,7 +190,7 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
       { label: 'Download PDF', kind: 'softred', value: null, onClick: () => { doPdf(); return false; } },
       { label: 'Download Excel', kind: 'soft', value: null, onClick: () => { doExcel(); return false; } },
       { label: 'Download CSV', kind: 'ghost', value: null, onClick: () => { doCsv(); return false; } },
-      { label: 'Print', kind: 'ghost', value: null, onClick: () => { window.print(); return false; } },
+      { label: 'Print', kind: 'ghost', value: null, onClick: () => { doPdf(); return false; } },
       { label: 'Close', kind: 'primary', value: true },
     ],
   });
