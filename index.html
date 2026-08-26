@@ -11,13 +11,22 @@
   var p = location.pathname || '/';
   if (p && !/\/$/.test(p) && !/\.[a-z0-9]+$/i.test(p)) {
     location.replace(p + '/' + (location.search || '') + (location.hash || ''));
+    return;
+  }
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) {
+      rs.forEach(function (r) { r.unregister(); });
+    });
+  }
+  if (window.caches) {
+    caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
   }
 })();
 </script>
-<link rel="manifest" href="./manifest.webmanifest?v=6.5.11">
+<link rel="manifest" href="./manifest.webmanifest?v=6.5.12">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch.png">
-<link rel="stylesheet" href="./css/app.css?v=6.5.11">
+<link rel="stylesheet" href="./css/app.css?v=6.5.12">
 <script src="./vendor/firebase-app-compat.js" defer></script>
 <script src="./vendor/firebase-auth-compat.js" defer></script>
 <script src="./vendor/firebase-database-compat.js" defer></script>
@@ -36,7 +45,7 @@
       <div class="sub">Dhruvo Sangsad</div>
     </div>
     <p class="auth-title" id="bootMsg">লোড হচ্ছে… / Loading…</p>
-    <p class="auth-foot">v6.5.11 · GitHub Pages</p>
+    <p class="auth-foot">v6.5.12</p>
   </div>
 </div>
 
@@ -65,7 +74,7 @@
 </div>
 
 <noscript><p style="padding:20px;font-family:sans-serif">This application requires JavaScript.</p></noscript>
-<script type="module" src="./js/app.js?v=6.5.11"></script>
+<script type="module" src="./js/app.js?v=6.5.12"></script>
 <script>
 window.addEventListener('error', function (e) {
   var el = document.getElementById('bootMsg');

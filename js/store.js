@@ -4,10 +4,8 @@ import {
 } from './db.js';
 import {
   uid, nowISO, todayISO, num, normalizeMobile, memberIdFromMobile, monthsBetweenInclusive, monthKey,
-  logoSrc, DEFAULT_LOGO,
 } from './util.js';
 import { hashPassword } from './crypto.js';
-export { logoSrc, DEFAULT_LOGO };
 
 /* ---------------- cache ---------------- */
 const cache = { members: null, deposits: null, withdrawals: null, users: null, logs: null, notifs: null };

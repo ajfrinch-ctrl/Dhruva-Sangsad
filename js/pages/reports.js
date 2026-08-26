@@ -2,8 +2,9 @@
    Payment Method, Date Range, Member-wise — with PDF / Excel / CSV export. */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, monthKey, monthLabel,
-  typeLabel, methodLabel, PAY_METHODS, waNumber, modal, t, logoSrc,
+  typeLabel, methodLabel, PAY_METHODS, waNumber, modal, t,
 } from '../util.js';
+import { logoSrc } from '../brand.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
 import {
@@ -766,8 +767,5 @@ const BUILDERS = {
   method: rMethod,
   range: (c, m) => periodReport(c, m, 'range'),
   memberwise: rMemberWise,
-  withdrawal: rWithdrawal,
-};
-emberwise: rMemberWise,
   withdrawal: rWithdrawal,
 };

@@ -1,5 +1,6 @@
 /* ধ্রুব সংসদ — application shell, router, role-based navigation guard, idle timeout */
-import { $, el, clear, toast, esc, alertBox, confirmBox, t, logoSrc } from './util.js';
+import { $, el, clear, toast, esc, alertBox, confirmBox, t } from './util.js';
+import { logoSrc } from './brand.js';
 import { setLang, getLang } from './i18n.js';
 import { icon } from './icons.js';
 import { openDB } from './db.js';
@@ -86,7 +87,7 @@ export const App = {
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.11</span>`;
+        + `<span class="app-footer-meta">v6.5.12</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
@@ -287,14 +288,9 @@ async function boot() {
   }
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-    /* Reload once when a new service worker version takes control, so stale cached assets are dropped. */
-    navigator.serviceWorker.addEventListener('message', e => {
-      if (e.data && e.data.type === 'VERSION_CHANGED') {
-        const seen = sessionStorage.getItem('ds_sw_reload');
-        if (!seen) { sessionStorage.setItem('ds_sw_reload', '1'); location.reload(); }
-      }
-    });
+    /* Preview / first load: drop any stale SW that was serving old JS modules. */
+    navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+    caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).catch(() => {});
   }
 }
 boot();
