@@ -25,8 +25,10 @@ export function setTheme(theme) {
 }
 
 export function applyRole(role) {
+  /* Role accents reverted — keep a data attribute only for optional styling. */
   const r = role === 'admin' || role === 'maker' || role === 'member' ? role : '';
   document.documentElement.dataset.role = r;
+  return;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta && getTheme() === 'light') {
     const map = { admin: '#7c3aed', maker: '#0d9488', member: '#ea580c' };
@@ -34,4 +36,4 @@ export function applyRole(role) {
   }
 }
 
-applyTheme(getTheme());
+applyTheme('light');

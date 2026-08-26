@@ -7,7 +7,7 @@ import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSION
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole } from './theme.js';
-import { visibleNotifications, invalidate, logActivity, settings } from './store.js';
+import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
@@ -106,7 +106,7 @@ export const App = {
   async refreshNotifBadge() {
     const s = this.session; if (!s) return;
     const list = await visibleNotifications(s);
-    this.unread = list.filter(n => !(n.readBy || {})[s.id]).length;
+    this.unread = list.filter(n => n.sticky || n.kind === 'due' || !(n.readBy || {})[s.id]).length;
     const btn = $('#btnNotif');
     btn.innerHTML = icon('bell');
     if (this.unread > 0) btn.appendChild(el('span', { class: 'badge', text: this.unread > 99 ? '99+' : String(this.unread) }));
@@ -142,6 +142,7 @@ export const App = {
       if (!done) { await logout(); this.session = null; this.showAuth(); return; }
       this.session = done;
     }
+    try { await syncDueNotifications(); } catch {}
     await this.refreshNotifBadge();
     const hash = (location.hash || '').replace('#', '');
     await this.go(hash && PAGES[hash] && can(this.session, hash) ? hash : 'home');
