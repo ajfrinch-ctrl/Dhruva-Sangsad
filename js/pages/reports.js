@@ -8,7 +8,7 @@ import { icon } from '../icons.js';
 import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals,
-  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel,
+  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel, logoSrc,
 } from '../store.js';
 import { sheetToPdf, downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { can } from '../auth.js';
@@ -31,8 +31,9 @@ export async function sendWaReminder(member) {
 /* ---------------- print-sheet builders ---------------- */
 export function sheetHead(cfg, titleEn, subEn) {
   const h = el('header', { class: 'ps-head' });
+  const src = (typeof logoSrc === 'function' ? logoSrc(cfg) : 'icons/logo.png');
   h.innerHTML = `
-    <img class="ps-logo" src="${esc(logoSrc(cfg))}" alt="">
+    <img class="ps-logo" src="${esc(src)}" alt="">
     <div class="ps-title">${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}</div>
     <div class="ps-org">${esc(cfg.orgNameEn || 'Dhruvo Sangsad')}${cfg.orgAddress ? ' · ' + esc(cfg.orgAddress) : ''}${cfg.orgPhone ? ' · ' + esc(cfg.orgPhone) : ''}</div>
     <div class="ps-sub">${esc(titleEn)}</div>
@@ -152,12 +153,16 @@ export async function pageReports(session, params = {}) {
       build(); // (re)initialise the builder with fresh data (e.g. members now exist)
     }
     if (!ctx.render) { toast('প্রতিবেদন নির্বাচন করুন / Select a report first', 'warn'); return; }
-    await ctx.render();
+    try { await ctx.render(); }
+    catch (err) { toast(err.message || String(err), 'error'); }
   }));
   wrap.appendChild(genRow);
 
   picker.addEventListener('change', build);
   build();
+  if (session.role === 'member' && ctx.render) {
+    Promise.resolve().then(() => ctx.render()).catch(err => toast(err.message || String(err), 'error'));
+  }
   return wrap;
 }
 
@@ -295,8 +300,7 @@ function rStatement(ctx, meta) {
 }
 
 /* ================= 2. Overall Report ================= */
-async function rOverall(ctx, meta) {
-  const stSel = el('select');
+a('select');
   [['active', 'শুধু Active'], ['', 'সব সদস্য / All'], ['pending', 'Pending']].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
   ctx.filterHost.append(mkField('সদস্য স্ট্যাটাস / Status', stSel, '160px'));
 
@@ -761,5 +765,8 @@ const BUILDERS = {
   method: rMethod,
   range: (c, m) => periodReport(c, m, 'range'),
   memberwise: rMemberWise,
+  withdrawal: rWithdrawal,
+};
+emberwise: rMemberWise,
   withdrawal: rWithdrawal,
 };

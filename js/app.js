@@ -7,7 +7,7 @@ import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSION
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
-import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications } from './store.js';
+import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, logoSrc } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
@@ -86,7 +86,7 @@ export const App = {
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.8</span>`;
+        + `<span class="app-footer-meta">v6.5.9</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
@@ -102,7 +102,8 @@ export const App = {
     const items = s.role === 'member'
       ? NAV.filter(i => i.id === 'home' || i.id === 'deposit' || i.id === 'reports')
       : NAV;
-    const host = s.role === 'member' ? bottom : nav;
+    const host = (s.role === 'member' && bottom) ? bottom : nav;
+    if (!host) return;
     for (const item of items) {
       if (!can(s, item.id)) continue;
       const btn = el('button', {
