@@ -320,13 +320,19 @@ export const WITHDRAWAL_TYPES = [
 ];
 export const withdrawalTypeLabel = id => (WITHDRAWAL_TYPES.find(t => t.id === id) || { bn: id, en: id });
 
-/** Net withdrawable balance for a member = approved deposits − approved withdrawals. */
+/** Net withdrawable balance for a member = approved deposits − approved withdrawals.
+ *  available = approved deposits − (approved + pending withdrawals) to prevent overdraft via multiple pending requests.
+ *  totalWithdrawal = approved only (for reporting), pendingWithdrawal = sum of pending.
+ */
 export function withdrawalBalance(member, deposits, withdrawals) {
   const dep = approvedOf(deposits).filter(d => d.memberDocId === member.id || d.memberId === member.memberId)
     .reduce((s, d) => s + num(d.amount), 0);
-  const wit = (withdrawals || []).filter(w => (w.memberDocId === member.id || w.memberId === member.memberId) && w.status === 'approved')
-    .reduce((s, w) => s + num(w.amount), 0);
-  return { totalDeposit: dep, totalWithdrawal: wit, available: Math.max(0, dep - wit) };
+  const list = (withdrawals || []).filter(w => w.memberDocId === member.id || w.memberId === member.memberId);
+  const witApproved = list.filter(w => w.status === 'approved').reduce((s, w) => s + num(w.amount), 0);
+  const witPending = list.filter(w => w.status === 'pending').reduce((s, w) => s + num(w.amount), 0);
+  const available = Math.max(0, dep - witApproved - witPending);
+  const availableForApproval = Math.max(0, dep - witApproved); // when approving, only approved counts, pending will be converted
+  return { totalDeposit: dep, totalWithdrawal: witApproved, pendingWithdrawal: witPending, available, availableForApproval };
 }
 
 export async function submitWithdrawal(form, actor) {
@@ -344,8 +350,9 @@ export async function submitWithdrawal(form, actor) {
   const withdrawals = await allWithdrawals();
   const deposits = await allDeposits();
   const bal = withdrawalBalance(member, deposits, withdrawals);
+  // For new request, available already subtracts pending, so prevents multiple pending overdrafts
   if (amount > bal.available) {
-    throw new Error(`পর্যাপ্ত ব্যালান্স নেই / Insufficient balance — available ৳${Math.round(bal.available)}`);
+    throw new Error(`পর্যাপ্ত ব্যালান্স নেই / Insufficient balance — available ৳${Math.round(bal.available)} (approved ৳${Math.round(bal.totalDeposit - bal.totalWithdrawal)} minus pending ৳${Math.round(bal.pendingWithdrawal)})`);
   }
 
   const byStaff = actor && (actor.role === 'admin' || actor.role === 'maker');
@@ -382,6 +389,15 @@ export async function submitWithdrawal(form, actor) {
 export async function setWithdrawalStatus(withdrawalId, status, actor, reason = '') {
   const w = await dbGet('withdrawals', withdrawalId);
   if (!w) throw new Error('Withdrawal not found');
+  // When approving, re-validate balance against current approved totals (excluding this pending record)
+  if (status === 'approved' && w.status !== 'approved') {
+    const [deposits, withdrawals] = await Promise.all([allDeposits(), allWithdrawals()]);
+    const member = await dbGet('members', w.memberDocId) || { id: w.memberDocId, memberId: w.memberId };
+    const bal = withdrawalBalance(member, deposits, withdrawals.filter(x => x.id !== w.id));
+    if (num(w.amount) > bal.availableForApproval) {
+      throw new Error(`পর্যাপ্ত ব্যালান্স নেই / Insufficient balance at approval — available ৳${Math.round(bal.availableForApproval)}`);
+    }
+  }
   const next = { ...w, status };
   if (status === 'approved') { next.approvedAt = nowISO(); next.approvedBy = actor && actor.id; next.rejectedAt = null; next.rejectReason = ''; }
   if (status === 'rejected') { next.rejectedAt = nowISO(); next.rejectReason = reason; next.approvedAt = null; next.approvedBy = null; }

@@ -6,7 +6,7 @@
     "authIndex": {
       "$uid": {
         ".read": "auth != null && $uid === auth.uid",
-        ".write": "auth != null && $uid === auth.uid && (newData.child('role').val() === 'member' || (root.child('authIndex').child(auth.uid).exists() && root.child('authIndex').child(auth.uid).child('role').val() === newData.child('role').val()))",
+        ".write": "auth != null && $uid === auth.uid && (newData.child('role').val() === 'member' || root.child('authIndex').numChildren() === 0 || (root.child('authIndex').child(auth.uid).exists() && root.child('authIndex').child(auth.uid).child('role').val() === newData.child('role').val()) || root.child('authIndex').child(auth.uid).child('role').val() === 'admin')",
         ".validate": "newData.hasChildren(['role','username']) && newData.child('role').val().matches(/^(admin|maker|member)$/)",
         "$other": { ".validate": true }
       }
@@ -61,9 +61,9 @@
     },
 
     "pendingDeposits": {
-      ".read": "auth != null",
+      ".read": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker')",
       "$depositId": {
-        ".write": "auth != null",
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker' || (newData.child('memberDocId').val() === root.child('authIndex').child(auth.uid).child('localId').val()))",
         ".validate": "newData.hasChildren(['id','memberId','amount'])",
         "$other": { ".validate": true }
       }
@@ -81,8 +81,8 @@
       ".read": "auth != null",
       ".indexOn": ["audience", "memberId", "createdAt"],
       "$notifId": {
-        ".write": "auth != null",
-        ".validate": "newData.hasChildren(['id','title','audience','createdAt'])",
+        ".write": "auth != null && (root.child('authIndex').child(auth.uid).child('role').val() === 'admin' || root.child('authIndex').child(auth.uid).child('role').val() === 'maker' || (newData.child('audience').val() === 'staff' && newData.child('kind').val().matches(/^(deposit|withdraw|register)$/)))",
+        ".validate": "newData.hasChildren(['id','title','audience','createdAt']) && newData.child('audience').val().matches(/^(staff|all|member)$/)",
         "readBy": { ".write": "auth != null" },
         "$other": { ".validate": true }
       }
@@ -110,8 +110,8 @@
     "syncMetadata": {
       ".read": "auth != null",
       "$deviceId": {
-        ".write": "auth != null",
-        ".validate": "newData.hasChildren(['deviceId','lastSyncAt'])",
+        ".write": "auth != null && newData.child('deviceId').val() === $deviceId",
+        ".validate": "newData.hasChildren(['deviceId','lastSyncAt']) && newData.child('deviceId').val() === $deviceId",
         "$other": { ".validate": true }
       }
     }

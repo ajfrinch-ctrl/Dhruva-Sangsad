@@ -6,7 +6,7 @@
   "dir": "ltr",
   "start_url": "./index.html",
   "scope": "./",
-  "id": "/dhruvo-sangsad/",
+  "id": "./index.html",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#ffffff",
