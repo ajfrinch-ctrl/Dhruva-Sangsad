@@ -8,14 +8,14 @@ import { nowISO, deviceId } from './util.js';
    When no custom config has been saved (Settings → Firebase), the app connects
    to this project automatically so every device shares the same data. */
 export const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyBig1Ajmtb4wBSQI3B0Ie16DoSODeIZiDs',
-  authDomain: 'dhruvo-sangsad.firebaseapp.com',
-  databaseURL: 'https://dhruvo-sangsad-default-rtdb.firebaseio.com',
-  projectId: 'dhruvo-sangsad',
-  storageBucket: 'dhruvo-sangsad.firebasestorage.app',
-  messagingSenderId: '262988571932',
-  appId: '1:262988571932:web:9481147725a42ff71986d9',
-  measurementId: 'G-V1ZFDHKEPY',
+  apiKey: 'AIzaSyD6NqECquRLQlGuvNj3eqdWIjhBGSn97ZI',
+  authDomain: 'rtd-ds.firebaseapp.com',
+  databaseURL: 'https://rtd-ds-default-rtdb.firebaseio.com',
+  projectId: 'rtd-ds',
+  storageBucket: 'rtd-ds.firebasestorage.app',
+  messagingSenderId: '705434695169',
+  appId: '1:705434695169:web:cb42e0513efa075b34b200',
+  measurementId: 'G-YQ2PQDVM9P',
 };
 
 const SYNCED_STORES = ['users', 'members', 'deposits', 'withdrawals', 'notifications', 'activityLogs', 'settings'];
