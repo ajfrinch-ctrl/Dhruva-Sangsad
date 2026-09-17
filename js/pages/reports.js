@@ -2,8 +2,9 @@
    Payment Method, Date Range, Member-wise — with PDF / Excel / CSV export. */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, monthKey, monthLabel,
-  typeLabel, methodLabel, PAY_METHODS, waNumber, modal,
+  typeLabel, methodLabel, PAY_METHODS, waNumber, modal, t,
 } from '../util.js';
+import { logoSrc } from '../brand.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
 import {
@@ -30,8 +31,10 @@ export async function sendWaReminder(member) {
 
 /* ---------------- print-sheet builders ---------------- */
 export function sheetHead(cfg, titleEn, subEn) {
-  const h = el('div');
+  const h = el('header', { class: 'ps-head' });
+  const src = (typeof logoSrc === 'function' ? logoSrc(cfg) : 'icons/logo.png');
   h.innerHTML = `
+    <img class="ps-logo" src="${esc(src)}" alt="">
     <div class="ps-title">${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}</div>
     <div class="ps-org">${esc(cfg.orgNameEn || 'Dhruvo Sangsad')}${cfg.orgAddress ? ' · ' + esc(cfg.orgAddress) : ''}${cfg.orgPhone ? ' · ' + esc(cfg.orgPhone) : ''}</div>
     <div class="ps-sub">${esc(titleEn)}</div>
@@ -40,9 +43,9 @@ export function sheetHead(cfg, titleEn, subEn) {
   return h;
 }
 export function sheetFoot(cfg, extra = '') {
-  const f = el('div', { class: 'ps-foot' });
+  const f = el('footer', { class: 'ps-foot' });
   f.innerHTML = `<span>Generated: ${esc(fmtDateTime(new Date().toISOString()))}${extra ? ' · ' + esc(extra) : ''}</span>
-    <span>${esc(cfg.orgNameEn || 'Dhruvo Sangsad')} — Member, Deposit &amp; Due Management System</span>`;
+    <span>${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}${cfg.orgNameEn ? ' · ' + esc(cfg.orgNameEn) : ''}</span>`;
   return f;
 }
 export function psTable(headers, rows, footer) {
@@ -72,18 +75,24 @@ export function psTable(headers, rows, footer) {
   return t;
 }
 function psInfo(pairs) {
-  const d = el('div', { class: 'ps-info' });
-  const t = el('table');
+  const tbl = el('table', { class: 'ps-info-tbl' });
+  const tb = el('tbody');
+  const cell = (k, v) => {
+    const td = el('td');
+    td.appendChild(el('span', { class: 'ps-k', text: k }));
+    td.appendChild(document.createTextNode(' '));
+    td.appendChild(el('span', { class: 'ps-v', text: v == null || v === '' ? '—' : String(v) }));
+    return td;
+  };
   for (let i = 0; i < pairs.length; i += 2) {
     const tr = el('tr');
-    const [k1, v1] = pairs[i];
-    tr.appendChild(el('td', { class: 'k', text: k1 })); tr.appendChild(el('td', { text: ': ' + (v1 ?? '') }));
-    if (pairs[i + 1]) { const [k2, v2] = pairs[i + 1]; tr.appendChild(el('td', { class: 'k2', text: k2 })); tr.appendChild(el('td', { text: ': ' + (v2 ?? '') })); }
-    else { tr.appendChild(el('td', { class: 'k2', text: '' })); tr.appendChild(el('td', { text: '' })); }
-    t.appendChild(tr);
+    tr.appendChild(cell(pairs[i][0], pairs[i][1]));
+    if (pairs[i + 1]) tr.appendChild(cell(pairs[i + 1][0], pairs[i + 1][1]));
+    else tr.appendChild(el('td'));
+    tb.appendChild(tr);
   }
-  d.appendChild(t);
-  return d;
+  tbl.appendChild(tb);
+  return tbl;
 }
 function sechead(text) { return el('div', { class: 'ps-sechead', text }); }
 
@@ -109,11 +118,11 @@ export async function pageReports(session, params = {}) {
   const list = REPORTS.filter(r => r.roles.includes(session.role));
 
   const picker = el('select', { name: 'report' });
-  list.forEach(r => picker.appendChild(el('option', { value: r.id }, [`${r.bn} / ${r.en}`])));
+  list.forEach(r => picker.appendChild(el('option', { value: r.id }, [t(r.bn, r.en)])));
   if (params.report && list.some(r => r.id === params.report)) picker.value = params.report;
 
   const pf = el('div', { class: 'field', style: 'flex:1 1 240px' });
-  pf.appendChild(el('label', { text: 'প্রতিবেদন নির্বাচন / Select Report' }));
+  pf.appendChild(el('label', { text: t('প্রতিবেদন নির্বাচন', 'Select Report') }));
   pf.appendChild(picker);
 
   const filterHost = el('div', { class: 'toolbar', style: 'flex:1 1 100%' });
@@ -137,7 +146,7 @@ export async function pageReports(session, params = {}) {
 
   // "Generate Report" button — the report is rendered only on click, using fresh data.
   const genRow = el('div', { class: 'btn-row', style: 'margin-bottom:10px' });
-  genRow.appendChild(btn('Generate Report', 'report', 'primary', async () => {
+  genRow.appendChild(btn(t('রিপোর্ট তৈরি করুন', 'Generate Report'), 'report', 'primary', async () => {
     const [m2, d2, c2] = await Promise.all([allMembers(), allDeposits(), settings()]);
     ctx.members = m2; ctx.deposits = d2; ctx.cfg = c2; WA_TPL = c2.waTemplate || WA_TPL;
     ctx.withdrawals = await allWithdrawals().catch(() => []);
@@ -145,12 +154,16 @@ export async function pageReports(session, params = {}) {
       build(); // (re)initialise the builder with fresh data (e.g. members now exist)
     }
     if (!ctx.render) { toast('প্রতিবেদন নির্বাচন করুন / Select a report first', 'warn'); return; }
-    await ctx.render();
+    try { await ctx.render(); }
+    catch (err) { toast(err.message || String(err), 'error'); }
   }));
   wrap.appendChild(genRow);
 
   picker.addEventListener('change', build);
   build();
+  if (session.role === 'member' && ctx.render) {
+    Promise.resolve().then(() => ctx.render()).catch(err => toast(err.message || String(err), 'error'));
+  }
   return wrap;
 }
 
@@ -163,10 +176,8 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
     body.appendChild(el('div', { class: 'banner info', html: `${icon('filter')}<span>${esc(criteria)}</span>` }));
   }
   if (screen) body.appendChild(screen);
-  body.appendChild(el('div', { class: 'fs8 muted', style: 'margin:12px 0 4px', text: 'প্রিন্ট প্রিভিউ / Print preview (A4 · black & white)' }));
-  const prev = el('div', { class: 'sheet-preview' });
-  prev.appendChild(sheet);
-  body.appendChild(prev);
+  sheet.classList.add('sheet-offscreen');
+  body.appendChild(sheet);
 
   const doPdf = async () => {
     toast('PDF তৈরি হচ্ছে… / Generating PDF…', 'info', 1600);
@@ -192,7 +203,7 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
       { label: 'Download PDF', kind: 'softred', value: null, onClick: () => { doPdf(); return false; } },
       { label: 'Download Excel', kind: 'soft', value: null, onClick: () => { doExcel(); return false; } },
       { label: 'Download CSV', kind: 'ghost', value: null, onClick: () => { doCsv(); return false; } },
-      { label: 'Print', kind: 'ghost', value: null, onClick: () => { window.print(); return false; } },
+      { label: 'Print', kind: 'ghost', value: null, onClick: () => { doPdf(); return false; } },
       { label: 'Close', kind: 'primary', value: true },
     ],
   });
@@ -244,8 +255,8 @@ function rStatement(ctx, meta) {
     sheet.appendChild(psInfo([
       ['Member ID', m.memberId], ['Status', (m.status || '').toUpperCase()],
       ['Name (Bangla)', m.nameBn], ['Name (English)', m.nameEn],
-      ["Father's Name", m.fatherBn || m.fatherEn || '-'], ['Mobile', m.mobile],
-      ['Address', m.address || '-'], ['Join Date', fmtDate(m.joinDate)],
+      ['Join Date', fmtDate(m.joinDate)], ['Mobile', m.mobile],
+      ["Father's Name", m.fatherBn || m.fatherEn || '-'], ['Address', m.address || '-'],
       ['Monthly Installment', money(m.installment) + ' Tk'], ['Statement Date', fmtDate(todayISO())],
     ]));
     sheet.appendChild(sechead('Deposit Statement'));

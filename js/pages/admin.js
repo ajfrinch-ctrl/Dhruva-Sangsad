@@ -14,6 +14,7 @@ import {
 } from '../store.js';
 import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
 import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
+import { getLang, setLang, t } from '../i18n.js';
 import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
@@ -478,6 +479,7 @@ export async function pageSettings(session, params = {}) {
 
   const TABS = [
     { id: 'account', label: 'আমার অ্যাকাউন্ট / Account' },
+    { id: 'language', label: 'ভাষা / Language' },
     { id: 'activity', label: 'কার্যক্রম লগ / Activity Log' },
   ];
   if (can(session, 'settings:manage')) {
@@ -505,6 +507,7 @@ export async function pageSettings(session, params = {}) {
   async function paint() {
     host.replaceChildren();
     if (active === 'account') accountSection(session, host);
+    else if (active === 'language') languageSection(host);
     else if (active === 'activity') await embedPage(host, pageActivity, session);
     else if (active === 'organisation') await organisationSection(session, host);
     else if (active === 'firebase') await firebaseSection(session, host);
@@ -514,6 +517,30 @@ export async function pageSettings(session, params = {}) {
   }
   await paint();
   return wrap;
+}
+
+function languageSection(host) {
+  const cur = getLang();
+  const wrap = el('div');
+  wrap.appendChild(el('p', { class: 'muted', style: 'margin:0 0 12px', text: t(
+    'অ্যাপের ভাষা বেছে নিন। বাংলা নির্বাচন করলে সবকিছু বাংলায় দেখাবে, ইংরেজি নির্বাচন করলে সবকিছু ইংরেজিতে।',
+    'Choose the app language. Bangla shows the whole interface in Bangla; English shows it in English.',
+  ) }));
+  const row = el('div', { class: 'lang-pick' });
+  [
+    { id: 'bn', title: 'বাংলা', sub: 'Bangla' },
+    { id: 'en', title: 'English', sub: 'ইংরেজি' },
+  ].forEach(opt => {
+    const b = el('button', {
+      type: 'button',
+      class: `lang-opt${cur === opt.id ? ' on' : ''}`,
+      onclick: () => { setLang(opt.id); },
+    });
+    b.innerHTML = `<strong>${esc(opt.title)}</strong><span>${esc(opt.sub)}</span>`;
+    row.appendChild(b);
+  });
+  wrap.appendChild(row);
+  host.appendChild(card('ভাষা', 'Language', wrap));
 }
 
 function accountSection(session, host) {
@@ -546,6 +573,30 @@ function accountSection(session, host) {
   host.appendChild(card('অ্যাপ সম্পর্কে', 'About', about));
 }
 
+function resizeLogoFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) return reject(new Error('ছবি ফাইল দিন / Choose an image file'));
+    if (file.size > 4 * 1024 * 1024) return reject(new Error('ফাইল খুব বড় (সর্বোচ্চ ৪ MB)'));
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 512;
+      let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      if (w > max || h > max) {
+        const s = Math.min(max / w, max / h);
+        w = Math.round(w * s); h = Math.round(h * s);
+      }
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, w); c.height = Math.max(1, h);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('ছবি খোলা যায়নি')); };
+    img.src = url;
+  });
+}
+
 async function organisationSection(session, host) {
   const cfg = await settings();
   const f = el('form', { class: 'grid', novalidate: true });
@@ -559,6 +610,17 @@ async function organisationSection(session, host) {
       <div class="field"><label>মাসিক আদায় লক্ষ্যমাত্রা (৳)</label><input name="monthlyTarget" type="number" min="0" value="${esc(cfg.monthlyTarget)}"><div class="hint">০ দিলে সক্রিয় সদস্যদের কিস্তির যোগফল লক্ষ্য ধরা হবে।</div></div>
     </div>
     <label class="check"><input type="checkbox" name="countSpecialTowardsInstallment" ${cfg.countSpecialTowardsInstallment ? 'checked' : ''}> বিশেষ চাঁদা ও অন্যান্য জমাকেও কিস্তি হিসেবে গণনা করুন</label>
+    <div class="field" style="margin-top:8px">
+      <label>প্রতিষ্ঠান / অ্যাপ লোগো</label>
+      <div class="logo-edit">
+        <img class="logo-preview" id="logoPreview" src="${esc(cfg.orgLogo || 'icons/logo.png')}" alt="logo">
+        <div>
+          <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+          <div class="hint">PNG / JPG — মোবাইল স্ক্রিনে অটোফিট হবে। সর্বোচ্চ ~৫১২px।</div>
+          <button class="btn btn-ghost btn-xs" type="button" id="logoReset">ডিফল্ট লোগো</button>
+        </div>
+      </div>
+    </div>
     <div class="field" style="margin-top:8px"><label>WhatsApp বকেয়া রিমাইন্ডার টেমপ্লেট</label>
       <textarea name="waTemplate" rows="7">${esc(cfg.waTemplate)}</textarea>
       <div class="hint"><b>[Member Name]</b> অংশটি স্বয়ংক্রিয়ভাবে সদস্যের নাম দিয়ে প্রতিস্থাপিত হবে। বার্তায় কোনো টাকার অঙ্ক থাকবে না।</div></div>
@@ -609,11 +671,10 @@ async function firebaseSection(session, host) {
   const fb = el('form', { class: 'grid', novalidate: true });
   const g = (k, ph) => `<div class="field"><label>${k}</label><input name="${k}" value="${esc((shown && shown[k]) || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
   fb.innerHTML = `
-    <div class="banner info">${icon('info')}<span>Firebase কনফিগার করলে সব ডিভাইসের ডাটা রিয়েল-টাইমে সিঙ্ক হবে। কনফিগার না করলেও অ্যাপটি সম্পূর্ণ অফলাইনে (IndexedDB) কাজ করবে।</span></div>
     <div class="grid g2">
-      ${g('apiKey', 'AIza…')}${g('authDomain', 'project.firebaseapp.com')}
-      ${g('databaseURL', 'https://dhruvo-sangsad-default-rtdb.firebaseio.com')}${g('projectId', 'project-id')}
-      ${g('storageBucket', 'project.appspot.com')}${g('messagingSenderId', '1234567890')}
+      ${g('apiKey', 'AIza…')}${g('authDomain', 'your-project.firebaseapp.com')}
+      ${g('databaseURL', 'https://your-project-default-rtdb.firebaseio.com')}${g('projectId', 'your-project-id')}
+      ${g('storageBucket', 'your-project.appspot.com')}${g('messagingSenderId', '1234567890')}
       ${g('appId', '1:123:web:abc')}
     </div>
     <div class="form-actions">

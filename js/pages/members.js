@@ -200,7 +200,10 @@ export function memberEditor(session, m, deposits, cfg, onSaved) {
       <div class="field"><label>Date of Birth</label><input name="dob" type="date" ${ro} value="${esc((m.dob || '').slice(0, 10))}"><div class="hint">প্রদর্শন: ${esc(fmtDate(m.dob) || '—')}</div></div>
       <div class="field"><label>Profession / পেশা</label><input name="profession" ${ro} value="${esc(m.profession || '')}"></div>
       <div class="field"><label>Monthly Installment (৳) <span class="req">*</span></label><input name="installment" type="number" min="1" ${ro} value="${esc(m.installment)}"><div class="err" data-err="installment"></div></div>
-      <div class="field"><label>Join Date</label><input value="${esc(fmtDate(m.joinDate))}" readonly></div>
+      <div class="field"><label>Join Date${session.role === 'admin' ? ' <span class="req">*</span>' : ''}</label>
+        ${session.role === 'admin'
+          ? `<input name="joinDate" type="date" value="${esc((m.joinDate || '').slice(0, 10))}" required><div class="hint">প্রদর্শন: ${esc(fmtDate(m.joinDate) || '—')} — শুধু Admin পরিবর্তন করতে পারেন।</div><div class="err" data-err="joinDate"></div>`
+          : `<input value="${esc(fmtDate(m.joinDate))}" readonly>`}</div>
     </div>
     <div class="field"><label>Address / ঠিকানা</label><textarea name="address" rows="2" ${ro}>${esc(m.address || '')}</textarea></div>`;
 
@@ -261,6 +264,7 @@ export function memberEditor(session, m, deposits, cfg, onSaved) {
     if (!String(v.nameEn || '').trim()) { setErr('nameEn', 'Name (English) is required'); bad = true; }
     if (v.email && !isValidEmail(v.email)) { setErr('email', 'সঠিক Email দিন'); bad = true; }
     if (!(num(v.installment) > 0)) { setErr('installment', 'মাসিক কিস্তি দিন'); bad = true; }
+    if (session.role === 'admin' && !/^\d{4}-\d{2}-\d{2}$/.test(String(v.joinDate || ''))) { setErr('joinDate', 'সঠিক যোগদানের তারিখ দিন'); bad = true; }
     if (bad) { toast('ফর্মে ত্রুটি রয়েছে', 'error'); return; }
     try {
       await updateMember(m.id, v, session);

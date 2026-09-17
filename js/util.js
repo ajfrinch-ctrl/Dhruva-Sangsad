@@ -1,4 +1,6 @@
 /* ধ্রুব সংসদ — utilities */
+import { t, getLang, loc, tx } from './i18n.js';
+export { t, getLang, loc, tx };
 
 export const APP_NAME_BN = 'ধ্রুব সংসদ';
 export const APP_NAME_EN = 'Dhruvo Sangsad';
@@ -80,7 +82,9 @@ export function toISO(ddmmyyyy) {
 }
 export function monthKey(iso) { return String(iso || '').slice(0, 7); }
 export function monthLabel(key) {
-  const names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const en = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const bn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+  const names = getLang() === 'en' ? en : bn;
   const [y, m] = String(key).split('-');
   return `${names[Number(m) - 1] || m} ${y}`;
 }
@@ -171,15 +175,18 @@ export function modal({ title, body, actions = [], width = 420, dismissible = tr
   });
 }
 
-export function confirmBox(message, { title = 'নিশ্চিত করুন / Confirm', okLabel = 'Yes', danger = false } = {}) {
+export function confirmBox(message, { title, okLabel, danger = false } = {}) {
   return modal({
-    title, body: `<p class="cf-msg">${esc(message)}</p>`, width: 380,
-    actions: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: okLabel, value: true, kind: danger ? 'danger' : 'primary' }],
+    title: title || t('নিশ্চিত করুন', 'Confirm'), body: `<p class="cf-msg">${esc(message)}</p>`, width: 380,
+    actions: [
+      { label: t('বাতিল', 'Cancel'), value: false, kind: 'ghost' },
+      { label: okLabel || t('হ্যাঁ', 'Yes'), value: true, kind: danger ? 'danger' : 'primary' },
+    ],
   }).then(v => v === true);
 }
 
-export function alertBox(message, title = 'বার্তা / Message') {
-  return modal({ title, body: `<p class="cf-msg">${esc(message)}</p>`, width: 380, actions: [{ label: 'OK', value: true, kind: 'primary' }] });
+export function alertBox(message, title) {
+  return modal({ title: title || t('বার্তা', 'Message'), body: `<p class="cf-msg">${esc(message)}</p>`, width: 380, actions: [{ label: t('ঠিক আছে', 'OK'), value: true, kind: 'primary' }] });
 }
 
 /* ---------------- misc ---------------- */

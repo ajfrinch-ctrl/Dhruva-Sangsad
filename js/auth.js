@@ -153,7 +153,24 @@ export async function completeAdminSetup({ displayName, username, mobile, email,
   return ns;
 }
 
-/** Step 1 of password recovery: does a valid registered member exist for this identifier? */
+/** Step 1 of password recovery: search by mobile and return public member info. */
+export async function findMemberForRecovery(mobile) {
+  const mob = normalizeMobile(mobile);
+  if (!mob || mob.length < 11) return null;
+  const u = await findUser(mob);
+  if (!u || u.role !== ROLES.MEMBER || u.active === false) return null;
+  const m = await dbGet('members', u.memberDocId);
+  if (!m) return null;
+  return {
+    identifier: u.username || m.mobile,
+    memberId: m.memberId,
+    nameBn: m.nameBn || '',
+    nameEn: m.nameEn || '',
+    mobile: m.mobile,
+    status: m.status || '',
+  };
+}
+
 export async function memberAccountExists(identifier) {
   const u = await findUser(identifier);
   return !!(u && u.role === ROLES.MEMBER && u.active !== false);
@@ -187,12 +204,24 @@ function fieldMatches(member, field, value) {
   }
 }
 
-/**
- * Password recovery (members only) — two unique profile fields must BOTH match
- * exactly before a reset is allowed. Failures are reported generically and never
- * reveal which specific field was wrong.
- */
-export async function recoverPassword({ identifier, field1, value1, field2, value2, newPassword }) {
+export async function verifyRecoveryDob(identifier, dobDay, dobMonth) {
+  const u = await findUser(identifier);
+  if (!u || u.role !== ROLES.MEMBER) throw new Error('এই মোবাইলে কোনো সদস্য পাওয়া যায়নি / No member found');
+  const m = await dbGet('members', u.memberDocId);
+  if (!m) throw new Error('Member record not found');
+  const stored = String(m.dob || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(stored)) {
+    throw new Error('যাচাই ব্যর্থ হয়েছে। প্রদত্ত তথ্য মেলেনি। / Verification failed.');
+  }
+  const d = String(Number(dobDay)).padStart(2, '0');
+  const mo = String(Number(dobMonth)).padStart(2, '0');
+  if (stored.slice(8, 10) !== d || stored.slice(5, 7) !== mo) {
+    throw new Error('যাচাই ব্যর্থ হয়েছে। জন্ম তারিখ ও মাস মেলেনি। / Date and month of birth do not match.');
+  }
+  return true;
+}
+
+export async function recoverPassword({ identifier, dobDay, dobMonth, field1, value1, field2, value2, newPassword }) {
   const u = await findUser(identifier);
   if (!u) throw new Error('এই User ID খুঁজে পাওয়া যায়নি / User ID not found');
   if (u.role !== ROLES.MEMBER) {
@@ -200,13 +229,17 @@ export async function recoverPassword({ identifier, field1, value1, field2, valu
   }
   const m = await dbGet('members', u.memberDocId);
   if (!m) throw new Error('Member record not found');
-  if (!RECOVERY_FIELDS.includes(field1) || !RECOVERY_FIELDS.includes(field2) || field1 === field2) {
-    throw new Error('দুটি ভিন্ন যাচাই তথ্য নির্বাচন করুন / Choose two different verification fields');
-  }
-  const ok1 = fieldMatches(m, field1, value1);
-  const ok2 = fieldMatches(m, field2, value2);
-  if (!(ok1 && ok2)) {
-    throw new Error('যাচাই ব্যর্থ হয়েছে। প্রদত্ত তথ্য মেলেনি। / Verification failed. Please check your information.');
+  if (dobDay != null && dobMonth != null && String(dobDay) !== '' && String(dobMonth) !== '') {
+    await verifyRecoveryDob(identifier, dobDay, dobMonth);
+  } else {
+    if (!RECOVERY_FIELDS.includes(field1) || !RECOVERY_FIELDS.includes(field2) || field1 === field2) {
+      throw new Error('জন্ম তারিখ ও মাস দিন / Enter date and month of birth');
+    }
+    const ok1 = fieldMatches(m, field1, value1);
+    const ok2 = fieldMatches(m, field2, value2);
+    if (!(ok1 && ok2)) {
+      throw new Error('যাচাই ব্যর্থ হয়েছে। প্রদত্ত তথ্য মেলেনি। / Verification failed. Please check your information.');
+    }
   }
   const issues = passwordIssues(newPassword);
   if (issues.length) throw new Error(issues[0]);

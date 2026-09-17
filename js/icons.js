@@ -52,6 +52,8 @@ const P = {
   pending: '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.5V12l3 1.8"/>',
   phone: '<path d="M7.4 3.8 9.6 8 8 10a11 11 0 0 0 6 6l2-1.6 4.2 2.2v3a2 2 0 0 1-2.2 2A17.5 17.5 0 0 1 3 6a2 2 0 0 1 2-2.2z"/>',
   dashboard: '<rect x="3.5" y="3.5" width="7" height="7.5" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="4.5" rx="1.5"/><rect x="3.5" y="14" width="7" height="6.5" rx="1.5"/><rect x="13.5" y="11" width="7" height="9.5" rx="1.5"/>',
+  moon: '<path d="M19.5 14.2A7.6 7.6 0 0 1 9.8 4.5 7.8 7.8 0 1 0 19.5 14.2Z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.2M12 19v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.8 12h2.2M19 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>',
 };
 
 export function icon(name, cls = '') {

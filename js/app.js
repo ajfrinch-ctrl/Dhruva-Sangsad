@@ -1,11 +1,14 @@
 /* ধ্রুব সংসদ — application shell, router, role-based navigation guard, idle timeout */
-import { $, el, clear, toast, esc, alertBox, confirmBox } from './util.js';
+import { $, el, clear, toast, esc, alertBox, confirmBox, t } from './util.js';
+import { logoSrc } from './brand.js';
+import { setLang, getLang } from './i18n.js';
 import { icon } from './icons.js';
 import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
-import { visibleNotifications, invalidate, logActivity } from './store.js';
+import { applyRole, getTheme, toggleTheme } from './theme.js';
+import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
@@ -17,9 +20,9 @@ import { openNotifications } from './pages/misc.js';
 
 const NAV = [
   { id: 'home', bn: 'ড্যাশবোর্ড', en: 'Dashboard', icon: 'dashboard' },
-  { id: 'members', bn: 'সদস্য ব্যবস্থাপনা', en: 'Members', icon: 'members' },
+  { id: 'members', bn: 'সদস্য ব্যবস্থাপনা', en: 'Member Management', icon: 'members' },
   { id: 'deposit', bn: 'জমা / লেনদেন', en: 'Deposits', icon: 'money' },
-  { id: 'authorization', bn: 'অনুমোদন অপেক্ষমাণ', en: 'Authorization Pending', icon: 'approve' },
+  { id: 'authorization', bn: 'অনুমোদন অপেক্ষমাণ', en: 'Pending Approval', icon: 'approve' },
   { id: 'reports', bn: 'রিপোর্ট', en: 'Reports', icon: 'report' },
   { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings' },
 ];
@@ -42,7 +45,7 @@ export const App = {
     const s = this.session;
     if (!s) { this.showAuth(); return; }
     if (!PAGES[route] || !can(s, route)) {
-      toast('এই মডিউলে প্রবেশাধিকার নেই / You do not have access to this module', 'error');
+      toast(t('এই মডিউলে প্রবেশাধিকার নেই', 'You do not have access to this module'), 'error');
       route = 'home';
     }
     this.route = route;
@@ -51,7 +54,7 @@ export const App = {
     resetIdleTimer();
     const view = $('#view');
     clear(view);
-    view.appendChild(el('div', { class: 'empty', html: 'লোড হচ্ছে… / Loading…' }));
+    view.appendChild(el('div', { class: 'empty', html: t('লোড হচ্ছে…', 'Loading…') }));
     try {
       const node = await PAGES[route](s, params);
       clear(view);
@@ -63,23 +66,57 @@ export const App = {
       view.appendChild(el('div', { class: 'banner err', html: `${icon('warn')}<span>${esc(e.message || 'Error')}</span>` }));
     }
     this.paintNav();
+    this.paintFooter();
+  },
+  applyBrand(cfg) {
+    const src = logoSrc(cfg);
+    document.querySelectorAll('#brandLogo img, .js-org-logo').forEach(img => { img.src = src; });
+    const link = document.querySelector('link[rel="icon"]');
+    if (link && src && !String(src).startsWith('data:')) link.href = src;
+  },
+  async paintFooter() {
+    const el = $('#appFooterOrg');
+    if (!el) return;
+    try {
+      const cfg = await settings();
+      this.applyBrand(cfg);
+      const bn = (cfg.orgNameBn || '').trim();
+      const en = (cfg.orgNameEn || '').trim();
+      const extra = [cfg.orgAddress, cfg.orgPhone].filter(Boolean).join(' · ');
+      el.innerHTML = `<img class="foot-logo js-org-logo" src="${esc(logoSrc(cfg))}" alt="">`
+        + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
+        + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
+        + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
+        + `<span class="app-footer-meta">v6.5.12</span>`;
+    } catch {
+      el.textContent = 'ধ্রুব সংসদ';
+    }
   },
   refresh() { return this.go(this.route, this.params || {}); },
 
   paintNav() {
     const s = this.session; if (!s) return;
     const nav = $('#topnav');
+    const bottom = $('#bottomnav');
     clear(nav);
-    for (const item of NAV) {
+    if (bottom) { clear(bottom); bottom.hidden = s.role !== 'member'; }
+    const items = s.role === 'member'
+      ? NAV.filter(i => i.id === 'home' || i.id === 'deposit' || i.id === 'reports')
+      : NAV;
+    const host = (s.role === 'member' && bottom) ? bottom : nav;
+    if (!host) return;
+    for (const item of items) {
       if (!can(s, item.id)) continue;
       const btn = el('button', {
         class: `nav-tab${this.route === item.id ? ' on' : ''}`, type: 'button',
-        title: `${item.bn} — ${item.en}`,
-        html: `${icon(item.icon)}<span>${item.bn}</span>`,
+        title: t(item.bn, item.en),
+        html: `${icon(item.icon)}<span>${t(item.bn, item.en)}</span>`,
         onclick: () => this.go(item.id),
       });
-      nav.appendChild(btn);
+      host.appendChild(btn);
     }
+    const setBtn = $('#btnSettings');
+    if (setBtn) setBtn.hidden = s.role !== 'member';
     const userName = s.displayName || s.username || s.memberId || '';
     const brand = $('#brandRole');
     brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc((s.role || '').toUpperCase())}</span>`;
@@ -88,7 +125,7 @@ export const App = {
   async refreshNotifBadge() {
     const s = this.session; if (!s) return;
     const list = await visibleNotifications(s);
-    this.unread = list.filter(n => !(n.readBy || {})[s.id]).length;
+    this.unread = list.filter(n => n.sticky || n.kind === 'due' || !(n.readBy || {})[s.id]).length;
     const btn = $('#btnNotif');
     btn.innerHTML = icon('bell');
     if (this.unread > 0) btn.appendChild(el('span', { class: 'badge', text: this.unread > 99 ? '99+' : String(this.unread) }));
@@ -107,6 +144,7 @@ export const App = {
   async enter(session) {
     this.session = session;
     window.DS_SESSION = session;
+    applyRole(session.role);
     $('#authScreen').classList.add('hidden');
     clear($('#authScreen'));
     $('#app').classList.add('on');
@@ -123,31 +161,35 @@ export const App = {
       if (!done) { await logout(); this.session = null; this.showAuth(); return; }
       this.session = done;
     }
+    try { await syncDueNotifications(); } catch {}
     await this.refreshNotifBadge();
     const hash = (location.hash || '').replace('#', '');
     await this.go(hash && PAGES[hash] && can(this.session, hash) ? hash : 'home');
   },
 
   async doLogout() {
-    if (!(await confirmBox('আপনি কি লগআউট করতে চান? / Do you want to log out?', { title: 'লগআউট / Logout', okLabel: 'Logout' }))) return;
+    if (!(await confirmBox(t('আপনি কি লগআউট করতে চান?', 'Do you want to log out?'), { title: t('লগআউট', 'Logout'), okLabel: t('লগআউট', 'Logout') }))) return;
     await logout();
     this.session = null; window.DS_SESSION = null;
+    applyRole('');
     clearIdleTimer();
     setAuthMode('login');
     location.hash = '';
-    toast('লগআউট সম্পন্ন / Logged out', 'success');
+    toast(t('লগআউট সম্পন্ন', 'Logged out'), 'success');
     this.showAuth();
   },
 };
 window.App = App;
 
-/* ---------------- sync status chip ---------------- */
-const SYNC_LABEL = { online: 'Online', offline: 'Offline', syncing: 'Syncing…', synced: 'Synced', 'sync-error': 'Sync Error' };
+/* ---------------- topbar sync border (no text chip) ---------------- */
 function paintSync(status) {
-  const chip = $('#syncChip'); if (!chip) return;
-  chip.className = 'chip ' + status;
-  const ic = status === 'offline' ? 'offline' : status === 'syncing' ? 'sync' : status === 'sync-error' ? 'warn' : 'online';
-  chip.innerHTML = `${icon(ic)}<span>${SYNC_LABEL[status] || status}</span>`;
+  const bar = document.querySelector('.topbar');
+  if (!bar) return;
+  const st = status || (navigator.onLine ? 'online' : 'offline');
+  bar.classList.remove('sync-online', 'sync-offline', 'sync-syncing', 'sync-synced', 'sync-error');
+  const cls = st === 'sync-error' ? 'sync-error' : `sync-${st}`;
+  bar.classList.add(cls);
+  document.documentElement.dataset.sync = st;
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail.status));
 
@@ -167,6 +209,7 @@ async function onIdleTimeout() {
   if (!App.session) return;
   const s = App.session;
   App.session = null; window.DS_SESSION = null;
+  applyRole('');
   clearIdleTimer();
   try { await logActivity('SESSION_TIMEOUT', `${s.role} ${s.username || s.displayName} — 30 minutes of inactivity`, s); } catch {}
   try { firebase.signOut().catch(() => {}); } catch {}
@@ -179,15 +222,37 @@ async function onIdleTimeout() {
 
 /* ---------------- boot ---------------- */
 async function boot() {
-  await openDB();
-  await ensureBootstrapAdmin();
+  try {
+    await Promise.race([
+      openDB(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('IndexedDB timeout')), 8000)),
+    ]);
+    await ensureBootstrapAdmin();
+  } catch (e) {
+    console.error('boot db', e);
+  }
   paintSync(navigator.onLine ? 'online' : 'offline');
-  firebase.init();
+  try { firebase.init(); } catch (e) { console.error('firebase', e); }
 
   $('#btnLogout').innerHTML = icon('logout');
   $('#btnLogout').addEventListener('click', () => App.doLogout());
+  const setBtn = $('#btnSettings');
+  if (setBtn) {
+    setBtn.innerHTML = icon('settings');
+    setBtn.addEventListener('click', () => { if (App.session) App.go('settings'); });
+  }
   $('#btnNotif').innerHTML = icon('bell');
   $('#btnNotif').addEventListener('click', () => { if (App.session) openNotifications(App.session); });
+  const paintThemeBtn = () => {
+    const b = $('#btnTheme'); if (!b) return;
+    const dark = getTheme() === 'amoled';
+    b.innerHTML = icon(dark ? 'sun' : 'moon');
+    b.setAttribute('aria-label', dark ? 'Light mode' : 'Hard dark');
+    b.title = dark ? 'লাইট মোড / Light' : 'হার্ড ডার্ক / Hard dark';
+  };
+  paintThemeBtn();
+  $('#btnTheme').addEventListener('click', () => { toggleTheme(); paintThemeBtn(); });
+  window.addEventListener('ds:theme', paintThemeBtn);
 
   // Reset the idle timer on any meaningful user interaction.
   ['mousemove', 'mousedown', 'keydown', 'touchstart', 'touchmove', 'scroll', 'click', 'wheel']
@@ -205,21 +270,27 @@ async function boot() {
     const h = (location.hash || '').replace('#', '');
     if (App.session && h && h !== App.route && PAGES[h]) App.go(h);
   });
-  window.addEventListener('online', () => toast('ইন্টারনেট সংযোগ ফিরে এসেছে — সিঙ্ক হচ্ছে / Back online — syncing', 'success'));
-  window.addEventListener('offline', () => toast('অফলাইন মোড — ডেটা লোকালি সংরক্ষিত হবে / Offline mode — data is saved locally', 'warn'));
+  window.addEventListener('online', () => toast(t('ইন্টারনেট সংযোগ ফিরে এসেছে — সিঙ্ক হচ্ছে', 'Back online — syncing'), 'success'));
+  window.addEventListener('offline', () => toast(t('অফলাইন মোড — ডেটা লোকালি সংরক্ষিত হবে', 'Offline mode — data is saved locally'), 'warn'));
+  window.addEventListener('ds:lang', () => {
+    if (App.session) App.refresh();
+    else App.showAuth();
+  });
 
-  const s = getSession();
-  if (s) await App.enter(s); else App.showAuth();
+  try {
+    const s = getSession();
+    if (s) await App.enter(s); else App.showAuth();
+  } catch (e) {
+    console.error('boot enter', e);
+    App.showAuth();
+    const t = document.querySelector('#authScreen .auth-title');
+    if (t) t.textContent = 'লোড সমস্যা: ' + (e.message || e);
+  }
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-    /* Reload once when a new service worker version takes control, so stale cached assets are dropped. */
-    navigator.serviceWorker.addEventListener('message', e => {
-      if (e.data && e.data.type === 'VERSION_CHANGED') {
-        const seen = sessionStorage.getItem('ds_sw_reload');
-        if (!seen) { sessionStorage.setItem('ds_sw_reload', '1'); location.reload(); }
-      }
-    });
+    /* Preview / first load: drop any stale SW that was serving old JS modules. */
+    navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+    caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).catch(() => {});
   }
 }
 boot();

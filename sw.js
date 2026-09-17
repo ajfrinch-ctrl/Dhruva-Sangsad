@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.0.0';
+const VERSION = 'ds-v6.5.11';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -9,9 +9,11 @@ const PRECACHE = [
   'index.html',
   'manifest.webmanifest',
   'css/app.css',
+  'icons/logo.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
+  'icons/apple-touch.png',
   /* vendor (classic scripts) */
   'vendor/firebase-app-compat.js',
   'vendor/firebase-auth-compat.js',
@@ -31,6 +33,8 @@ const PRECACHE = [
   'js/crypto.js',
   'js/db.js',
   'js/firebase.js',
+  'js/i18n.js',
+  'js/theme.js',
   'js/icons.js',
   'js/pdf.js',
   'js/store.js',
@@ -114,7 +118,24 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  /* Static assets: cache-first with background refresh (stale-while-revalidate). */
+  /* JS/CSS: network-first so new exports (e.g. logoSrc) are not stuck in cache. */
+  if (/\.(js|mjs|css)$/i.test(url.pathname)) {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req, { cache: 'no-store' });
+        if (fresh && fresh.ok) {
+          try { (await caches.open(SHELL)).put(url.pathname.replace(/^\//, ''), fresh.clone()); } catch (_) {}
+        }
+        return fresh;
+      } catch (_) {
+        return (await caches.match(req, { ignoreSearch: true })) ||
+          new Response('', { status: 504, statusText: 'Offline' });
+      }
+    })());
+    return;
+  }
+
+  /* Other static assets: cache-first with background refresh. */
   event.respondWith((async () => {
     const cached = await caches.match(req, { ignoreSearch: false });
     const network = fetch(req).then(async res => {

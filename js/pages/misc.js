@@ -8,7 +8,7 @@ import { visibleNotifications, markNotificationRead, allLogs } from '../store.js
 import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { App } from '../app.js';
 
-const NOTIF_ICON = { register: 'register', deposit: 'deposit', approve: 'approve', reject: 'reject', info: 'bell', warn: 'warn' };
+const NOTIF_ICON = { register: 'register', deposit: 'deposit', approve: 'approve', reject: 'reject', info: 'bell', warn: 'warn', due: 'due' };
 
 /* ==================== Notifications (popup from top-right bell) ==================== */
 export async function openNotifications(session) {
@@ -35,23 +35,28 @@ export async function openNotifications(session) {
     }
     const list = el('div', { class: 'list' });
     items.forEach(n => {
-      const read = isRead(n);
-      const li = el('div', { class: 'li' + (read ? '' : ' unread') });
+      const sticky = !!(n.sticky || n.kind === 'due');
+      const read = !sticky && isRead(n);
+      const li = el('div', { class: 'li' + (read ? '' : ' unread') + (n.kind === 'due' ? ' wa-msg' : '') });
       li.innerHTML = `
-        <div class="ic ${n.kind === 'reject' ? 'b' : 'a'}">${icon(NOTIF_ICON[n.kind] || 'bell')}</div>
-        <div class="bd"><div class="t">${esc(n.title)}${read ? '' : ' <span class="tag pending">NEW</span>'}</div>
-          <div class="s">${esc(n.body || '')}</div></div>
+        <div class="ic ${n.kind === 'due' ? 'r' : n.kind === 'reject' ? 'b' : 'a'}">${icon(NOTIF_ICON[n.kind] || 'bell')}</div>
+        <div class="bd"><div class="t">${esc(n.title)}${read || sticky ? (sticky ? ' <span class="tag due">বকেয়া</span>' : '') : ' <span class="tag pending">NEW</span>'}</div>
+          <div class="s">${esc(n.body || '')}</div>
+          ${n.action === 'deposit' ? '<div class="s" style="margin-top:6px"><span class="tag info">জমা দিন →</span></div>' : ''}</div>
         <div class="w">${esc(fmtDate(n.createdAt))}<br>${esc(fmtTime(n.createdAt))}</div>`;
-      if (!read) {
-        li.style.cursor = 'pointer';
-        li.title = 'পঠিত চিহ্নিত করতে ক্লিক করুন / Click to mark as read';
-        li.addEventListener('click', async () => {
+      li.style.cursor = 'pointer';
+      li.addEventListener('click', async () => {
+        if (!sticky && !read) {
           await markNotificationRead(n.id, session.id);
           li.classList.remove('unread');
           li.querySelector('.tag.pending')?.remove();
           App.refreshNotifBadge();
-        });
-      }
+        }
+        if (n.action === 'deposit') {
+          document.querySelector('.modal-back')?.remove();
+          App.go('deposit');
+        }
+      });
       list.appendChild(li);
     });
     body.appendChild(list);

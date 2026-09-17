@@ -47,6 +47,8 @@ export const DEFAULT_SETTINGS = {
   monthlyTarget: 0,
   countSpecialTowardsInstallment: false,
   currency: '৳',
+  dueDay: 12,
+  orgLogo: '',
   waTemplate: 'প্রিয় [Member Name],\nআসসালামু আলাইকুম।\nআপনার মাসিক জমা বকেয়া রয়েছে। অনুগ্রহ করে দ্রুত সময়ের মধ্যে বকেয়া পরিশোধ করার জন্য বিনীতভাবে অনুরোধ করা হলো।\nধন্যবাদ।\nধ্রুব সংসদ',
 };
 export async function settings() {
@@ -79,11 +81,13 @@ export async function logActivity(action, details = '', actor = null) {
 }
 
 /* ---------------- notifications ---------------- */
-export async function notify({ title, body, audience = 'staff', memberId = null, kind = 'info' }) {
+export async function notify({ title, body, audience = 'staff', memberId = null, kind = 'info', action = null, sticky = false, id = null }) {
   const rec = {
-    id: uid('ntf'), title, body, audience, memberId, kind,
+    id: id || uid('ntf'), title, body, audience, memberId, kind, action, sticky,
     createdAt: nowISO(), readBy: {},
   };
+  const existing = id ? await dbGet('notifications', id) : null;
+  if (existing) rec.createdAt = existing.createdAt;
   await saveRecord('notifications', rec, { queue: true });
   return rec;
 }
@@ -95,8 +99,15 @@ export async function markNotificationRead(id, userId) {
 }
 export async function visibleNotifications(session) {
   const all = await allNotifications();
+  const myId = String(session.memberId || '');
   return all.filter(n => {
-    if (session.role === 'member') return n.audience === 'all' || (n.audience === 'member' && n.memberId === session.memberId);
+    const owner = n.memberId != null && n.memberId !== '' ? String(n.memberId) : '';
+    if (session.role === 'member') {
+      if (!myId) return false;
+      if (n.audience === 'staff') return false;
+      return owner === myId;
+    }
+    if (n.audience === 'member' || n.kind === 'due') return false;
     return n.audience === 'staff' || n.audience === 'all';
   }).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 }
@@ -181,6 +192,11 @@ export async function updateMember(memberDocId, patch, actor) {
   const next = { ...m };
   const fields = ['nameBn', 'nameEn', 'fatherBn', 'fatherEn', 'motherBn', 'motherEn', 'mobile', 'whatsapp', 'email', 'nid', 'dob', 'profession', 'address', 'installment'];
   for (const f of fields) if (f in patch) next[f] = f === 'installment' ? num(patch[f]) : (typeof patch[f] === 'string' ? patch[f].trim() : patch[f]);
+  if ('joinDate' in patch && actor && actor.role === 'admin') {
+    const jd = String(patch.joinDate || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(jd)) throw new Error('সঠিক যোগদানের তারিখ দিন / Enter a valid join date');
+    next.joinDate = jd;
+  }
   next.mobile = normalizeMobile(next.mobile);
   next.whatsapp = normalizeMobile(next.whatsapp);
   next.memberId = m.memberId; // never changes
@@ -189,8 +205,11 @@ export async function updateMember(memberDocId, patch, actor) {
   if (errs.length) { const e = new Error(errs[0].msg); e.fieldErrors = errs; throw e; }
 
   await saveRecord('members', next, { queue: true, actorId: actor && actor.id });
-  await logActivity('MEMBER_UPDATE', `Member ${m.memberId} updated`, actor);
+  await logActivity('MEMBER_UPDATE', `Member ${m.memberId} updated${next.joinDate !== m.joinDate ? ` (join date ${m.joinDate} → ${next.joinDate})` : ''}`, actor);
   invalidate('members');
+  if (next.joinDate !== m.joinDate) {
+    try { await syncDueNotifications(); } catch {}
+  }
   return next;
 }
 
@@ -204,7 +223,7 @@ export async function setMemberStatus(memberDocId, status, actor, reason = '') {
   await logActivity(status === 'active' ? 'MEMBER_APPROVAL' : status === 'rejected' ? 'MEMBER_REJECTION' : 'MEMBER_STATUS', `Member ${m.memberId} → ${status}${reason ? ' (' + reason + ')' : ''}`, actor);
   await notify({
     title: status === 'active' ? 'সদস্য অনুমোদিত / Member Approved' : status === 'rejected' ? 'সদস্য বাতিল / Member Rejected' : 'সদস্য স্ট্যাটাস',
-    body: `${m.nameBn} (${m.memberId}) — ${status}`, audience: 'all', memberId: m.memberId,
+    body: `${m.nameBn} (${m.memberId}) — ${status}`, audience: 'member', memberId: m.memberId,
     kind: status === 'active' ? 'approve' : 'reject',
   });
   invalidate('members');
@@ -251,9 +270,10 @@ export async function submitDeposit(form, actor) {
   if (rec.status === 'pending') {
     await notify({ title: 'নতুন জমা / New Deposit', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'deposit' });
   } else {
-    await notify({ title: 'জমা যুক্ত হয়েছে / Deposit Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'all', memberId: member.memberId, kind: 'approve' });
+    await notify({ title: 'জমা যুক্ত হয়েছে / Deposit Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'approve' });
   }
   invalidate('deposits');
+  try { await syncDueNotifications(); } catch {}
   return rec;
 }
 
@@ -265,10 +285,11 @@ export async function setDepositStatus(depositId, status, actor, reason = '') {
   if (status === 'rejected') { next.rejectedAt = nowISO(); next.rejectReason = reason; next.approvedAt = null; next.approvedBy = null; }
   await saveRecord('deposits', next, { queue: true, actorId: actor && actor.id });
   await logActivity(status === 'approved' ? 'DEPOSIT_APPROVAL' : 'DEPOSIT_REJECTION', `Deposit ${d.id} (${d.memberId}, ৳${d.amount}) → ${status}`, actor);
+  try { await syncDueNotifications(); } catch {}
   await notify({
     title: status === 'approved' ? 'জমা অনুমোদিত / Deposit Approved' : 'জমা বাতিল / Deposit Rejected',
     body: `${d.memberName} (${d.memberId}) — ৳${d.amount}${reason ? ' — ' + reason : ''}`,
-    audience: 'all', memberId: d.memberId, kind: status === 'approved' ? 'approve' : 'reject',
+    audience: 'member', memberId: d.memberId, kind: status === 'approved' ? 'approve' : 'reject',
   });
   invalidate('deposits');
   return next;
@@ -373,7 +394,7 @@ export async function submitWithdrawal(form, actor) {
   if (rec.status === 'pending') {
     await notify({ title: 'নতুন উত্তোলন / New Withdrawal', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'withdraw' });
   } else {
-    await notify({ title: 'উত্তোলন সম্পন্ন / Withdrawal Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'all', memberId: member.memberId, kind: 'withdraw' });
+    await notify({ title: 'উত্তোলন সম্পন্ন / Withdrawal Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'withdraw' });
   }
   invalidate('withdrawals');
   return rec;
@@ -390,7 +411,7 @@ export async function setWithdrawalStatus(withdrawalId, status, actor, reason = 
   await notify({
     title: status === 'approved' ? 'উত্তোলন অনুমোদিত / Withdrawal Approved' : 'উত্তোলন বাতিল / Withdrawal Rejected',
     body: `${w.memberName} (${w.memberId}) — ৳${w.amount}${reason ? ' — ' + reason : ''}`,
-    audience: 'all', memberId: w.memberId, kind: status === 'approved' ? 'approve' : 'reject',
+    audience: 'member', memberId: w.memberId, kind: status === 'approved' ? 'approve' : 'reject',
   });
   invalidate('withdrawals');
   return next;
@@ -411,6 +432,22 @@ export function canModifyWithdrawal(w, session) {
 /* ---------------- calculations (APPROVED data only) ---------------- */
 export function approvedOf(deposits) { return deposits.filter(d => d.status === 'approved'); }
 
+/** Months whose installment deadline (default the 12th) has already passed. */
+export function chargeableMonths(joinISO, asOfISO, dueDay = 12) {
+  if (!joinISO || !asOfISO) return 0;
+  const asOf = String(asOfISO).slice(0, 10);
+  const day = Number(asOf.slice(8, 10));
+  let endKey = asOf.slice(0, 7);
+  if (day <= Number(dueDay || 12)) {
+    const [y, m] = endKey.split('-').map(Number);
+    const prev = new Date(y, m - 2, 1);
+    endKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  }
+  const startKey = String(joinISO).slice(0, 7);
+  if (endKey < startKey) return 0;
+  return monthsBetweenInclusive(`${startKey}-01`, `${endKey}-01`);
+}
+
 /**
  * Member financial summary — only approved deposits/withdrawals count.
  * required = installment × months from join month to current month (inclusive)
@@ -426,7 +463,8 @@ export function memberSummary(member, deposits, opts = {}) {
   const installmentPaid = towards.reduce((s, d) => s + num(d.amount), 0);
   const inst = num(member.installment);
   const activeFrom = member.joinDate || (member.createdAt || '').slice(0, 10) || asOf;
-  const months = member.status === 'rejected' ? 0 : monthsBetweenInclusive(activeFrom, asOf);
+  const dueDay = opts.dueDay != null ? opts.dueDay : 12;
+  const months = member.status === 'rejected' ? 0 : chargeableMonths(activeFrom, asOf, dueDay);
   const required = inst * months;
   const due = Math.max(0, required - installmentPaid);
   const advance = Math.max(0, installmentPaid - required);
@@ -446,7 +484,39 @@ export function memberSummary(member, deposits, opts = {}) {
 export async function summariesFor(members, deposits, cfg) {
   const s = cfg || await settings();
   const withdrawals = await allWithdrawals();
-  return members.map(m => memberSummary(m, deposits, { countSpecialTowardsInstallment: s.countSpecialTowardsInstallment, withdrawals }));
+  return members.map(m => memberSummary(m, deposits, {
+    countSpecialTowardsInstallment: s.countSpecialTowardsInstallment,
+    withdrawals,
+    dueDay: s.dueDay != null ? s.dueDay : 12,
+  }));
+}
+
+export async function syncDueNotifications() {
+  const [members, deposits, cfg, notifs] = await Promise.all([allMembers(), allDeposits(), settings(), allNotifications()]);
+  const dueDay = cfg.dueDay != null ? cfg.dueDay : 12;
+  let changed = 0;
+  for (const m of members) {
+    if (m.status !== 'active') continue;
+    const s = memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment, dueDay });
+    const nid = `ntf_due_${m.memberId}`;
+    const existing = notifs.find(n => n.id === nid);
+    if (s.due > 0) {
+      const title = 'মাসিক জমা বকেয়া';
+      const body = `প্রিয় ${m.nameBn || m.nameEn}, আপনার মাসিক জমা বকেয়া রয়েছে (৳${Math.round(s.due)})। ${dueDay} তারিখের মধ্যে জমা না দিলে বকেয়া দেখায়। যেকোনো দিন জমা দিতে এখানে ট্যাপ করুন।`;
+      if (!existing || existing.body !== body) {
+        await notify({
+          id: nid, title, body, audience: 'member', memberId: m.memberId,
+          kind: 'due', action: 'deposit', sticky: true,
+        });
+        changed++;
+      }
+    } else if (existing) {
+      await removeRecord('notifications', nid, { queue: true });
+      changed++;
+    }
+  }
+  if (changed) invalidate('notifs');
+  return changed;
 }
 
 export function statementRows(summary) {
