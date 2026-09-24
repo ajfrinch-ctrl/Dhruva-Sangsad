@@ -76,7 +76,7 @@ p{margin:0 0 8px}
 #app.on{display:flex;height:100dvh;max-height:100dvh;overflow:hidden}
 .topbar{position:fixed;top:0;left:0;right:0;z-index:60;background:#fff;border:3px solid var(--line);
   display:flex;align-items:center;gap:10px;height:var(--header-h);padding:0 18px;box-shadow:0 1px 2px rgba(16,24,40,.04);
-  box-sizing:border-box;transition:border-color .2s}
+  box-sizing:border-box;transition:transform .22s ease,border-color .2s}
 .topbar.sync-synced,.topbar.sync-online{border-color:#16a34a}
 .topbar.sync-offline,.topbar.sync-error{border-color:#e11d48}
 .topbar.sync-syncing{border-color:#16a34a}
@@ -121,6 +121,7 @@ p{margin:0 0 8px}
 /* ---- main content ---- */
 .main{flex:1;min-width:0;width:100%;max-width:var(--content-max);margin:0 auto;
   padding:20px 24px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain; /* custom pull-to-refresh owns the top edge */
   margin-top:calc(var(--header-h) + var(--nav-h));margin-bottom:var(--footer-h);
   height:calc(100dvh - var(--header-h) - var(--nav-h) - var(--footer-h));max-width:none}
 .main > *{max-width:var(--content-max);margin-left:auto;margin-right:auto}
@@ -797,7 +798,7 @@ html[data-role="admin"] .fab,html[data-role="maker"] .fab,html[data-role="member
 .sk-row .sk-lines{flex:1;min-width:0;padding-top:2px}
 @keyframes sk{0%{background-position:100% 0}100%{background-position:0 0}}
 @media (prefers-reduced-motion:reduce){
-  .sk-line,.sk-dot{animation:none}
+  .sk-line,.sk-dot,.ptr.loading .ptr-spin{animation:none}
   *{transition-duration:.01ms !important}
 }
 .empty-state{padding:30px 18px;text-align:center;color:var(--muted)}
@@ -866,3 +867,51 @@ html[data-theme="dark"] .empty-state .es-ic,
 html[data-theme="amoled"] .empty-state .es-ic{background:#141414}
 html[data-theme="dark"] .fab,
 html[data-theme="amoled"] .fab{box-shadow:0 6px 18px rgba(0,0,0,.55)}
+
+/* ===================== GESTURES (roadmap step-8 polish) =====================
+   Swipe-to-act · pull-to-refresh · collapse-on-scroll topbar · 44px targets */
+
+/* ---- collapse-on-scroll topbar (body.tb-hidden is set by gestures.js) ---- */
+body.tb-hidden .topbar{transform:translateY(-110%)}
+body.tb-hidden .offline-bar{top:8px}
+@media (max-width:1023px){
+  .main{transition:margin-top .22s ease,height .22s ease}
+  body.tb-hidden .main{margin-top:0;
+    height:calc(100dvh - var(--bottom-nav-h) - env(safe-area-inset-bottom,0px))}
+}
+
+/* ---- swipe-to-act (approval rows) ---- */
+.appr.swipe{padding:0}
+.swipe{position:relative;overflow:hidden}
+.swipe-under{position:absolute;inset:0;display:flex;z-index:0}
+.su-zone{flex:1;display:flex;align-items:center;gap:8px;color:#fff;
+  font-size:13.5px;font-weight:700;padding:0 18px;white-space:nowrap}
+.su-zone .icon{width:22px;height:22px;transition:transform .15s ease}
+.su-lead{background:linear-gradient(100deg,#16a34a,#15803d);justify-content:flex-start}
+.su-trail{background:linear-gradient(260deg,#e11d48,#be123c);justify-content:flex-end;text-align:right}
+.su-zone.past .icon{transform:scale(1.3)}
+.swipe-front{position:relative;z-index:1;width:100%;background:inherit;border-radius:inherit;
+  display:flex;gap:12px;align-items:center;padding:11px 13px;
+  touch-action:pan-y;transition:transform .18s ease;will-change:transform}
+.swipe-front.drag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+@media (max-width:700px){.swipe-front{flex-wrap:wrap}}
+
+/* ---- pull-to-refresh indicator (first child of .main while pulling) ---- */
+.ptr{height:0;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;width:100%}
+.ptr.ease{transition:height .2s ease}
+.ptr-box{display:flex;align-items:center;gap:8px;height:52px;color:var(--muted);
+  font-size:12.5px;font-weight:700;white-space:nowrap}
+.ptr.ready .ptr-box{color:var(--green-dark)}
+.ptr-spin{width:20px;height:20px;flex:none;border-radius:50%;
+  border:2.5px solid var(--line);border-top-color:var(--green);transition:transform .2s ease}
+.ptr.ready .ptr-spin{transform:rotate(180deg)}
+.ptr.loading .ptr-spin{animation:ptrspin .8s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
+html[data-theme="dark"] .ptr.ready .ptr-box,
+html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
+
+/* ---- 44px touch targets for primary mobile actions ---- */
+@media (max-width:640px){
+  .form-actions .btn-primary,.form-actions .btn-danger,
+  .modal-foot .btn,.btn-block{min-height:44px}
+}

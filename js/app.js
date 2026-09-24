@@ -9,6 +9,7 @@ import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
 import { bottomSheet, switchEl, skeleton, errorState } from './ui.js';
+import { initShellGestures } from './gestures.js';
 import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, allMembers, allDeposits, allWithdrawals } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
@@ -440,6 +441,9 @@ async function boot() {
   }
   paintSync(navigator.onLine ? 'online' : 'offline');
   try { firebase.init(); } catch (e) { console.error('firebase', e); }
+
+  /* Step-8 touch polish: pull-to-refresh + collapse-on-scroll topbar. */
+  try { initShellGestures({ onRefresh: () => App.refresh() }); } catch (e) { console.error('gestures', e); }
 
   // onclick replaces any previous handler (safe if boot runs twice)
   $('#btnLogout').innerHTML = icon('logout');

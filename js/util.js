@@ -143,6 +143,10 @@ export const STATUS_EN = { pending: 'Pending', approved: 'Approved', rejected: '
 
 /* ---------------- toast / modal ---------------- */
 export function toast(msg, kind = 'info', ms = 3200) {
+  /* Success and failure moments get a tactile echo on phones that support it. */
+  if (kind === 'success') haptic('success');
+  else if (kind === 'error') haptic('error');
+  else if (kind === 'warn') haptic('tap');
   let wrap = document.getElementById('toastWrap');
   if (!wrap) { wrap = el('div', { id: 'toastWrap', class: 'toast-wrap' }); document.body.appendChild(wrap); }
   const t = el('div', { class: `toast toast-${kind}`, html: `<span>${esc(msg)}</span>` });
@@ -191,6 +195,19 @@ export function alertBox(message, title) {
 
 /* ---------------- misc ---------------- */
 export function debounce(fn, ms = 220) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+/* ---------------- haptics ----------------
+   Tiny vibration feedback for success/error/tap moments (step-8 polish).
+   No-op on devices without the API (e.g. iOS Safari) and whenever the
+   user prefers reduced motion. */
+const HAPTIC_PATTERNS = { tick: 8, tap: 14, success: [14, 42, 20], error: [46, 36, 46] };
+export function haptic(kind = 'tap') {
+  try {
+    if (!('vibrate' in navigator)) return false;
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    return navigator.vibrate(HAPTIC_PATTERNS[kind] || HAPTIC_PATTERNS.tap);
+  } catch { return false; }
+}
 export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = el('a', { href: url, download: filename });

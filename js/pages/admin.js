@@ -6,6 +6,7 @@ import {
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, embedPage } from '../ui.js';
+import { attachSwipe } from '../gestures.js';
 import { pageActivity } from './misc.js';
 import {
   allMembers, allDeposits, allWithdrawals, allUsers, allLogs, settings, saveSettings, setMemberStatus,
@@ -261,6 +262,14 @@ function approvalRow(item) {
   const acts = el('div', { class: 'acts' });
   item.actions.forEach(a => acts.appendChild(btn(a.label, a.ic, a.kind, a.run, { size: 'xs' })));
   row.appendChild(acts);
+  /* Step-8 polish: swipe right → approve, swipe left → reject.
+     Both fire the same dialog-gated handlers as the buttons above. */
+  const approve = item.actions.find(a => a.ic === 'approve');
+  const reject = item.actions.find(a => a.ic === 'reject');
+  attachSwipe(row, {
+    leading: approve ? { ic: 'approve', label: approve.label, run: approve.run } : null,
+    trailing: reject ? { ic: 'reject', label: reject.label, run: reject.run } : null,
+  });
   return row;
 }
 
