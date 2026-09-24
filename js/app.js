@@ -8,7 +8,7 @@ import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSION
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
-import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications } from './store.js';
+import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, allMembers, allDeposits, allWithdrawals } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
@@ -22,9 +22,10 @@ const NAV = [
   { id: 'home', bn: 'ড্যাশবোর্ড', en: 'Dashboard', icon: 'dashboard' },
   { id: 'members', bn: 'সদস্য ব্যবস্থাপনা', en: 'Member Management', icon: 'members' },
   { id: 'deposit', bn: 'জমা / লেনদেন', en: 'Deposits', icon: 'money' },
-  { id: 'authorization', bn: 'অনুমোদন অপেক্ষমাণ', en: 'Pending Approval', icon: 'approve' },
+  { id: 'authorization', bn: 'অনুমোদন', en: 'Approvals', icon: 'approve' },
   { id: 'reports', bn: 'রিপোর্ট', en: 'Reports', icon: 'report' },
-  { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings' },
+  /* Staff see this as the admin hub; members keep the plain “Settings” label. */
+  { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings', bnStaff: 'অ্যাডমিন', enStaff: 'Admin' },
 ];
 
 const PAGES = {
@@ -107,19 +108,41 @@ export const App = {
     if (!host) return;
     for (const item of items) {
       if (!can(s, item.id)) continue;
+      const isStaff = s.role !== 'member';
+      const label = t(
+        (isStaff && item.bnStaff) ? item.bnStaff : item.bn,
+        (isStaff && item.enStaff) ? item.enStaff : item.en,
+      );
       const btn = el('button', {
         class: `nav-tab${this.route === item.id ? ' on' : ''}`, type: 'button',
-        title: t(item.bn, item.en),
-        html: `${icon(item.icon)}<span>${t(item.bn, item.en)}</span>`,
+        title: label, dataset: { route: item.id },
+        html: `${icon(item.icon)}<span>${label}</span>`,
         onclick: () => this.go(item.id),
       });
       host.appendChild(btn);
     }
+    this.paintApprovalBadge();
     const setBtn = $('#btnSettings');
     if (setBtn) setBtn.hidden = s.role !== 'member';
     const userName = s.displayName || s.username || s.memberId || '';
     const brand = $('#brandRole');
     brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc((s.role || '').toUpperCase())}</span>`;
+  },
+
+  /** Red pill on the Approvals tab: how many requests are waiting. */
+  async paintApprovalBadge() {
+    const s = this.session;
+    if (!s || (!can(s, 'member:approve') && !can(s, 'deposit:approve'))) return;
+    try {
+      const [members, deposits, withdrawals] = await Promise.all([allMembers(), allDeposits(), allWithdrawals()]);
+      const n = members.filter(m => m.status === 'pending').length
+        + deposits.filter(d => d.status === 'pending').length
+        + withdrawals.filter(w => w.status === 'pending').length;
+      const tab = document.querySelector('#topnav .nav-tab[data-route="authorization"]');
+      if (!tab) return;
+      tab.querySelector('.pill')?.remove();
+      if (n > 0) tab.appendChild(el('span', { class: 'pill', text: n > 99 ? '99+' : String(n) }));
+    } catch { /* non-critical — skip the badge */ }
   },
 
   async refreshNotifBadge() {

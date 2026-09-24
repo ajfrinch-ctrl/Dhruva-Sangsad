@@ -2,10 +2,10 @@
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, fmtTime, todayISO,
   confirmBox, alertBox, downloadBlob, deviceId, typeLabel, methodLabel, isValidMobile,
-  isValidEmail, APP_NAME_BN, APP_NAME_EN,
+  isValidEmail, APP_NAME_BN, APP_NAME_EN, debounce,
 } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage } from '../ui.js';
+import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, embedPage } from '../ui.js';
 import { pageActivity } from './misc.js';
 import {
   allMembers, allDeposits, allWithdrawals, allUsers, allLogs, settings, saveSettings, setMemberStatus,
@@ -146,79 +146,127 @@ export async function pageBackup(session) {
   return wrap;
 }
 
-/* ==================== shared approval queues ==================== */
-async function memberQueue(session, host) {
-  const [members, deposits, cfg] = await Promise.all([allMembers(), allDeposits(), settings()]);
-  const pending = members.filter(m => m.status === 'pending')
-    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
-  const c = card('সদস্য অনুমোদন', `Pending Member Approvals (${pending.length})`, el('div'));
-  c.body.appendChild(tableWrap(
-    [{ label: 'ID' }, { label: 'নাম / Name' }, { label: 'Mobile' }, { label: 'কিস্তি', cls: 'num' }, { label: 'নিবন্ধন / Registered' }, { label: 'Action', cls: 'nowrap' }],
-    pending.map(m => {
-      const acts = el('div', { class: 'btn-row' });
-      acts.appendChild(btn('View', 'eye', 'ghost', () => viewMember(session, m, memberSummary(m, deposits, summaryOpts(cfg))), { size: 'xs' }));
-      acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
-        if (!(await confirmBox(`${m.nameBn} (${m.memberId}) — সদস্যপদ অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-        await setMemberStatus(m.id, 'active', session); toast('সদস্য অনুমোদিত / Member approved', 'success'); App.refresh();
-      }, { size: 'xs' }));
-      acts.appendChild(btn('Reject', 'reject', 'softred', async () => {
-        const r = await rejectReason();
-        if (r === null) return;
-        await setMemberStatus(m.id, 'rejected', session, r); toast('সদস্য বাতিল / Member rejected', 'warn'); App.refresh();
-      }, { size: 'xs' }));
-      acts.appendChild(btn('Edit', 'edit', 'ghost', () => App.go('members', { tab: 'update', memberDocId: m.id }), { size: 'xs' }));
-      return [
-        `<b>${esc(m.memberId)}</b>`,
-        `${esc(m.nameBn)}<br><span class="faint fs8">${esc(m.nameEn)}</span>`,
-        esc(m.mobile), { text: money(m.installment), cls: 'num' },
-        esc(fmtDate(m.createdAt || m.joinDate)),
-        { node: acts, cls: 'nowrap' },
-      ];
-    }),
-    { empty: 'অনুমোদনের অপেক্ষায় কোনো সদস্য নেই / No pending members', emptyIcon: 'approve' },
-  ));
-  host.appendChild(c);
+/* ==================== shared approval queues ====================
+   Everything waiting for a decision is normalised into one list of "items",
+   so the approval page is a single filterable inbox instead of three stacked
+   tables. Every action from the old tables is preserved. */
+
+async function pendingMemberItems(session, deposits, cfg) {
+  const members = await allMembers();
+  return members.filter(m => m.status === 'pending')
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    .map(m => ({
+      kind: 'member',
+      ic: 'members',
+      title: m.nameBn,
+      sub: `${m.memberId} · ${m.mobile}`,
+      meta: `নিবন্ধন ${fmtDate(m.createdAt || m.joinDate)} · মাসিক কিস্তি ${money(m.installment)}`,
+      amount: null,
+      sort: String(m.createdAt || m.joinDate || ''),
+      actions: [
+        { label: t('দেখুন', 'View'), ic: 'eye', kind: 'ghost', run: () => viewMember(session, m, memberSummary(m, deposits, summaryOpts(cfg))) },
+        {
+          label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
+            if (!(await confirmBox(`${m.nameBn} (${m.memberId}) — সদস্যপদ অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
+            await setMemberStatus(m.id, 'active', session); toast('সদস্য অনুমোদিত / Member approved', 'success'); App.refresh();
+          },
+        },
+        {
+          label: t('বাতিল', 'Reject'), ic: 'reject', kind: 'softred', run: async () => {
+            const r = await rejectReason();
+            if (r === null) return;
+            await setMemberStatus(m.id, 'rejected', session, r); toast('সদস্য বাতিল / Member rejected', 'warn'); App.refresh();
+          },
+        },
+        { label: t('সম্পাদনা', 'Edit'), ic: 'edit', kind: 'ghost', run: () => App.go('members', { tab: 'update', memberDocId: m.id }) },
+      ],
+    }));
 }
 
-async function depositQueue(session, host) {
+const descOf = r => (r.description || r.comment || '').trim();
+
+async function pendingDepositItems(session) {
   const deposits = await allDeposits();
-  const pending = deposits.filter(d => d.status === 'pending')
-    .sort((a, b) => String(a.submittedAt || '').localeCompare(String(b.submittedAt || '')));
-  const total = pending.reduce((s, d) => s + num(d.amount), 0);
-  const c = card('জমা অনুমোদন', `Pending Deposit Approvals (${pending.length})`, el('div'));
-  c.body.appendChild(tableWrap(
-    [{ label: 'Date' }, { label: 'Member' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'বিবরণ' }, { label: 'Action', cls: 'nowrap' }],
-    pending.map(d => {
-      const acts = el('div', { class: 'btn-row' });
-      acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
-        if (!(await confirmBox(`${d.memberName} — ${taka(d.amount)} (${fmtDate(d.date)}) অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-        await setDepositStatus(d.id, 'approved', session); toast('জমা অনুমোদিত / Deposit approved', 'success'); App.refresh();
-      }, { size: 'xs' }));
-      acts.appendChild(btn('Reject', 'reject', 'softred', async () => {
-        const r = await rejectReason('জমা বাতিলের কারণ / Deposit Rejection Reason');
-        if (r === null) return;
-        await setDepositStatus(d.id, 'rejected', session, r); toast('জমা বাতিল / Deposit rejected', 'warn'); App.refresh();
-      }, { size: 'xs' }));
-      return [
-        esc(fmtDate(d.date)),
-        `${esc(d.memberName)}<br><span class="faint fs8">${esc(d.memberId)}</span>`,
-        esc(typeLabel(d.type).bn), esc(methodLabel(d.method).bn),
-        { text: money(d.amount), cls: 'num' },
-        esc(d.description || d.comment || '—'),
-        { node: acts, cls: 'nowrap' },
-      ];
-    }),
-    {
-      empty: 'অনুমোদনের অপেক্ষায় কোনো জমা নেই / No pending deposits', emptyIcon: 'deposit',
-      footer: pending.length ? [{ html: '' }, { html: '<b>সর্বমোট / Total</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }, { html: '' }, { html: '' }] : null,
-    },
-  ));
-  host.appendChild(c);
+  return deposits.filter(d => d.status === 'pending')
+    .sort((a, b) => String(a.submittedAt || '').localeCompare(String(b.submittedAt || '')))
+    .map(d => ({
+      kind: 'deposit',
+      ic: 'deposit',
+      title: d.memberName,
+      sub: `${d.memberId} · ${fmtDate(d.date)}`,
+      meta: `${typeLabel(d.type).bn} · ${methodLabel(d.method).bn}${descOf(d) ? ' · ' + descOf(d) : ''}`,
+      amount: num(d.amount),
+      sort: String(d.submittedAt || ''),
+      actions: [
+        {
+          label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
+            if (!(await confirmBox(`${d.memberName} — ${taka(d.amount)} (${fmtDate(d.date)}) অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
+            await setDepositStatus(d.id, 'approved', session); toast('জমা অনুমোদিত / Deposit approved', 'success'); App.refresh();
+          },
+        },
+        {
+          label: t('বাতিল', 'Reject'), ic: 'reject', kind: 'softred', run: async () => {
+            const r = await rejectReason('জমা বাতিলের কারণ / Deposit Rejection Reason');
+            if (r === null) return;
+            await setDepositStatus(d.id, 'rejected', session, r); toast('জমা বাতিল / Deposit rejected', 'warn'); App.refresh();
+          },
+        },
+      ],
+    }));
+}
+
+async function pendingWithdrawalItems(session) {
+  const withdrawals = await allWithdrawals();
+  return withdrawals.filter(w => w.status === 'pending')
+    .sort((a, b) => String(a.submittedAt || '').localeCompare(String(b.submittedAt || '')))
+    .map(w => ({
+      kind: 'withdrawal',
+      ic: 'withdraw',
+      title: w.memberName,
+      sub: `${w.memberId} · ${fmtDate(w.date)}`,
+      meta: `${withdrawalTypeLabel(w.type).bn} · ${methodLabel(w.method).bn}${descOf(w) ? ' · ' + descOf(w) : ''}`,
+      amount: num(w.amount),
+      sort: String(w.submittedAt || ''),
+      actions: [
+        {
+          label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
+            if (!(await confirmBox(`${w.memberName} — ${taka(w.amount)} (${fmtDate(w.date)}) উত্তোলন অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
+            await setWithdrawalStatus(w.id, 'approved', session); toast('উত্তোলন অনুমোদিত / Withdrawal approved', 'success'); App.refresh();
+          },
+        },
+        {
+          label: t('বাতিল', 'Reject'), ic: 'reject', kind: 'softred', run: async () => {
+            const r = await rejectReason('উত্তোলন বাতিলের কারণ / Withdrawal Rejection Reason');
+            if (r === null) return;
+            await setWithdrawalStatus(w.id, 'rejected', session, r); toast('উত্তোলন বাতিল / Withdrawal rejected', 'warn'); App.refresh();
+          },
+        },
+      ],
+    }));
+}
+
+/** One pending request, rendered as a row with its actions on the right. */
+function approvalRow(item) {
+  const KIND = { member: t('সদস্য', 'Member'), deposit: t('জমা', 'Deposit'), withdrawal: t('উত্তোলন', 'Withdrawal') };
+  const row = el('div', { class: `appr ${item.kind}` });
+  row.innerHTML = `<div class="ic">${icon(item.ic)}</div>
+    <div class="bd">
+      <div class="t">${esc(item.title)}<span class="kind">${esc(KIND[item.kind] || item.kind)}</span></div>
+      <div class="s">${esc(item.sub)}</div>
+      <div class="m">${esc(item.meta)}</div>
+    </div>`;
+  if (item.amount !== null && item.amount !== undefined) {
+    row.appendChild(el('div', { class: 'amt', text: money(item.amount) }));
+  }
+  const acts = el('div', { class: 'acts' });
+  item.actions.forEach(a => acts.appendChild(btn(a.label, a.ic, a.kind, a.run, { size: 'xs' })));
+  row.appendChild(acts);
+  return row;
 }
 
 /* ==================== Authorization Pending ==================== */
 export async function pageAuthorization(session) {
-  const wrap = page('অনুমোদন অপেক্ষমাণ', 'Authorization Pending', 'approve');
+  const wrap = page('অনুমোদন', 'Approvals', 'approve');
   const canApproveMember = can(session, 'member:approve');
   const canApproveDeposit = can(session, 'deposit:approve');
   if (!canApproveMember && !canApproveDeposit) {
@@ -226,60 +274,70 @@ export async function pageAuthorization(session) {
     return wrap;
   }
 
-  const [members, deposits, withdrawals] = await Promise.all([allMembers(), allDeposits(), allWithdrawals()]);
-  const pm = members.filter(m => m.status === 'pending').length;
-  const pd = deposits.filter(d => d.status === 'pending').length;
-  const pw = withdrawals.filter(w => w.status === 'pending').length;
+  const [deposits, cfg] = await Promise.all([allDeposits(), settings()]);
+  const items = [
+    ...(canApproveMember ? await pendingMemberItems(session, deposits, cfg) : []),
+    ...(canApproveDeposit ? await pendingDepositItems(session) : []),
+    ...(canApproveDeposit ? await pendingWithdrawalItems(session) : []),
+  ].sort((a, b) => a.sort.localeCompare(b.sort));
+
+  const count = kind => items.filter(i => i.kind === kind).length;
+  const sum = kind => items.filter(i => i.kind === kind).reduce((s, i) => s + (i.amount || 0), 0);
 
   const stats = el('div', { class: 'stats' });
   stats.append(
-    statCard({ label: 'সদস্য অনুমোদন / Pending Members', value: String(pm), sub: 'সদস্যপদ অনুমোদনের অপেক্ষায়', ic: 'members', tone: 'amber' }),
-    statCard({ label: 'জমা অনুমোদন / Pending Deposits', value: String(pd), sub: 'জমা অনুমোদনের অপেক্ষায়', ic: 'deposit', tone: 'amber' }),
-    statCard({ label: 'উত্তোলন অনুমোদন / Pending Withdrawals', value: String(pw), sub: 'উত্তোলন অনুমোদনের অপেক্ষায়', ic: 'withdraw', tone: 'amber' }),
-    statCard({ label: 'সর্বমোট / Total', value: String(pm + pd + pw), sub: 'সব অনুমোদন এখানে কেন্দ্রীভূত', ic: 'pending' }),
+    statCard({ label: 'সদস্য / Members', value: String(count('member')), sub: 'সদস্যপদ অনুমোদের অপেক্ষায়', ic: 'members', tone: 'blue' }),
+    statCard({ label: 'জমা / Deposits', value: String(count('deposit')), sub: sum('deposit') ? `মোট ${taka(sum('deposit'))}` : 'কোনো জমা নেই', ic: 'deposit', tone: 'amber' }),
+    statCard({ label: 'উত্তোলন / Withdrawals', value: String(count('withdrawal')), sub: sum('withdrawal') ? `মোট ${taka(sum('withdrawal'))}` : 'কোনো উত্তোলন নেই', ic: 'withdraw', tone: 'amber' }),
+    statCard({ label: 'সর্বমোট / Total', value: String(items.length), sub: 'এক জায়গায় সব অনুমোদন', ic: 'pending' }),
   );
   wrap.appendChild(stats);
 
-  if (canApproveMember) await memberQueue(session, wrap);
-  if (canApproveDeposit) await depositQueue(session, wrap);
-  if (canApproveDeposit) await withdrawalQueue(session, wrap);
-  return wrap;
-}
+  /* --- filter chips --- */
+  const FILTERS = [
+    { id: 'all', label: t('সব', 'All') },
+    { id: 'member', label: t('সদস্য', 'Members') },
+    { id: 'deposit', label: t('জমা', 'Deposits') },
+    { id: 'withdrawal', label: t('উত্তোলন', 'Withdrawals') },
+  ];
+  let filter = 'all';
+  const chips = el('div', { class: 'chips' });
+  const listBox = el('div', { class: 'appr-list' });
+  const countLine = el('div', { class: 'count-line' });
 
-async function withdrawalQueue(session, host) {
-  const withdrawals = await allWithdrawals();
-  const pending = withdrawals.filter(w => w.status === 'pending')
-    .sort((a, b) => String(a.submittedAt || '').localeCompare(String(b.submittedAt || '')));
-  const total = pending.reduce((s, w) => s + num(w.amount), 0);
-  const c = card('উত্তোলন অনুমোদন', `Pending Withdrawal Approvals (${pending.length})`, el('div'));
-  c.body.appendChild(tableWrap(
-    [{ label: 'Date' }, { label: 'Member' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'বিবরণ' }, { label: 'Action', cls: 'nowrap' }],
-    pending.map(w => {
-      const acts = el('div', { class: 'btn-row' });
-      acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
-        if (!(await confirmBox(`${w.memberName} — ${taka(w.amount)} (${fmtDate(w.date)}) উত্তোলন অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-        await setWithdrawalStatus(w.id, 'approved', session); toast('উত্তোলন অনুমোদিত / Withdrawal approved', 'success'); App.refresh();
-      }, { size: 'xs' }));
-      acts.appendChild(btn('Reject', 'reject', 'softred', async () => {
-        const r = await rejectReason('উত্তোলন বাতিলের কারণ / Withdrawal Rejection Reason');
-        if (r === null) return;
-        await setWithdrawalStatus(w.id, 'rejected', session, r); toast('উত্তোলন বাতিল / Withdrawal rejected', 'warn'); App.refresh();
-      }, { size: 'xs' }));
-      return [
-        esc(fmtDate(w.date)),
-        `${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`,
-        esc(withdrawalTypeLabel(w.type).bn), esc(methodLabel(w.method).bn),
-        { text: money(w.amount), cls: 'num' },
-        esc(w.description || w.comment || '—'),
-        { node: acts, cls: 'nowrap' },
-      ];
-    }),
-    {
-      empty: 'অনুমোদনের অপেক্ষায় কোনো উত্তোলন নেই / No pending withdrawals', emptyIcon: 'withdraw',
-      footer: pending.length ? [{ html: '' }, { html: '<b>সর্বমোট / Total</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }, { html: '' }, { html: '' }] : null,
-    },
-  ));
-  host.appendChild(c);
+  const render = () => {
+    chips.querySelectorAll('.chip-btn').forEach(b => b.classList.toggle('on', b.dataset.f === filter));
+    const shown = filter === 'all' ? items : items.filter(i => i.kind === filter);
+    const total = shown.reduce((s, i) => s + (i.amount || 0), 0);
+    countLine.textContent = shown.length
+      ? `${shown.length}টি অনুরোধ${total ? ` · মোট ${money(total)}` : ''}`
+      : '';
+    listBox.replaceChildren();
+    if (!shown.length) {
+      const msg = items.length
+        ? t('এই ধরনের কোনো অনুরোধ নেই', 'Nothing pending in this category')
+        : t('অনুমোদনের অপেক্ষায় কিছু নেই — সব শেষ!', 'Nothing waiting for approval — all clear!');
+      listBox.appendChild(el('div', { class: 'empty', html: `${icon(items.length ? 'filter' : 'check')}${esc(msg)}` }));
+      return;
+    }
+    shown.forEach(i => listBox.appendChild(approvalRow(i)));
+  };
+
+  FILTERS.forEach(f => {
+    const n = f.id === 'all' ? items.length : count(f.id);
+    const b = el('button', {
+      type: 'button', class: 'chip-btn' + (f.id === filter ? ' on' : ''), dataset: { f: f.id },
+      html: `${esc(f.label)}<span class="n">${n}</span>`,
+      onclick: () => { filter = f.id; render(); },
+    });
+    chips.appendChild(b);
+  });
+
+  const listCard = card('অপেক্ষমাণ অনুরোধ', 'Pending Requests', el('div'));
+  listCard.body.replaceChildren(chips, countLine, listBox);
+  wrap.appendChild(listCard);
+  render();
+  return wrap;
 }
 
 async function staffManager(session, host) {
@@ -287,21 +345,54 @@ async function staffManager(session, host) {
   const staff = users.filter(u => u.role === 'maker' || u.role === 'admin')
     .sort((a, b) => (a.role === b.role ? (a.username || '').localeCompare(b.username || '') : a.role === 'admin' ? -1 : 1));
 
-  const c = card('Maker / Admin অ্যাকাউন্ট', 'Staff Accounts', el('div'), [
-    btn('নতুন Maker / New Maker', 'plus', 'primary', () => newStaff(session), { size: 'xs' }),
+  const c = card('স্টাফ অ্যাকাউন্ট', 'Staff Accounts', el('div'), [
+    btn('নতুন Maker', 'plus', 'primary', () => newStaff(session), { size: 'xs' }),
   ]);
-  c.body.appendChild(tableWrap(
-    [{ label: 'Username' }, { label: 'নাম / Name' }, { label: 'Role' }, { label: 'Mobile' }, { label: 'Status' }, { label: 'তৈরি / Created' }, { label: 'Action', cls: 'nowrap' }],
-    staff.map(u => {
+
+  /* --- search + filter --- */
+  const bar = el('div', { class: 'toolbar' });
+  const searchBox = el('div', { class: 'search-box', html: icon('search') });
+  const q = el('input', { placeholder: t('Username / নাম / মোবাইল', 'Username / name / mobile'), autocomplete: 'off' });
+  searchBox.appendChild(q);
+  const mkSel = (label, opts, w = '150px') => {
+    const sel = el('select');
+    opts.forEach(([v, l]) => sel.appendChild(el('option', { value: v }, [l])));
+    const f = el('div', { class: 'field', style: `flex:0 1 ${w}` });
+    f.appendChild(el('label', { text: label })); f.appendChild(sel);
+    return { f, sel };
+  };
+  const role = mkSel(t('রোল', 'Role'), [['', t('সব', 'All')], ['admin', 'Admin'], ['maker', 'Maker']], '130px');
+  const stat = mkSel(t('স্ট্যাটাস', 'Status'), [['', t('সব', 'All')], ['active', t('সক্রিয়', 'Active')], ['inactive', t('নিষ্ক্রিয়', 'Inactive')]], '130px');
+  bar.append(searchBox, role.f, stat.f);
+  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; role.sel.value = ''; stat.sel.value = ''; render(); }, { size: 'xs' }));
+  host.appendChild(bar);
+  host.appendChild(c);
+
+  const render = () => {
+    const term = q.value.trim().toLowerCase();
+    const rows = staff.filter(u => {
+      if (role.sel.value && u.role !== role.sel.value) return false;
+      if (stat.sel.value === 'active' && u.active === false) return false;
+      if (stat.sel.value === 'inactive' && u.active !== false) return false;
+      if (!term) return true;
+      return [u.username, u.displayName, u.mobile, u.email].some(x => String(x || '').toLowerCase().includes(term));
+    });
+    c.body.replaceChildren();
+    if (staff.length > rows.length || term) {
+      c.body.appendChild(el('div', { class: 'count-line', text: `${rows.length} / ${staff.length} জন` }));
+    }
+    c.body.appendChild(tableWrap(
+      [{ label: 'Username' }, { label: 'নাম / Name' }, { label: 'Role' }, { label: 'Mobile' }, { label: 'Status' }, { label: 'তৈরি / Created' }, { label: 'Action', cls: 'nowrap' }],
+      rows.map(u => {
       const acts = el('div', { class: 'btn-row' });
-      acts.appendChild(btn('Reset PW', 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
+      acts.appendChild(btn(t('পাসওয়ার্ড', 'Password'), 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
       if (u.role !== 'admin') {
-        acts.appendChild(btn(u.active === false ? 'Activate' : 'Deactivate', u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
+        acts.appendChild(btn(u.active === false ? t('চালু', 'Activate') : t('বন্ধ', 'Deactivate'), u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
           await setUserActive(u.id, u.active === false, session);
           toast(u.active === false ? 'অ্যাকাউন্ট সক্রিয় / Activated' : 'অ্যাকাউন্ট নিষ্ক্রিয় / Deactivated', 'success');
           App.refresh();
         }, { size: 'xs' }));
-        acts.appendChild(btn('Delete', 'trash', 'softred', async () => {
+        acts.appendChild(btn(t('মুছুন', 'Delete'), 'trash', 'softred', async () => {
           if (!(await confirmBox(`${u.username} অ্যাকাউন্টটি স্থায়ীভাবে মুছে ফেলবেন?`, { okLabel: 'Delete', danger: true }))) return;
           try { await deleteUser(u.id, session); toast('অ্যাকাউন্ট মুছে ফেলা হয়েছে / Account deleted', 'warn'); App.refresh(); }
           catch (err) { toast(err.message, 'error'); }
@@ -316,9 +407,13 @@ async function staffManager(session, host) {
         { node: acts, cls: 'nowrap' },
       ];
     }),
-    { empty: 'কোনো স্টাফ অ্যাকাউন্ট নেই / No staff accounts', emptyIcon: 'maker' },
-  ));
-  host.appendChild(c);
+      { empty: t('কোনো স্টাফ অ্যাকাউন্ট নেই', 'No staff accounts'), emptyIcon: 'maker' },
+    ));
+  };
+  q.addEventListener('input', debounce(render, 180));
+  role.sel.addEventListener('change', render);
+  stat.sel.addEventListener('change', render);
+  render();
   host.appendChild(banner('info', 'Maker সদস্য অনুমোদন, জমা এন্ট্রি ও অনুমোদন, প্রতিবেদন ও WhatsApp রিমাইন্ডার ব্যবহার করতে পারেন। Maker কেবল <b>আজকের তারিখের</b> জমা সম্পাদনা বা মুছতে পারবেন এবং Member ID পরিবর্তন করতে পারবেন না।'));
 }
 
@@ -376,30 +471,72 @@ function resetPw(session, u) {
 async function accountManager(session, host) {
   const [members, users] = await Promise.all([allMembers(), allUsers()]);
   const rows = members.slice().sort((a, b) => a.memberId.localeCompare(b.memberId)).map(m => ({ m, u: users.find(u => u.memberDocId === m.id) }));
+
+  host.appendChild(banner('info', 'সদস্যের লগইন Username = তার মোবাইল নম্বর। পাসওয়ার্ড কখনো সংরক্ষিত বা প্রদর্শিত হয় না — প্রয়োজনে রিসেট করুন।'));
+
+  /* --- search + filter --- */
+  const bar = el('div', { class: 'toolbar' });
+  const searchBox = el('div', { class: 'search-box', html: icon('search') });
+  const q = el('input', { placeholder: t('Member ID / নাম / মোবাইল', 'Member ID / name / mobile'), autocomplete: 'off' });
+  searchBox.appendChild(q);
+  const mkSel = (label, opts, w = '150px') => {
+    const sel = el('select');
+    opts.forEach(([v, l]) => sel.appendChild(el('option', { value: v }, [l])));
+    const f = el('div', { class: 'field', style: `flex:0 1 ${w}` });
+    f.appendChild(el('label', { text: label })); f.appendChild(sel);
+    return { f, sel };
+  };
+  const login = mkSel(t('লগইন', 'Login'), [
+    ['', t('সব', 'All')], ['on', t('চালু', 'Enabled')], ['off', t('বন্ধ', 'Disabled')], ['none', t('অ্যাকাউন্ট নেই', 'No account')],
+  ], '160px');
+  const mstat = mkSel(t('সদস্য', 'Member'), [
+    ['', t('সব', 'All')], ['active', t('সক্রিয়', 'Active')], ['pending', t('অপেক্ষমাণ', 'Pending')], ['rejected', t('বাতিল', 'Rejected')],
+  ], '150px');
+  bar.append(searchBox, login.f, mstat.f);
+  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; login.sel.value = ''; mstat.sel.value = ''; render(); }, { size: 'xs' }));
+  host.appendChild(bar);
+
   const c = card('সদস্য লগইন অ্যাকাউন্ট', 'Member Login Accounts', el('div'));
-  c.body.appendChild(banner('info', 'সদস্যের লগইন Username = তার মোবাইল নম্বর। পাসওয়ার্ড কখনো সংরক্ষিত বা প্রদর্শিত হয় না — প্রয়োজনে রিসেট করুন।'));
-  c.body.appendChild(tableWrap(
-    [{ label: 'Member ID' }, { label: 'নাম / Name' }, { label: 'Username (Mobile)' }, { label: 'সদস্য স্ট্যাটাস' }, { label: 'লগইন স্ট্যাটাস' }, { label: 'Action', cls: 'nowrap' }],
-    rows.map(({ m, u }) => {
-      const acts = el('div', { class: 'btn-row' });
-      if (u) {
-        acts.appendChild(btn('Reset PW', 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
-        acts.appendChild(btn(u.active === false ? 'Enable' : 'Disable', u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
-          await setUserActive(u.id, u.active === false, session);
-          toast('লগইন স্ট্যাটাস হালনাগাদ / Login status updated', 'success'); App.refresh();
-        }, { size: 'xs' }));
-      }
-      acts.appendChild(btn('Edit', 'edit', 'ghost', () => App.go('members', { tab: 'update', memberDocId: m.id }), { size: 'xs' }));
-      return [
-        `<b>${esc(m.memberId)}</b>`, esc(m.nameBn), esc(u ? u.username : '—'),
-        { html: statusTag(m.status) },
-        u ? `<span class="tag ${u.active === false ? 'rejected' : 'approved'}">${u.active === false ? 'DISABLED' : 'ENABLED'}</span>` : '<span class="tag gray">NO ACCOUNT</span>',
-        { node: acts, cls: 'nowrap' },
-      ];
-    }),
-    { empty: 'কোনো সদস্য নেই / No members', emptyIcon: 'members' },
-  ));
   host.appendChild(c);
+
+  const render = () => {
+    const term = q.value.trim().toLowerCase();
+    const shown = rows.filter(({ m, u }) => {
+      if (login.sel.value === 'on' && !(u && u.active !== false)) return false;
+      if (login.sel.value === 'off' && !(u && u.active === false)) return false;
+      if (login.sel.value === 'none' && u) return false;
+      if (mstat.sel.value && m.status !== mstat.sel.value) return false;
+      if (!term) return true;
+      return [m.memberId, m.nameBn, m.nameEn, m.mobile, u && u.username].some(x => String(x || '').toLowerCase().includes(term));
+    });
+    c.body.replaceChildren();
+    c.body.appendChild(el('div', { class: 'count-line', text: `${shown.length} / ${rows.length} সদস্য` }));
+    c.body.appendChild(tableWrap(
+      [{ label: 'Member ID' }, { label: 'নাম / Name' }, { label: 'Username (Mobile)' }, { label: 'সদস্য স্ট্যাটাস' }, { label: 'লগইন স্ট্যাটাস' }, { label: 'Action', cls: 'nowrap' }],
+      shown.map(({ m, u }) => {
+        const acts = el('div', { class: 'btn-row' });
+        if (u) {
+          acts.appendChild(btn(t('পাসওয়ার্ড', 'Password'), 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
+          acts.appendChild(btn(u.active === false ? t('চালু', 'Enable') : t('বন্ধ', 'Disable'), u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
+            await setUserActive(u.id, u.active === false, session);
+            toast('লগইন স্ট্যাটাস হালনাগাদ / Login status updated', 'success'); App.refresh();
+          }, { size: 'xs' }));
+        }
+        acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => App.go('members', { tab: 'update', memberDocId: m.id }), { size: 'xs' }));
+        return [
+          `<b>${esc(m.memberId)}</b>`, esc(m.nameBn), esc(u ? u.username : '—'),
+          { html: statusTag(m.status) },
+          u ? `<span class="tag ${u.active === false ? 'rejected' : 'approved'}">${u.active === false ? 'DISABLED' : 'ENABLED'}</span>` : '<span class="tag gray">NO ACCOUNT</span>',
+          { node: acts, cls: 'nowrap' },
+        ];
+      }),
+      { empty: t('এই ফিল্টারে কোনো সদস্য নেই', 'No members match this filter'), emptyIcon: 'members' },
+    ));
+  };
+  q.addEventListener('input', debounce(render, 180));
+  login.sel.addEventListener('change', render);
+  mstat.sel.addEventListener('change', render);
+  render();
 }
 
 /* ==================== Member Panel ==================== */
@@ -475,48 +612,149 @@ export async function pageMemberPanel(session) {
   return wrap;
 }
 
-/* ==================== Settings (tabbed hub) ==================== */
-export async function pageSettings(session, params = {}) {
-  const wrap = page('সেটিংস', 'Settings', 'settings');
+/* ==================== Admin hub (tile home) ==================== */
 
-  const TABS = [
-    { id: 'account', label: 'আমার অ্যাকাউন্ট / Account' },
-    { id: 'language', label: 'ভাষা / Language' },
-    { id: 'activity', label: 'কার্যক্রম লগ / Activity Log' },
+/** One big tile on the admin home screen. */
+function hubTile(sec, onPick) {
+  const b = el('button', { type: 'button', class: `hub-tile${sec.tone ? ' ' + sec.tone : ''}`, onclick: onPick });
+  b.innerHTML = `<span class="tic">${icon(sec.ic)}</span>
+    <span class="tb">
+      <span class="tt">${esc(t(sec.bn, sec.en))}${sec.badge ? `<span class="badge${sec.badge.n ? '' : ' zero'}">${esc(sec.badge.n)}</span>` : ''}</span>
+      <span class="ts">${esc(t(sec.descBn, sec.descEn))}</span>
+    </span>
+    <span class="go">${icon('chevron')}</span>`;
+  return b;
+}
+
+const HUB_GROUPS = [
+  { id: 'me', bn: 'আমার', en: 'Mine' },
+  { id: 'approve', bn: 'অনুমোদন', en: 'Approvals' },
+  { id: 'manage', bn: 'ব্যবস্থাপনা', en: 'Management' },
+  { id: 'org', bn: 'সংগঠন', en: 'Organisation' },
+  { id: 'data', bn: 'ডেটা', en: 'Data' },
+  { id: 'system', bn: 'সিস্টেম', en: 'System' },
+];
+
+export async function pageSettings(session, params = {}) {
+  const staff = session.role === 'admin' || session.role === 'maker';
+  const wrap = page(staff ? 'অ্যাডমিন' : 'সেটিংস', staff ? 'Admin' : 'Settings', staff ? 'admin' : 'settings');
+
+  const [members, deposits, withdrawals, users, queue] = await Promise.all([
+    allMembers(), allDeposits(), allWithdrawals(), allUsers(), queueAll(),
+  ]);
+  const pending = members.filter(m => m.status === 'pending').length
+    + deposits.filter(d => d.status === 'pending').length
+    + withdrawals.filter(w => w.status === 'pending').length;
+  const makers = users.filter(u => u.role === 'maker').length;
+
+  const SECTIONS = [
+    { id: 'account', group: 'me', ic: 'admin', bn: 'আমার অ্যাকাউন্ট', en: 'My Account', descBn: 'প্রোফাইল ও পাসওয়ার্ড', descEn: 'Profile and password' },
+    { id: 'language', group: 'me', ic: 'globe', bn: 'ভাষা', en: 'Language', descBn: 'বাংলা / English', descEn: 'Bangla / English' },
+    { id: 'about', group: 'me', ic: 'info', bn: 'অ্যাপ তথ্য', en: 'About', descBn: 'সংস্করণ, ডিভাইস, সংযোগ', descEn: 'Version, device, connection' },
   ];
-  if (can(session, 'settings:manage')) {
-    TABS.push({ id: 'organisation', label: 'সংগঠন সেটিংস / Organisation' });
-    TABS.push({ id: 'firebase', label: 'ক্লাউড সিঙ্ক / Firebase' });
+  if (can(session, 'member:approve') || can(session, 'deposit:approve')) {
+    SECTIONS.push({
+      id: 'approvals', group: 'approve', ic: 'approve', bn: 'অনুমোদন', en: 'Approvals',
+      descBn: pending ? `${pending}টি অনুরোধ অপেক্ষায়` : 'সব অনুমোদন সম্পন্ন',
+      descEn: pending ? `${pending} request(s) waiting` : 'All approvals done',
+      route: 'authorization', badge: { n: pending }, tone: pending ? 'warn' : '',
+    });
   }
   if (session.role === 'admin') {
-    TABS.push({ id: 'staff', label: 'স্টাফ / Staff' });
-    TABS.push({ id: 'accounts', label: 'সদস্য অ্যাকাউন্ট / Accounts' });
+    SECTIONS.push({
+      id: 'staff', group: 'manage', ic: 'maker', bn: 'স্টাফ', en: 'Staff',
+      descBn: `${makers} জন Maker`, descEn: `${makers} maker(s)`, badge: { n: makers },
+    });
+    SECTIONS.push({
+      id: 'accounts', group: 'manage', ic: 'members', bn: 'সদস্য লগইন', en: 'Member Logins',
+      descBn: 'চালু/বন্ধ, পাসওয়ার্ড রিসেট', descEn: 'Enable, disable, reset password',
+    });
+  }
+  if (can(session, 'settings:manage')) {
+    SECTIONS.push({
+      id: 'organisation', group: 'org', ic: 'building', bn: 'সংগঠন', en: 'Organisation',
+      descBn: 'নাম, লোগো, কিস্তি, টেমপ্লেট', descEn: 'Name, logo, installment, template',
+    });
+    SECTIONS.push({
+      id: 'firebase', group: 'data', ic: 'sync', bn: 'ক্লাউড সিঙ্ক', en: 'Cloud Sync',
+      descBn: queue.length ? `${queue.length}টি সিঙ্ক বাকি` : 'Firebase সংযোগ',
+      descEn: queue.length ? `${queue.length} item(s) pending` : 'Firebase connection',
+      badge: { n: queue.length },
+    });
   }
   if (can(session, 'backup:manage')) {
-    TABS.push({ id: 'backup', label: 'ব্যাকআপ / Backup & Restore' });
+    SECTIONS.push({
+      id: 'backup', group: 'data', ic: 'backup', bn: 'ব্যাকআপ', en: 'Backup',
+      descBn: 'সংরক্ষণ ও পুনরুদ্ধার', descEn: 'Save and restore',
+    });
   }
-
-  let active = params.tab && TABS.some(t => t.id === params.tab) ? params.tab : 'account';
-  const host = el('div');
-  const tabBar = tabs(TABS, active, id => {
-    active = id;
-    App.params = { ...(App.params || {}), tab: id };
-    paint();
-    tabBar.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', TABS[i].id === id));
+  SECTIONS.push({
+    id: 'activity', group: 'system', ic: 'log', bn: 'কার্যকলাপ লগ', en: 'Activity Log',
+    descBn: 'কে, কখন, কী করেছে', descEn: 'Who did what, and when',
   });
-  wrap.append(tabBar, host);
+
+  const host = el('div');
+  wrap.appendChild(host);
+  let active = params.tab && SECTIONS.some(s => s.id === params.tab && !s.route) ? params.tab : '';
+
+  const setTab = id => { App.params = { ...(App.params || {}), tab: id }; };
+
+  function renderHome() {
+    host.replaceChildren();
+    HUB_GROUPS.forEach(g => {
+      const items = SECTIONS.filter(s => s.group === g.id);
+      if (!items.length) return;
+      host.appendChild(el('div', { class: 'hub-group-title', text: t(g.bn, g.en) }));
+      const grid = el('div', { class: 'hub-grid' });
+      items.forEach(s => grid.appendChild(hubTile(s, () => (s.route ? App.go(s.route) : open(s.id)))));
+      host.appendChild(grid);
+    });
+  }
 
   async function paint() {
     host.replaceChildren();
-    if (active === 'account') accountSection(session, host);
-    else if (active === 'language') languageSection(host);
-    else if (active === 'activity') await embedPage(host, pageActivity, session);
-    else if (active === 'organisation') await organisationSection(session, host);
-    else if (active === 'firebase') await firebaseSection(session, host);
-    else if (active === 'staff') await staffManager(session, host);
-    else if (active === 'accounts') await accountManager(session, host);
-    else if (active === 'backup') await embedPage(host, pageBackup, session);
+    if (!active) return renderHome();
+    const sec = SECTIONS.find(s => s.id === active);
+    if (!sec) return renderHome();
+
+    const bar = el('div', { class: 'hub-bar' });
+    bar.appendChild(btn(t('অ্যাডমিন হোম', 'Admin home'), 'back', 'ghost', home, { size: 'xs' }));
+    const head = el('div', { class: 'hub-sec' });
+    head.innerHTML = `<div class="ic">${icon(sec.ic)}</div><div><h2>${esc(t(sec.bn, sec.en))}</h2><div class="s">${esc(t(sec.descBn, sec.descEn))}</div></div>`;
+    const pane = el('div');
+    host.append(bar, head, pane);
+
+    if (active === 'account') accountSection(session, pane);
+    else if (active === 'language') languageSection(pane);
+    else if (active === 'about') aboutSection(pane);
+    else if (active === 'organisation') await organisationSection(session, pane);
+    else if (active === 'firebase') await firebaseSection(session, pane);
+    else if (active === 'staff') await staffManager(session, pane);
+    else if (active === 'accounts') await accountManager(session, pane);
+    else if (active === 'activity') await embedPage(pane, pageActivity, session);
+    else if (active === 'backup') await embedPage(pane, pageBackup, session);
   }
+
+  async function open(id) {
+    active = id;
+    setTab(id);
+    await paint();
+    window.scrollTo(0, 0);
+  }
+  async function home() {
+    active = '';
+    setTab('');
+    await paint();
+    window.scrollTo(0, 0);
+  }
+
+  /* Esc returns to the tile home; auto-detaches once this page is replaced. */
+  const onKey = ev => {
+    if (!host.isConnected) { window.removeEventListener('keydown', onKey); return; }
+    if (ev.key === 'Escape' && active) home();
+  };
+  window.addEventListener('keydown', onKey);
+
   await paint();
   return wrap;
 }
@@ -562,17 +800,19 @@ function accountSection(session, host) {
   host.appendChild(accCard);
 
   if (session.role === 'member') {
-    accRow.appendChild(btn('আমার প্রোফাইল / My Profile', 'member', 'ghost', () => App.go('member-panel')));
+    accRow.appendChild(btn(t('আমার প্রোফাইল', 'My Profile'), 'member', 'ghost', () => App.go('member-panel')));
   }
+}
 
-  const about = kv([
+function aboutSection(host) {
+  host.appendChild(card('অ্যাপ সম্পর্কে', 'About', kv([
     ['অ্যাপ / Application', `${esc(APP_NAME_BN)} — ${esc(APP_NAME_EN)}`],
     ['সংস্করণ / Version', APP_VERSION],
     ['ধরন / Type', 'Offline-first PWA · IndexedDB + Firebase Realtime Database'],
     ['সংযোগ / Connection', navigator.onLine ? '<span class="tag approved">ONLINE</span>' : '<span class="tag gray">OFFLINE</span>'],
-    ['ব্যাকআপ / Data safety', 'Admin → Settings → Backup & Restore'],
-  ]);
-  host.appendChild(card('অ্যাপ সম্পর্কে', 'About', about));
+    ['ডিভাইস / Device ID', esc(deviceId())],
+    ['ব্যাকআপ / Data safety', t('অ্যাডমিন হোম → ব্যাকআপ', 'Admin home → Backup')],
+  ])));
 }
 
 function resizeLogoFile(file) {
