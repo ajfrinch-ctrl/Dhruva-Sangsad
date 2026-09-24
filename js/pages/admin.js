@@ -11,10 +11,12 @@ import {
   allMembers, allDeposits, allWithdrawals, allUsers, allLogs, settings, saveSettings, setMemberStatus,
   setDepositStatus, setWithdrawalStatus, memberSummary, summariesFor, orgTotals, createStaffUser, setUserActive,
   resetUserPassword, deleteUser, logActivity, invalidate, getMember, statementRows, withdrawalTypeLabel,
+  logUserName, summaryOpts,
 } from '../store.js';
 import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
 import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
 import { getLang, setLang, t } from '../i18n.js';
+import { APP_VERSION, logoSrc } from '../brand.js';
 import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
@@ -61,7 +63,7 @@ export async function pageBackup(session) {
       .forEach(d => dRows.push([d.id, fmtDate(d.date), d.memberId, d.memberName, typeLabel(d.type).en, methodLabel(d.method).en, num(d.amount), d.description || '', d.comment || '', d.status, fmtDateTime(d.submittedAt), d.approvedAt ? fmtDateTime(d.approvedAt) : '']));
     const lRows = [['Date', 'Time', 'User', 'Role', 'Action', 'Details']];
     logs.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .forEach(l => lRows.push([fmtDate(l.createdAt), fmtTime(l.createdAt), l.displayName || '', l.role || '', l.action, l.details || '']));
+      .forEach(l => lRows.push([fmtDate(l.createdAt), fmtTime(l.createdAt), logUserName(l), l.role || '', l.action, l.details || '']));
     downloadExcel([
       { name: 'Members', rows: mRows }, { name: 'Deposits', rows: dRows }, { name: 'Activity Log', rows: lRows },
     ], `Dhruvo_Sangsad_Data_${todayISO()}.xlsx`);
@@ -154,7 +156,7 @@ async function memberQueue(session, host) {
     [{ label: 'ID' }, { label: 'নাম / Name' }, { label: 'Mobile' }, { label: 'কিস্তি', cls: 'num' }, { label: 'নিবন্ধন / Registered' }, { label: 'Action', cls: 'nowrap' }],
     pending.map(m => {
       const acts = el('div', { class: 'btn-row' });
-      acts.appendChild(btn('View', 'eye', 'ghost', () => viewMember(session, m, memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment })), { size: 'xs' }));
+      acts.appendChild(btn('View', 'eye', 'ghost', () => viewMember(session, m, memberSummary(m, deposits, summaryOpts(cfg))), { size: 'xs' }));
       acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
         if (!(await confirmBox(`${m.nameBn} (${m.memberId}) — সদস্যপদ অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
         await setMemberStatus(m.id, 'active', session); toast('সদস্য অনুমোদিত / Member approved', 'success'); App.refresh();
@@ -407,7 +409,7 @@ export async function pageMemberPanel(session) {
   const [deposits, cfg] = await Promise.all([allDeposits(), settings()]);
   const m = await getMember(session.memberDocId);
   if (!m) { wrap.appendChild(banner('err', 'সদস্য প্রোফাইল পাওয়া যায়নি / Member profile not found')); return wrap; }
-  const s = memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment });
+  const s = memberSummary(m, deposits, summaryOpts(cfg));
 
   if (m.status === 'pending') wrap.appendChild(banner('warn', 'আপনার সদস্যপদ এখনো অনুমোদনের অপেক্ষায়। অনুমোদনের পূর্বে জমা দাখিল করা যাবে না।'));
   if (m.status === 'rejected') wrap.appendChild(banner('err', `আপনার সদস্যপদ বাতিল করা হয়েছে।${m.rejectReason ? ' কারণ: ' + esc(m.rejectReason) : ''}`));
@@ -565,7 +567,7 @@ function accountSection(session, host) {
 
   const about = kv([
     ['অ্যাপ / Application', `${esc(APP_NAME_BN)} — ${esc(APP_NAME_EN)}`],
-    ['সংস্করণ / Version', '1.0.0'],
+    ['সংস্করণ / Version', APP_VERSION],
     ['ধরন / Type', 'Offline-first PWA · IndexedDB + Firebase Realtime Database'],
     ['সংযোগ / Connection', navigator.onLine ? '<span class="tag approved">ONLINE</span>' : '<span class="tag gray">OFFLINE</span>'],
     ['ব্যাকআপ / Data safety', 'Admin → Settings → Backup & Restore'],
@@ -582,7 +584,8 @@ function resizeLogoFile(file) {
     img.onload = () => {
       URL.revokeObjectURL(url);
       const max = 512;
-      let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      // SVG may report no intrinsic size — fall back to the resize ceiling.
+      let w = img.naturalWidth || img.width || 512, h = img.naturalHeight || img.height || 512;
       if (w > max || h > max) {
         const s = Math.min(max / w, max / h);
         w = Math.round(w * s); h = Math.round(h * s);
@@ -628,18 +631,56 @@ async function organisationSection(session, host) {
       <button class="btn btn-primary" type="submit">${icon('save')}<span>Save / সংরক্ষণ</span></button>
       <button class="btn btn-ghost" type="reset">${icon('clear')}<span>Reset</span></button>
     </div>`;
+  /* --- logo picker: preview immediately, persist on Save --- */
+  const preview = f.querySelector('#logoPreview');
+  const fileInput = f.querySelector('#logoFile');
+  let pendingLogo = cfg.orgLogo || '';   // '' means “use the default logo”
+  const paintPreview = () => { preview.src = logoSrc({ orgLogo: pendingLogo }); };
+  paintPreview();
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    try {
+      pendingLogo = await resizeLogoFile(file);
+      paintPreview();
+      toast('লোগো নির্বাচন করা হয়েছে — Save করুন / Logo selected — press Save', 'info');
+    } catch (err) {
+      toast(err.message || 'লোগো লোড করা যায়নি', 'error');
+      fileInput.value = '';
+    }
+  });
+  f.querySelector('#logoReset').addEventListener('click', () => {
+    pendingLogo = '';
+    fileInput.value = '';
+    paintPreview();
+  });
+  f.addEventListener('reset', () => setTimeout(() => {
+    pendingLogo = cfg.orgLogo || '';
+    fileInput.value = '';
+    paintPreview();
+  }, 0));
+
   f.addEventListener('submit', async e => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(f).entries());
     if (!String(v.orgNameBn || '').trim() || !String(v.orgNameEn || '').trim()) { toast('সংগঠনের নাম আবশ্যক / Organisation name required', 'error'); return; }
     if (!String(v.waTemplate || '').includes('[Member Name]')) { toast('টেমপ্লেটে [Member Name] অবশ্যই থাকতে হবে', 'error'); return; }
-    await saveSettings({
-      orgNameBn: v.orgNameBn.trim(), orgNameEn: v.orgNameEn.trim(),
-      orgAddress: (v.orgAddress || '').trim(), orgPhone: (v.orgPhone || '').trim(),
-      defaultInstallment: num(v.defaultInstallment), monthlyTarget: num(v.monthlyTarget),
-      countSpecialTowardsInstallment: !!v.countSpecialTowardsInstallment,
-      waTemplate: v.waTemplate,
-    });
+    const b = f.querySelector('button[type=submit]'); b.disabled = true;
+    try {
+      await saveSettings({
+        orgNameBn: v.orgNameBn.trim(), orgNameEn: v.orgNameEn.trim(),
+        orgAddress: (v.orgAddress || '').trim(), orgPhone: (v.orgPhone || '').trim(),
+        defaultInstallment: num(v.defaultInstallment), monthlyTarget: num(v.monthlyTarget),
+        countSpecialTowardsInstallment: !!v.countSpecialTowardsInstallment,
+        waTemplate: v.waTemplate,
+        orgLogo: pendingLogo,
+      });
+    } catch (err) {
+      b.disabled = false;
+      toast('সেটিংস সংরক্ষণ ব্যর্থ: ' + err.message, 'error');
+      return;
+    }
+    b.disabled = false;
     await logActivity('SETTINGS_UPDATE', 'Organisation settings updated', session);
     toast('সেটিংস সংরক্ষিত হয়েছে / Settings saved', 'success');
     App.refresh();
@@ -684,7 +725,12 @@ async function firebaseSection(session, host) {
     </div>
     <div class="fs8 muted" id="fbStat"></div>`;
   const stat = fb.querySelector('#fbStat');
-  const paintStat = () => { stat.textContent = `Status: ${firebase.status}${firebase.lastError ? ' — ' + firebase.lastError : ''}`; };
+  const paintStat = () => {
+    // Auto-detach once the tab is re-rendered — otherwise every visit to this
+    // tab leaks another listener.
+    if (!stat.isConnected) { window.removeEventListener('ds:sync-status', paintStat); return; }
+    stat.textContent = `Status: ${firebase.status}${firebase.lastError ? ' — ' + firebase.lastError : ''}`;
+  };
   paintStat();
   window.addEventListener('ds:sync-status', paintStat);
   fb.addEventListener('submit', async e => {

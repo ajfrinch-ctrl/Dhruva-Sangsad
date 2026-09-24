@@ -9,7 +9,7 @@ import { icon } from '../icons.js';
 import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals,
-  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel,
+  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel, summaryOpts,
 } from '../store.js';
 import { sheetToPdf, downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { can } from '../auth.js';
@@ -175,7 +175,7 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
   if (criteria) {
     body.appendChild(el('div', { class: 'banner info', html: `${icon('filter')}<span>${esc(criteria)}</span>` }));
   }
-  if (screen) body.appendChild(screen);
+  if (screen) { screen.classList.add('no-print'); body.appendChild(screen); }
   sheet.classList.add('sheet-offscreen');
   body.appendChild(sheet);
 
@@ -194,6 +194,23 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
     downloadCSV(excelRows(), safeName(fileBase) + '.csv');
     toast('CSV ডাউনলোড হয়েছে / CSV downloaded', 'success');
   };
+  /* Send the print sheet to the printer/“Save as PDF” dialog. The on-screen
+     table is marked .no-print so only the sheet is printed. */
+  const doPrint = () => {
+    sheet.classList.remove('sheet-offscreen');
+    document.body.classList.add('printing');
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      document.body.classList.remove('printing');
+      sheet.classList.add('sheet-offscreen');
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    setTimeout(restore, 60000); // fallback for browsers without afterprint
+    window.print();
+  };
 
   return modal({
     title: `${titleBn} / ${titleEn}`,
@@ -203,7 +220,7 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
       { label: 'Download PDF', kind: 'softred', value: null, onClick: () => { doPdf(); return false; } },
       { label: 'Download Excel', kind: 'soft', value: null, onClick: () => { doExcel(); return false; } },
       { label: 'Download CSV', kind: 'ghost', value: null, onClick: () => { doCsv(); return false; } },
-      { label: 'Print', kind: 'ghost', value: null, onClick: () => { doPdf(); return false; } },
+      { label: 'Print', kind: 'ghost', value: null, onClick: () => { doPrint(); return false; } },
       { label: 'Close', kind: 'primary', value: true },
     ],
   });
@@ -224,7 +241,7 @@ function memberSelect(members, { includeAll = false, value = '' } = {}) {
   });
   return s;
 }
-const cfgOf = ctx => ({ countSpecialTowardsInstallment: ctx.cfg.countSpecialTowardsInstallment });
+const cfgOf = ctx => summaryOpts(ctx.cfg);
 
 /* ================= 1. Member Statement ================= */
 function rStatement(ctx, meta) {

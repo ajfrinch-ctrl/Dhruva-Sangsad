@@ -88,7 +88,7 @@ export function monthLabel(key) {
   const [y, m] = String(key).split('-');
   return `${names[Number(m) - 1] || m} ${y}`;
 }
-/** whole months from a to b inclusive of both endpoints' months (>=1) */
+/** whole months from a to b inclusive of both endpoints' months (>=0; 0 when b predates a) */
 export function monthsBetweenInclusive(isoA, isoB) {
   if (!isoA || !isoB) return 1;
   const a = new Date(isoA.slice(0, 10) + 'T00:00:00');

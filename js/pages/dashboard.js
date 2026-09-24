@@ -3,7 +3,7 @@
 import { el, esc, taka, num } from '../util.js';
 import { icon } from '../icons.js';
 import { page, statCard, banner, btn, card } from '../ui.js';
-import { allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals, getMember, withdrawalBalance } from '../store.js';
+import { allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals, getMember, withdrawalBalance, summaryOpts } from '../store.js';
 import { App } from '../app.js';
 
 export async function pageHome(session) {
@@ -42,7 +42,7 @@ async function memberHome(session) {
   const wrap = page('আমার ড্যাশবোর্ড', 'My Dashboard', 'dashboard');
   if (!m) { wrap.appendChild(banner('err', 'সদস্য তথ্য পাওয়া যায়নি / Member record not found')); return wrap; }
 
-  const s = memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment, withdrawals });
+  const s = memberSummary(m, deposits, summaryOpts(cfg, { withdrawals }));
   const bal = withdrawalBalance(m, deposits, withdrawals);
 
   if (m.status === 'pending') {

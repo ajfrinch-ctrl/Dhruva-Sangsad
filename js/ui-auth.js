@@ -94,7 +94,7 @@ function loginForm(body, root, onLoggedIn) {
       onLoggedIn(s);
     } catch (err) {
       errBox.innerHTML = `<span class="form-err">${esc(err.message)}</span>`;
-      btn.disabled = false; btn.innerHTML = `${icon('login')} Login`;
+      btn.disabled = false; btn.innerHTML = `${icon('login')} ${t('লগইন', 'Login')}`;
     }
   });
 }

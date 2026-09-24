@@ -1,9 +1,9 @@
 /* Domain layer: members, deposits, approvals, calculations, logs, notifications */
 import {
-  dbAll, dbGet, saveRecord, removeRecord, getSetting, setSetting, dbPutRaw, enqueue,
+  dbAll, dbGet, saveRecord, removeRecord, getSetting, setSetting, dbPutRaw, dbBulkPut, enqueue,
 } from './db.js';
 import {
-  uid, nowISO, todayISO, num, normalizeMobile, memberIdFromMobile, monthsBetweenInclusive, monthKey,
+  uid, nowISO, todayISO, num, normalizeMobile, memberIdFromMobile, monthsBetweenInclusive, monthKey, deviceId,
 } from './util.js';
 import { hashPassword } from './crypto.js';
 
@@ -64,6 +64,20 @@ export async function saveSettings(patch) {
   return settings();
 }
 
+/** Options for memberSummary, derived from settings. Always pass `dueDay`
+ *  through — otherwise the summary silently falls back to the hard-coded 12 and
+ *  disagrees with the dashboard and the due notifications. */
+export const summaryOpts = (cfg, extra = {}) => ({
+  countSpecialTowardsInstallment: !!(cfg && cfg.countSpecialTowardsInstallment),
+  dueDay: cfg && cfg.dueDay != null ? cfg.dueDay : 12,
+  ...extra,
+});
+
+/** Log records store the actor's name in `userName` (see logActivity). Older or
+ *  hand-edited rows may only carry `displayName`, so read through this helper —
+ *  otherwise the Activity Log silently falls back to a raw user id. */
+export const logUserName = l => (l && (l.userName || l.displayName)) || (l && l.userId) || '—';
+
 /* ---------------- activity log ---------------- */
 export async function logActivity(action, details = '', actor = null) {
   const a = actor || (window.DS_SESSION || null);
@@ -82,12 +96,14 @@ export async function logActivity(action, details = '', actor = null) {
 
 /* ---------------- notifications ---------------- */
 export async function notify({ title, body, audience = 'staff', memberId = null, kind = 'info', action = null, sticky = false, id = null }) {
+  // Re-writing an existing notification (e.g. a refreshed due amount) must keep
+  // the read state, otherwise it re-appears as unread for everyone.
+  const existing = id ? await dbGet('notifications', id) : null;
   const rec = {
     id: id || uid('ntf'), title, body, audience, memberId, kind, action, sticky,
-    createdAt: nowISO(), readBy: {},
+    createdAt: existing ? existing.createdAt : nowISO(),
+    readBy: existing ? (existing.readBy || {}) : {},
   };
-  const existing = id ? await dbGet('notifications', id) : null;
-  if (existing) rec.createdAt = existing.createdAt;
   await saveRecord('notifications', rec, { queue: true });
   return rec;
 }
@@ -205,7 +221,24 @@ export async function updateMember(memberDocId, patch, actor) {
   if (errs.length) { const e = new Error(errs[0].msg); e.fieldErrors = errs; throw e; }
 
   await saveRecord('members', next, { queue: true, actorId: actor && actor.id });
-  await logActivity('MEMBER_UPDATE', `Member ${m.memberId} updated${next.joinDate !== m.joinDate ? ` (join date ${m.joinDate} → ${next.joinDate})` : ''}`, actor);
+
+  // The member's login username IS their mobile number, so keep the linked
+  // `users` record in step — otherwise they can no longer sign in or run
+  // password recovery with the new number.
+  if (next.mobile !== m.mobile) {
+    const users = await allUsers();
+    const user = users.find(u => u.memberDocId === memberDocId);
+    if (user && user.username !== next.mobile) {
+      await saveRecord('users', {
+        ...user,
+        username: next.mobile,
+        displayName: next.nameBn || next.nameEn || user.displayName,
+      }, { queue: true, actorId: actor && actor.id });
+      invalidate('users');
+    }
+  }
+
+  await logActivity('MEMBER_UPDATE', `Member ${m.memberId} updated${next.joinDate !== m.joinDate ? ` (join date ${m.joinDate} → ${next.joinDate})` : ''}${next.mobile !== m.mobile ? ` (login ${m.mobile} → ${next.mobile})` : ''}`, actor);
   invalidate('members');
   if (next.joinDate !== m.joinDate) {
     try { await syncDueNotifications(); } catch {}
@@ -484,38 +517,52 @@ export function memberSummary(member, deposits, opts = {}) {
 export async function summariesFor(members, deposits, cfg) {
   const s = cfg || await settings();
   const withdrawals = await allWithdrawals();
-  return members.map(m => memberSummary(m, deposits, {
-    countSpecialTowardsInstallment: s.countSpecialTowardsInstallment,
-    withdrawals,
-    dueDay: s.dueDay != null ? s.dueDay : 12,
-  }));
+  return members.map(m => memberSummary(m, deposits, { ...summaryOpts(s), withdrawals }));
 }
 
 export async function syncDueNotifications() {
   const [members, deposits, cfg, notifs] = await Promise.all([allMembers(), allDeposits(), settings(), allNotifications()]);
   const dueDay = cfg.dueDay != null ? cfg.dueDay : 12;
-  let changed = 0;
+  const byId = new Map((notifs || []).map(n => [n.id, n]));
+  const now = nowISO();
+  const syncStatus = navigator.onLine ? 'pending' : 'local';
+  const toPut = [], toRemove = [];
+
   for (const m of members) {
     if (m.status !== 'active') continue;
-    const s = memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment, dueDay });
+    const s = memberSummary(m, deposits, summaryOpts(cfg));
     const nid = `ntf_due_${m.memberId}`;
-    const existing = notifs.find(n => n.id === nid);
+    const existing = byId.get(nid);
     if (s.due > 0) {
       const title = 'মাসিক জমা বকেয়া';
       const body = `প্রিয় ${m.nameBn || m.nameEn}, আপনার মাসিক জমা বকেয়া রয়েছে (৳${Math.round(s.due)})। ${dueDay} তারিখের মধ্যে জমা না দিলে বকেয়া দেখায়। যেকোনো দিন জমা দিতে এখানে ট্যাপ করুন।`;
       if (!existing || existing.body !== body) {
-        await notify({
+        // Keep the read state and original timestamp when refreshing the amount.
+        toPut.push({
           id: nid, title, body, audience: 'member', memberId: m.memberId,
           kind: 'due', action: 'deposit', sticky: true,
+          readBy: existing ? (existing.readBy || {}) : {},
+          createdAt: existing ? existing.createdAt : now,
+          updatedAt: now, updatedBy: null, deviceId: deviceId(), syncStatus,
         });
-        changed++;
       }
     } else if (existing) {
-      await removeRecord('notifications', nid, { queue: true });
-      changed++;
+      toRemove.push(nid);
     }
   }
-  if (changed) invalidate('notifs');
+
+  // One bulk write + one invalidate instead of two awaited transactions per member.
+  if (toPut.length) {
+    await dbBulkPut('notifications', toPut);
+    for (const r of toPut) await enqueue('notifications', r.id, 'put', r);
+  }
+  for (const id of toRemove) await removeRecord('notifications', id, { queue: true });
+
+  const changed = toPut.length + toRemove.length;
+  if (changed) {
+    invalidate('notifs');
+    window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store: 'notifications', id: '*' } }));
+  }
   return changed;
 }
 
