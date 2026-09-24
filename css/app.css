@@ -905,3 +905,70 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
   .form-actions .btn-primary,.form-actions .btn-danger,
   .modal-foot .btn,.btn-block{min-height:44px}
 }
+
+/* ============ Phase KHA — member forms + list ============ */
+/* --- registration wizard --- */
+.wsteps{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.wstep-dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  font-size:12px;font-weight:700;background:var(--line-2);color:var(--muted);flex:none}
+.wstep-dot.on{background:var(--green);color:#fff}
+.wstep-dot.done{background:var(--green-soft);color:var(--green-dark)}
+.wstep-line{flex:1;max-width:42px;height:2px;background:var(--line);border-radius:2px}
+.wstep-lbl{margin-left:auto;font-size:12.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.wstep{display:none;flex-direction:column;gap:12px}
+.wstep.on{display:flex}
+/* sticky action bar — flush card footer on mobile */
+.form-sticky{position:sticky;bottom:0;display:flex;gap:8px;background:var(--card);
+  border-top:1px solid var(--line-2);margin:12px -16px -16px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.form-sticky .btn{flex:1;min-height:48px}
+.form-sticky .wiz-back{flex:0 0 auto}
+/* editor section headers inside the g2 grid */
+.form-sec{grid-column:1/-1;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  color:var(--faint);margin-top:6px;padding-top:10px;border-top:1px solid var(--line-2)}
+/* desktop/tablet: wizard renders as one page with a single submit */
+@media (min-width:1024px){
+  .wsteps,.wiz-back,.wiz-next{display:none}
+  .wstep{display:flex}
+  .wiz-submit[hidden]{display:inline-flex}
+  .form-sticky{position:static;border-top:0;margin:12px 0 0;padding:4px 0 0;max-width:340px}
+}
+/* mobile forms: one column, 16px inputs (no iOS auto-zoom), 48px targets */
+@media (max-width:1023px){
+  .mform .g2{grid-template-columns:1fr}
+  .mform input,.mform select,.mform textarea{font-size:16px}
+  .mform input,.mform select{min-height:48px}
+}
+@media (max-width:640px){
+  .form-sticky{margin:12px -12px -12px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+}
+/* --- member picker (combobox) --- */
+.card.overflow-visible{overflow:visible}
+.mpick{position:relative}
+.mpick-in{padding-right:38px}
+.mpick-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+  border:0;background:transparent;color:var(--faint);font-size:19px;line-height:1;cursor:pointer;border-radius:6px}
+.mpick-x:hover{color:var(--text)}
+.mpick-drop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:70;background:var(--card);
+  border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px rgba(16,24,40,.16);
+  max-height:252px;overflow-y:auto;padding:4px}
+.mpick-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:9px 10px;
+  border:0;border-radius:8px;background:transparent;font:inherit;color:var(--text);cursor:pointer}
+.mpick-opt .mo-t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mpick-opt .mo-s{color:var(--muted);font-size:12px;white-space:nowrap}
+.mpick-opt .mo-tag{margin-left:auto;flex:none}
+.mpick-opt.on{background:var(--green-soft)}
+.mpick-empty{padding:12px;text-align:center;color:var(--faint);font-size:13px}
+/* --- member list: filter chips + compact cards --- */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chips .chip{font:inherit;color:var(--text);background:var(--card);cursor:pointer;min-height:34px}
+.chips .chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.count-line{font-size:12.5px;color:var(--muted);margin:2px 0 9px}
+.person-list{display:flex;flex-direction:column;gap:9px}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:11px 13px}
+.pc-head{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:2px 0;
+  font:inherit;cursor:pointer;text-align:left;color:var(--text);min-height:34px}
+.pc-name{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-sub{font-size:12.5px;color:var(--muted);margin-top:1px}
+.pc-nums{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted);margin-top:5px}
+.pc-nums b{color:var(--text);font-variant-numeric:tabular-nums}
+.pc-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
