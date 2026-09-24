@@ -52,5 +52,5 @@ Hosting workflow uses project `dhruva-sangsad-app`.
 ## After it is live
 
 1. Open the Hosting URL
-2. Log in `admin` / `admin` and change the password
+2. Log in `admin` / `admin` (needs internet — the app confirms no admin exists in the cloud yet) and change the password. After this, `admin` / `admin` is disabled on every device.
 3. Settings → Cloud Sync → paste the **same project’s** `firebaseConfig` → Save & Connect

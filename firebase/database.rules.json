@@ -12,6 +12,14 @@
       }
     },
 
+    "bootstrap": {
+      ".read": "auth != null",
+      "adminReady": {
+        ".write": "auth != null && (newData.val() === true || root.child('authIndex').child(auth.uid).child('role').val() === 'admin')",
+        ".validate": "!newData.exists() || newData.isBoolean()"
+      }
+    },
+
     "users": {
       ".read": "auth != null && root.child('authIndex').child(auth.uid).child('role').val() === 'admin'",
       "$userId": {
