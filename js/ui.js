@@ -60,14 +60,14 @@ export function tableWrap(headers, rows, { footer = null, empty, emptyIcon = 'in
   empty = empty || t('কোনো তথ্য পাওয়া যায়নি', 'No records found');
   const wrap = el('div', { class: 'tbl-wrap' });
   if (!rows.length) {
-    wrap.appendChild(el('div', { class: 'empty', html: `${icon(emptyIcon)}${esc(empty)}` }));
+    wrap.appendChild(emptyState({ ic: emptyIcon, title: empty, compact: true }));
     return wrap;
   }
-  const t = el('table', { class: 'tbl' });
+  const tbl = el('table', { class: 'tbl' });
   const thead = el('thead');
   const tr = el('tr');
   headers.forEach(h => tr.appendChild(el('th', { class: h.cls || '', text: tx(h.label !== undefined ? h.label : h) })));
-  thead.appendChild(tr); t.appendChild(thead);
+  thead.appendChild(tr); tbl.appendChild(thead);
   /* Column labels are kept on every cell so narrow screens can turn each row
      into a card (see the "responsive card table" block in app.css). */
   const labels = headers.map(h => tx(h.label !== undefined ? h.label : h));
@@ -85,16 +85,16 @@ export function tableWrap(headers, rows, { footer = null, empty, emptyIcon = 'in
     });
     tb.appendChild(row);
   });
-  t.appendChild(tb);
+  tbl.appendChild(tb);
   if (footer) {
     const tf = el('tfoot'); const fr = el('tr');
     footer.forEach(c => {
       if (c && typeof c === 'object' && !c.nodeType) fr.appendChild(el('td', { class: c.cls || '', html: c.html !== undefined ? c.html : esc(c.text ?? '') }));
       else fr.appendChild(el('td', { html: String(c ?? '') }));
     });
-    tf.appendChild(fr); t.appendChild(tf);
+    tf.appendChild(fr); tbl.appendChild(tf);
   }
-  wrap.appendChild(t);
+  wrap.appendChild(tbl);
   return wrap;
 }
 
@@ -122,6 +122,78 @@ export function tabs(items, active, onPick) {
 
 export function money2(v) { return money(v); }
 export { taka, fmtDate };
+
+/* ------------------------------------------------------------------ *
+ * States — skeleton · empty · error · offline  (mobile-first)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Loading placeholder. `rows` = list rows, `cards` = stat cards.
+ * Shows a shimmering skeleton instead of a blank screen.
+ */
+export function skeleton({ rows = 4, cards = 0, title = '' } = {}) {
+  const wrap = el('div', { class: 'sk-wrap' });
+  if (title) wrap.appendChild(el('div', { class: 'sk-line sk-title', style: 'width:120px;margin-bottom:12px' }));
+  if (cards) {
+    const g = el('div', { class: 'stat-grid' });
+    for (let i = 0; i < cards; i++) {
+      g.appendChild(el('div', { class: 'sk-card', html: '<i class="sk-line" style="width:52%"></i><i class="sk-line sk-big"></i><i class="sk-line" style="width:38%"></i>' }));
+    }
+    wrap.appendChild(g);
+  }
+  for (let i = 0; i < rows; i++) {
+    wrap.appendChild(el('div', { class: 'sk-row', html: `
+      <i class="sk-dot"></i>
+      <span class="sk-lines"><i class="sk-line" style="width:${58 + (i % 3) * 12}%"></i><i class="sk-line sk-sm" style="width:${30 + (i % 4) * 10}%"></i></span>` }));
+  }
+  return wrap;
+}
+
+/** Empty state with an icon, a message, an optional hint and one action. */
+export function emptyState({ ic = 'info', title, hint = '', actionLabel = '', onAction = null, compact = false } = {}) {
+  const box = el('div', { class: `empty-state${compact ? ' compact' : ''}` });
+  box.innerHTML = `
+    <div class="es-ic">${icon(ic)}</div>
+    <div class="es-t">${esc(tx(title || t('কোনো তথ্য পাওয়া যায়নি', 'Nothing here yet')))}</div>
+    ${hint ? `<div class="es-h">${esc(tx(hint))}</div>` : ''}`;
+  if (actionLabel && onAction) {
+    const b = el('button', { type: 'button', class: 'btn-primary sm', text: tx(actionLabel), onclick: onAction });
+    box.appendChild(b);
+  }
+  return box;
+}
+
+/** Error state with a retry button. */
+export function errorState({ title, hint = '', onRetry = null } = {}) {
+  const box = el('div', { class: 'empty-state err' });
+  box.innerHTML = `
+    <div class="es-ic">${icon('warn')}</div>
+    <div class="es-t">${esc(tx(title || t('কিছু একটা সমস্যা হয়েছে', 'Something went wrong')))}</div>
+    ${hint ? `<div class="es-h">${esc(tx(hint))}</div>` : ''}`;
+  if (onRetry) box.appendChild(el('button', { type: 'button', class: 'btn-ghost sm', text: t('আবার চেষ্টা করুন', 'Try again'), onclick: onRetry }));
+  return box;
+}
+
+/**
+ * Wrap an async render: paint a skeleton, then the real content; on failure
+ * show an error state with a retry button.
+ *   body.appendChild(await withSkeleton(host, () => renderThing()));
+ */
+export async function withSkeleton(host, render, opts = {}) {
+  host.innerHTML = '';
+  host.appendChild(skeleton(opts));
+  try {
+    const node = await render();
+    host.innerHTML = '';
+    if (node) host.appendChild(node);
+    return node;
+  } catch (e) {
+    console.error('[ui] render failed', e);
+    host.innerHTML = '';
+    host.appendChild(errorState({ hint: String(e && e.message || e), onRetry: () => withSkeleton(host, render, opts) }));
+    return null;
+  }
+}
 
 /** Mobile bottom sheet (used by the “More” menu). Returns { close }. */
 export function bottomSheet({ title, items = [] } = {}) {

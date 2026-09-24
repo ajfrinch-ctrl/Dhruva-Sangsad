@@ -8,7 +8,7 @@ import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSION
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
-import { bottomSheet, switchEl } from './ui.js';
+import { bottomSheet, switchEl, skeleton, errorState } from './ui.js';
 import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, allMembers, allDeposits, allWithdrawals } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
@@ -66,7 +66,7 @@ export const App = {
     resetIdleTimer();
     const view = $('#view');
     clear(view);
-    view.appendChild(el('div', { class: 'empty', html: t('লোড হচ্ছে…', 'Loading…') }));
+    view.appendChild(skeleton({ rows: 3, cards: 4 }));
     try {
       const node = await PAGES[route](s, params);
       clear(view);
@@ -75,7 +75,11 @@ export const App = {
     } catch (e) {
       console.error(e);
       clear(view);
-      view.appendChild(el('div', { class: 'banner err', html: `${icon('warn')}<span>${esc(e.message || 'Error')}</span>` }));
+      view.appendChild(errorState({
+        title: t('এই পেজটি লোড করা যায়নি', 'This page could not be loaded'),
+        hint: e && e.message ? e.message : '',
+        onRetry: () => this.go(route, params),
+      }));
     }
     this.paintNav();
     this.paintFooter();
@@ -203,6 +207,7 @@ export const App = {
       items.push({ ic: 'maker', label: t('ইউজার ম্যানেজমেন্ট', 'User management'), run: () => this.go('settings', { tab: 'staff' }) });
     }
     items.push({ ic: 'log', label: t('অ্যাকটিভিটি লগ', 'Activity Log'), run: () => this.go('settings', { tab: 'activity' }) });
+    items.push({ ic: 'key', label: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'), run: () => shortcutSheet() });
     items.push('sep');
     items.push({
       ic: getTheme() === 'amoled' ? 'moon' : 'sun', label: t('ডার্ক মোড', 'Dark mode'),
@@ -301,17 +306,86 @@ export const App = {
 };
 window.App = App;
 
-/* ---------------- topbar sync border (no text chip) ---------------- */
+/* ---------------- topbar sync border + offline bar ---------------- */
+function paintOfflineBar(on) {
+  let bar = $('#offlineBar');
+  if (!bar) {
+    bar = el('div', { class: 'offline-bar', id: 'offlineBar' });
+    const app = $('#app') || document.body;
+    app.insertBefore(bar, app.firstChild);
+  }
+  bar.innerHTML = `${icon('offline')}<span>${esc(t('অফলাইন — ডেটা ডিভাইসেই থাকবে, অনলাইনে সিঙ্ক হবে', 'Offline — data stays on this device and syncs when online'))}</span>`;
+  bar.hidden = !on;
+  document.documentElement.dataset.offline = on ? '1' : '0';
+}
+
 function paintSync(status) {
   const bar = document.querySelector('.topbar');
-  if (!bar) return;
   const st = status || (navigator.onLine ? 'online' : 'offline');
+  paintOfflineBar(st === 'offline' || st === 'sync-error');
+  if (!bar) return;
   bar.classList.remove('sync-online', 'sync-offline', 'sync-syncing', 'sync-synced', 'sync-error');
   const cls = st === 'sync-error' ? 'sync-error' : `sync-${st}`;
   bar.classList.add(cls);
   document.documentElement.dataset.sync = st;
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail.status));
+
+/* ---------------- keyboard shortcuts (desktop convenience) ---------------- */
+const GO_KEYS = {
+  h: 'home', m: 'members', d: 'deposit', a: 'authorization',
+  r: 'reports', s: 'settings', u: 'users', l: 'activity',
+};
+const SHORTCUTS = [
+  ['g h', t('হোম', 'Home')], ['g m', t('সদস্য', 'Members')], ['g d', t('জমা', 'Deposits')],
+  ['g a', t('অনুমোদন', 'Approvals')], ['g r', t('রিপোর্ট', 'Reports')], ['g s', t('সেটিংস', 'Settings')],
+  ['n', t('প্রধান অ্যাকশন (FAB)', 'Primary action (FAB)')],
+  ['/', t('অনুসন্ধান ফিল্ডে যান', 'Focus the search field')],
+  ['?', t('এই সাহায্য', 'This help')], ['Esc', t('শিট/মোডাল বন্ধ', 'Close sheet or dialog')],
+];
+
+export function shortcutSheet() {
+  bottomSheet({
+    title: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'),
+    items: SHORTCUTS.map(([k, label]) => ({
+      label: `${k} — ${label}`, ic: 'key', keepOpen: true,
+    })),
+  });
+}
+
+let chord = null;
+window.addEventListener('keydown', e => {
+  if (!App.session) return;
+  const tgt = e.target || {};
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName || '') || tgt.isContentEditable) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+
+  if (chord === 'g') {
+    chord = null;
+    const route = GO_KEYS[(k || '').toLowerCase()];
+    if (route) { e.preventDefault(); App.go(route); }
+    return;
+  }
+  if (k === 'Escape') {
+    const back = document.querySelector('.sheet-backdrop');
+    if (back) { back.click(); e.preventDefault(); }
+    return;
+  }
+  if (k === '?') { shortcutSheet(); return; }
+  if (k === '/') {
+    const box = document.querySelector('.main input[type="search"]')
+      || [...document.querySelectorAll('.main input')].find(i => /search/i.test(i.placeholder || ''));
+    if (box) { e.preventDefault(); box.focus(); box.select?.(); }
+    return;
+  }
+  if ((k === 'n' || k === 'N') && !chord) {
+    const f = $('#fab');
+    if (f && !f.hidden) { e.preventDefault(); f.click(); }
+    return;
+  }
+  if (k === 'g') { chord = 'g'; setTimeout(() => { chord = null; }, 1200); }
+});
 
 /* ---------------- automatic session timeout (30 min inactivity) ---------------- */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
