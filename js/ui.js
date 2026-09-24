@@ -68,16 +68,20 @@ export function tableWrap(headers, rows, { footer = null, empty, emptyIcon = 'in
   const tr = el('tr');
   headers.forEach(h => tr.appendChild(el('th', { class: h.cls || '', text: tx(h.label !== undefined ? h.label : h) })));
   thead.appendChild(tr); t.appendChild(thead);
+  /* Column labels are kept on every cell so narrow screens can turn each row
+     into a card (see the "responsive card table" block in app.css). */
+  const labels = headers.map(h => tx(h.label !== undefined ? h.label : h));
   const tb = el('tbody');
   rows.forEach(r => {
     const row = el('tr');
-    r.forEach(c => {
-      if (c && c.nodeType) { const td = el('td'); td.appendChild(c); row.appendChild(td); }
+    r.forEach((c, i) => {
+      const label = labels[i] || '';
+      if (c && c.nodeType) { const td = el('td', { dataset: { label } }); td.appendChild(c); row.appendChild(td); }
       else if (c && typeof c === 'object') {
-        const td = el('td', { class: c.cls || '' });
+        const td = el('td', { class: c.cls || '', dataset: { label } });
         if (c.node) td.appendChild(c.node); else td.innerHTML = c.html !== undefined ? c.html : esc(c.text ?? '');
         row.appendChild(td);
-      } else row.appendChild(el('td', { html: c === null || c === undefined ? '' : String(c) }));
+      } else row.appendChild(el('td', { dataset: { label }, html: c === null || c === undefined ? '' : String(c) }));
     });
     tb.appendChild(row);
   });
@@ -118,6 +122,48 @@ export function tabs(items, active, onPick) {
 
 export function money2(v) { return money(v); }
 export { taka, fmtDate };
+
+/** Mobile bottom sheet (used by the “More” menu). Returns { close }. */
+export function bottomSheet({ title, items = [] } = {}) {
+  const back = el('div', { class: 'sheet-backdrop' });
+  const sheet = el('div', { class: 'sheet' });
+  sheet.appendChild(el('div', { class: 'sheet-grab' }));
+  if (title) sheet.appendChild(el('div', { class: 'sheet-title', text: tx(title) }));
+  const list = el('div', { class: 'sheet-list' });
+  items.forEach(it => {
+    if (it === 'sep') { list.appendChild(el('div', { class: 'sheet-sep' })); return; }
+    const row = el('button', { type: 'button', class: `sheet-item${it.danger ? ' danger' : ''}` });
+    row.innerHTML = `<span class="si-ic">${icon(it.ic || 'info')}</span><span class="si-tx">${esc(tx(it.label))}</span>`;
+    if (it.right) { const r = el('span', { class: 'si-right' }); r.appendChild(it.right); row.appendChild(r); }
+    else if (it.value != null) row.appendChild(el('span', { class: 'si-val', text: it.value }));
+    row.onclick = () => { if (!it.keepOpen) close(); if (typeof it.run === 'function') it.run(); };
+    list.appendChild(row);
+  });
+  sheet.appendChild(list);
+  const close = () => {
+    back.remove(); sheet.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  back.onclick = close;
+  document.addEventListener('keydown', onKey);
+  document.body.append(back, sheet);
+  requestAnimationFrame(() => { back.classList.add('on'); sheet.classList.add('on'); });
+  return { close };
+}
+
+/** Small on/off switch used inside sheets and settings rows. */
+export function switchEl(on, onChange) {
+  const b = el('button', { type: 'button', class: `switch${on ? ' on' : ''}`, 'aria-pressed': on ? 'true' : 'false' });
+  b.onclick = e => {
+    e.stopPropagation();
+    const next = !b.classList.contains('on');
+    b.classList.toggle('on', next);
+    b.setAttribute('aria-pressed', next ? 'true' : 'false');
+    if (onChange) onChange(next);
+  };
+  return b;
+}
 
 /** Render a page function into a host, stripping its own page header (used by hub pages). */
 export async function embedPage(host, pageFn, session, params = {}) {

@@ -23,10 +23,10 @@
   }
 })();
 </script>
-<link rel="manifest" href="./manifest.webmanifest?v=6.5.13">
+<link rel="manifest" href="./manifest.webmanifest?v=6.5.15">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch.png">
-<link rel="stylesheet" href="./css/app.css?v=6.5.13">
+<link rel="stylesheet" href="./css/app.css?v=6.5.15">
 <script src="./vendor/firebase-app-compat.js" defer></script>
 <script src="./vendor/firebase-auth-compat.js" defer></script>
 <script src="./vendor/firebase-database-compat.js" defer></script>
@@ -45,7 +45,7 @@
       <div class="sub">Dhruvo Sangsad</div>
     </div>
     <p class="auth-title" id="bootMsg">লোড হচ্ছে… / Loading…</p>
-    <p class="auth-foot">v6.5.13</p>
+    <p class="auth-foot">v6.5.15</p>
   </div>
 </div>
 
@@ -62,19 +62,22 @@
       <button class="icon-btn" id="btnSettings" type="button" aria-label="Settings" hidden></button>
       <button class="icon-btn" id="btnTheme" type="button" aria-label="Dark mode" title="হার্ড ডার্ক / Hard dark"></button>
       <button class="icon-btn" id="btnNotif" type="button" aria-label="Notifications"></button>
+      <button class="icon-btn" id="btnMore" type="button" aria-label="More"></button>
       <button class="icon-btn" id="btnLogout" type="button" aria-label="Logout"></button>
     </div>
   </header>
-  <nav class="topnav" id="topnav" aria-label="Primary navigation"></nav>
+  <nav class="topnav" id="topnav" aria-label="Primary navigation" hidden></nav>
+  <aside class="rail" id="rail" hidden aria-label="Side navigation"></aside>
   <main class="main" id="view"></main>
-  <nav class="bottom-nav" id="bottomnav" hidden aria-label="Member navigation"></nav>
+  <button class="fab" id="fab" type="button" hidden></button>
+  <nav class="bottom-nav" id="bottomnav" hidden aria-label="Primary mobile navigation"></nav>
   <footer class="app-footer" id="appFooter">
     <div class="app-footer-org" id="appFooterOrg"></div>
   </footer>
 </div>
 
 <noscript><p style="padding:20px;font-family:sans-serif">This application requires JavaScript.</p></noscript>
-<script type="module" src="./js/app.js?v=6.5.13"></script>
+<script type="module" src="./js/app.js?v=6.5.15"></script>
 <script>
 window.addEventListener('error', function (e) {
   var el = document.getElementById('bootMsg');
