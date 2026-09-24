@@ -1,10 +1,11 @@
 /* Money Management (deposit entry) + Deposit History */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, modal, confirmBox,
-  DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, monthKey,
+  DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, monthKey, t,
 } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage } from '../ui.js';
+import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage, emptyState, bottomSheet } from '../ui.js';
+import { memberPicker } from '../picker.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, submitDeposit, memberSummary, setDepositStatus,
   canModifyDeposit, updateDeposit, deleteDeposit, getMember, submitWithdrawal, setWithdrawalStatus, summaryOpts,
@@ -14,6 +15,61 @@ import { can } from '../auth.js';
 import { App } from '../app.js';
 import { rejectReason } from './members.js';
 import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
+
+/* Short chip labels (full option adjectives stay in tables/modals). */
+const TYPE_SHORT = [
+  { value: 'monthly', bn: 'মাসিক', en: 'Monthly' },
+  { value: 'advance', bn: 'অগ্রিম', en: 'Advance' },
+  { value: 'special', bn: 'বিশেষ', en: 'Special' },
+  { value: 'other', bn: 'অন্যান্য', en: 'Other' },
+];
+const METHOD_SHORT = [
+  { value: 'cash', bn: 'নগদ', en: 'Cash' },
+  { value: 'mobile', bn: 'মোবাইল ব্যাংকিং', en: 'Mobile banking' },
+  { value: 'bank', bn: 'ব্যাংক', en: 'Bank' },
+];
+const WTYPE_SHORT = [
+  { value: 'savings', bn: 'সঞ্চয়', en: 'Savings' },
+  { value: 'advance_refund', bn: 'অগ্রিম ফেরত', en: 'Advance refund' },
+  { value: 'other', bn: 'অন্যান্য', en: 'Other' },
+];
+
+/* Segmented single-select chips backed by a hidden input, so FormData,
+   validation and the store see the exact same field as the old <select>.
+   Unknown initial values fall back to the first option (old selects did the
+   same by rendering it first). */
+function segChips(name, options, value, { onChange = null } = {}) {
+  const wrap = el('div', { class: 'seg', role: 'radiogroup' });
+  const hidden = el('input', { type: 'hidden', name, value: options.some(o => o.value === value) ? value : options[0].value });
+  const paint = () => {
+    [...wrap.querySelectorAll('.seg-chip')].forEach(b => {
+      const on = b.dataset.value === hidden.value;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  };
+  options.forEach(o => {
+    const b = el('button', { type: 'button', class: 'seg-chip', role: 'radio', 'aria-checked': 'false', text: t(o.bn, o.en) });
+    b.dataset.value = o.value;
+    b.addEventListener('click', () => {
+      if (hidden.value === o.value) return;
+      hidden.value = o.value;
+      paint();
+      hidden.dispatchEvent(new Event('change', { bubbles: true }));
+      if (onChange) onChange(o.value);
+    });
+    wrap.appendChild(b);
+  });
+  paint();
+  const root = el('div');
+  root.append(wrap, hidden);
+  return {
+    root, hidden,
+    get value() { return hidden.value; },
+    set(v) { if (options.some(o => o.value === v) && hidden.value !== v) { hidden.value = v; paint(); } },
+    reset() { this.set(options[0].value); },
+  };
+}
 
 /* ==================== Deposits hub (Entry / Withdrawal / Transactions) ==================== */
 export async function pageDepositsHub(session, params = {}) {
@@ -59,42 +115,41 @@ export async function pageWithdrawal(session) {
   if (staff && !activeMembers.length) { wrap.appendChild(banner('warn', 'কোনো Active সদস্য নেই। / No active member yet.')); return wrap; }
 
   const infoHost = el('div');
-  const form = el('form', { class: 'grid', novalidate: true });
-  const memberField = staff ? `
-    <div class="field"><label>সদস্য নির্বাচন / Select Member <span class="req">*</span></label>
-      <select name="memberDocId" required>
-        <option value="">— ID — Name —</option>
-        ${activeMembers.slice().sort((a, b) => a.memberId.localeCompare(b.memberId))
-          .map(m => `<option value="${esc(m.id)}">${esc(m.memberId)} — ${esc(m.nameBn || m.nameEn)}</option>`).join('')}
-      </select><div class="err" data-err="memberDocId"></div></div>`
-    : `<div class="field"><label>সদস্য / Member</label><input value="${esc(member.memberId)} — ${esc(member.nameBn)}" readonly>
+  const form = el('form', { class: 'grid mform', novalidate: true });
+  let picker = null;
+  const memberField = staff ? '<div class="field js-pickhost"><label>সদস্য <span class="req">*</span></label></div>'
+    : `<div class="field"><label>সদস্য</label><input value="${esc(member.memberId)} — ${esc(member.nameBn)}" readonly>
         <input type="hidden" name="memberDocId" value="${esc(member.id)}"></div>`;
 
   form.innerHTML = `
     <div class="grid g2">
       ${memberField}
-      <div class="field"><label>তারিখ / Date <span class="req">*</span></label>
+      <div class="field"><label>তারিখ <span class="req">*</span></label>
         <input name="date" type="date" required value="${todayISO()}" ${session.role === 'maker' ? `max="${todayISO()}" min="${todayISO()}"` : ''}>
         <div class="err" data-err="date"></div></div>
-      <div class="field"><label>উত্তোলনের ধরন / Withdrawal Type <span class="req">*</span></label>
-        <select name="type" required>${WITHDRAWAL_TYPES.map(t => `<option value="${t.id}">${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
-      <div class="field"><label>পরিশোধ পদ্ধতি / Payment Method <span class="req">*</span></label>
-        <select name="method" required>${PAY_METHODS.map(t => `<option value="${t.id}">${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
-      <div class="field"><label>উত্তোলনের পরিমাণ (৳) / Amount <span class="req">*</span></label>
+      <div class="field"><label>উত্তোলনের ধরন <span class="req">*</span></label><div class="js-type"></div></div>
+      <div class="field"><label>পরিশোধ পদ্ধতি <span class="req">*</span></label><div class="js-method"></div></div>
+      <div class="field"><label>পরিমাণ (৳) <span class="req">*</span></label>
         <input name="amount" type="number" min="1" step="0.01" required inputmode="decimal" placeholder="0">
-        <div class="hint">উপলব্ধ ব্যালান্সের বেশি উত্তোলন করা যাবে না / Cannot exceed available balance</div>
+        <div class="hint">উপলব্ধ ব্যালান্সের বেশি উত্তোলন করা যাবে না</div>
         <div class="err" data-err="amount"></div></div>
-      <div class="field"><label>বিবরণ / Description</label><input name="description" placeholder="ঐচ্ছিক / optional"></div>
+      <div class="field"><label>বিবরণ (ঐচ্ছিক)</label><input name="description" placeholder="ঐচ্ছিক"></div>
     </div>
-    <div class="field"><label>মন্তব্য / Comment</label><textarea name="comment" rows="2" placeholder="ঐচ্ছিক / optional"></textarea></div>
-    <div class="form-actions">
-      <button class="btn btn-danger" type="submit">${icon('upload')}<span>${staff ? 'Save Withdrawal / উত্তোলন সংরক্ষণ' : 'Submit / উত্তোলনের আবেদন'}</span></button>
-      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>Clear</span></button>
+    <div class="field"><label>মন্তব্য (ঐচ্ছিক)</label><textarea name="comment" rows="2" placeholder="ঐচ্ছিক"></textarea></div>
+    <div class="form-sticky">
+      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>${t('মুছুন', 'Clear')}</span></button>
+      <button class="btn btn-danger" type="submit">${icon('upload')}<span>${staff ? t('উত্তোলন সংরক্ষণ', 'Save withdrawal') : t('উত্তোলনের আবেদন', 'Request withdrawal')}</span></button>
     </div>`;
+  const typeSeg = segChips('type', WTYPE_SHORT, 'savings');
+  const methodSeg = segChips('method', METHOD_SHORT, 'cash');
+  form.querySelector('.js-type').appendChild(typeSeg.root);
+  form.querySelector('.js-method').appendChild(methodSeg.root);
 
   const paintInfo = async () => {
     infoHost.replaceChildren();
-    const id = form.elements.memberDocId.value;
+    /* During preselect construction the picker's hidden input is not in the
+       form yet — read through the picker then. */
+    const id = form.elements.memberDocId ? form.elements.memberDocId.value : (picker ? picker.value : '');
     if (!id) return;
     const m = await getMember(id);
     if (!m) return;
@@ -107,10 +162,24 @@ export async function pageWithdrawal(session) {
     );
     infoHost.appendChild(card('ব্যালান্স', `Balance — ${m.memberId} · ${m.nameBn}`, stats));
   };
-  if (staff) form.elements.memberDocId.addEventListener('change', paintInfo);
+  if (staff) {
+    picker = memberPicker({ members: activeMembers, onPick: () => paintInfo() });
+    const host = form.querySelector('.js-pickhost');
+    host.appendChild(picker.root);
+    host.insertAdjacentHTML('beforeend', '<div class="err" data-err="memberDocId"></div>');
+  }
+  /* Native reset restores hidden inputs but not chip/picker UI — sync it all. */
+  form.addEventListener('reset', () => setTimeout(() => {
+    if (picker) picker.set('');
+    typeSeg.reset(); methodSeg.reset();
+    form.elements.date.value = todayISO();
+    paintInfo();
+  }, 0));
 
   wrap.appendChild(infoHost);
-  wrap.appendChild(card(staff ? 'উত্তোলন এন্ট্রি' : 'উত্তোলনের আবেদন', staff ? 'Withdrawal Entry' : 'Withdrawal Request', form));
+  const entryCard = card(staff ? 'উত্তোলন এন্ট্রি' : 'উত্তোলনের আবেদন', staff ? 'Withdrawal Entry' : 'Withdrawal Request', form);
+  if (staff) entryCard.classList.add('overflow-visible');
+  wrap.appendChild(entryCard);
   await paintInfo();
 
   form.addEventListener('submit', async e => {
@@ -128,51 +197,77 @@ export async function pageWithdrawal(session) {
     try {
       const rec = await submitWithdrawal(v, session);
       await modal({
-        title: 'WITHDRAWAL SUBMITTED', width: 380,
+        title: t('উত্তোলন সফল', 'Withdrawal Successful'), width: 380,
         body: `<div class="success-pop"><div class="tick">${icon('check')}</div></div>
           <div class="kv">
-            <div>Member</div><div><b>${esc(rec.memberName)}</b> (${esc(rec.memberId)})</div>
-            <div>পরিমাণ / Amount</div><div><b style="color:var(--red-dark)">${taka(rec.amount)}</b></div>
-            <div>Status</div><div>${statusTag(rec.status)}</div>
+            <div>সদস্য</div><div><b>${esc(rec.memberName)}</b> (${esc(rec.memberId)})</div>
+            <div>পরিমাণ</div><div><b style="color:var(--red-dark)">${taka(rec.amount)}</b></div>
+            <div>স্ট্যাটাস</div><div>${statusTag(rec.status)}</div>
           </div>
           <div class="banner ${rec.status === 'approved' ? 'ok' : 'info'}" style="margin-top:9px">${icon('info')}<span>${
             rec.status === 'approved' ? 'উত্তোলন সফলভাবে সংরক্ষিত হয়েছে।' : 'আবেদন দাখিল হয়েছে। Maker/Admin অনুমোদনের পর ব্যালান্স থেকে বাদ যাবে।'}</span></div>`,
-        actions: [{ label: 'OK', value: true, kind: 'primary' }],
+        actions: [{ label: t('ঠিক আছে', 'OK'), value: true, kind: 'primary' }],
       });
-      form.reset(); form.elements.date.value = todayISO();
-      await paintInfo(); App.refresh();
+      form.reset();
+      App.refresh();
     } catch (err) { toast(err.message, 'error'); }
     finally { b.disabled = false; }
   });
 
-  /* --- history list --- */
+  /* --- history list: cards on mobile, table on desktop --- */
   const mine = staff ? withdrawals : withdrawals.filter(w => w.memberDocId === session.memberDocId || w.memberId === session.memberId);
   const rows = mine.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.submittedAt).localeCompare(String(a.submittedAt)));
-  wrap.appendChild(card('উত্তোলনের ইতিহাস', 'Withdrawal History', tableWrap(
-    [{ label: 'Date' }, ...(staff ? [{ label: 'Member' }] : []), { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'বিবরণ' }, { label: 'Status' }, { label: 'Action', cls: 'nowrap' }],
-    rows.map(w => {
-      const acts = el('div', { class: 'btn-row' });
-      if (w.status === 'pending' && (session.role === 'admin' || session.role === 'maker')) {
-        acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
-          if (!(await confirmBox(`${w.memberName} — ${taka(w.amount)} উত্তোলন অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-          await setWithdrawalStatus(w.id, 'approved', session); toast('উত্তোলন অনুমোদিত / Withdrawal approved', 'success'); App.refresh();
-        }, { size: 'xs' }));
-        acts.appendChild(btn('Reject', 'reject', 'softred', async () => {
-          const r = await rejectReason('উত্তোলন বাতিলের কারণ / Withdrawal Rejection Reason');
-          if (r === null) return;
-          await setWithdrawalStatus(w.id, 'rejected', session, r); toast('উত্তোলন বাতিল / Withdrawal rejected', 'warn'); App.refresh();
-        }, { size: 'xs' }));
-      }
-      return [
-        esc(fmtDate(w.date)),
-        ...(staff ? [`${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`] : []),
-        esc(withdrawalTypeLabel(w.type).bn), esc(methodLabel(w.method).bn),
-        { text: money(w.amount), cls: 'num' }, esc(w.description || '—'),
-        { html: statusTag(w.status) }, { node: acts, cls: 'nowrap' },
-      ];
-    }),
-    { empty: 'কোনো উত্তোলন নেই / No withdrawals', emptyIcon: 'withdraw' },
-  )));
+  const wActions = w => {
+    const acts = el('div', { class: 'btn-row' });
+    if (w.status === 'pending' && (session.role === 'admin' || session.role === 'maker')) {
+      acts.appendChild(btn(t('অনুমোদন', 'Approve'), 'approve', 'soft', async () => {
+        if (!(await confirmBox(`${w.memberName} — ${taka(w.amount)} উত্তোলন অনুমোদন করবেন?`, { okLabel: t('অনুমোদন', 'Approve') }))) return;
+        await setWithdrawalStatus(w.id, 'approved', session); toast('উত্তোলন অনুমোদিত / Withdrawal approved', 'success'); App.refresh();
+      }, { size: 'xs' }));
+      acts.appendChild(btn(t('বাতিল', 'Reject'), 'reject', 'softred', async () => {
+        const r = await rejectReason('উত্তোলন বাতিলের কারণ / Withdrawal Rejection Reason');
+        if (r === null) return;
+        await setWithdrawalStatus(w.id, 'rejected', session, r); toast('উত্তোলন বাতিল / Withdrawal rejected', 'warn'); App.refresh();
+      }, { size: 'xs' }));
+    }
+    return acts;
+  };
+  const histHost = el('div', { class: 'person-list' });
+  const paintHist = () => {
+    histHost.replaceChildren();
+    if (!rows.length) {
+      histHost.appendChild(emptyState({ ic: 'withdraw', title: t('কোনো উত্তোলন নেই', 'No withdrawals') }));
+      return;
+    }
+    if (window.matchMedia && matchMedia('(max-width: 767px)').matches) {
+      rows.forEach(w => histHost.appendChild(txnCard(w, {
+        staff, typeBn: withdrawalTypeLabel(w.type).bn, actions: wActions(w),
+      })));
+    } else {
+      histHost.appendChild(tableWrap(
+        [{ label: 'তারিখ' }, ...(staff ? [{ label: 'সদস্য' }] : []), { label: 'ধরন' }, { label: 'পদ্ধতি' },
+         { label: 'পরিমাণ', cls: 'num' }, { label: 'বিবরণ' }, { label: 'স্ট্যাটাস' }, { label: 'অ্যাকশন', cls: 'nowrap' }],
+        rows.map(w => [
+          esc(fmtDate(w.date)),
+          ...(staff ? [`${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`] : []),
+          esc(withdrawalTypeLabel(w.type).bn), esc(methodLabel(w.method).bn),
+          { text: money(w.amount), cls: 'num' }, esc(w.description || '—'),
+          { html: statusTag(w.status) }, { node: wActions(w), cls: 'nowrap' },
+        ]),
+        { empty: t('কোনো উত্তোলন নেই', 'No withdrawals'), emptyIcon: 'withdraw' },
+      ));
+    }
+  };
+  if (window.matchMedia) {
+    const mq = matchMedia('(max-width: 767px)');
+    const onBp = () => {
+      if (!histHost.isConnected) { if (mq.removeEventListener) mq.removeEventListener('change', onBp); return; }
+      paintHist();
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onBp);
+  }
+  wrap.appendChild(card('উত্তোলনের ইতিহাস', 'Withdrawal History', histHost));
+  paintHist();
   return wrap;
 }
 
@@ -188,7 +283,7 @@ export async function pageDeposit(session, params = {}) {
     member = members.find(m => m.id === session.memberDocId) || null;
     if (!member) { wrap.appendChild(banner('err', 'সদস্য প্রোফাইল পাওয়া যায়নি / Member profile not found.')); return wrap; }
     if (member.status !== 'active') {
-      wrap.appendChild(banner('warn', `আপনার সদস্যপদ এখনো <b>${esc((member.status || '').toUpperCase())}</b>। অনুমোদনের পূর্বে জমা দাখিল করা যাবে না। / Your membership is not active yet — deposits cannot be submitted.`));
+      wrap.appendChild(banner('warn', `আপনার সদস্যপদ এখনো ${statusTag(member.status)}। অনুমোদনের পূর্বে জমা দাখিল করা যাবে না। / Your membership is not active yet — deposits cannot be submitted.`));
       return wrap;
     }
   }
@@ -200,41 +295,38 @@ export async function pageDeposit(session, params = {}) {
   }
 
   const infoHost = el('div');
-  const form = el('form', { class: 'grid', novalidate: true });
+  const form = el('form', { class: 'grid mform', novalidate: true });
+  let picker = null;
 
-  const memberField = staff ? `
-    <div class="field"><label>সদস্য নির্বাচন / Select Member <span class="req">*</span></label>
-      <select name="memberDocId" required>
-        <option value="">— ID — Name —</option>
-        ${activeMembers.slice().sort((a, b) => a.memberId.localeCompare(b.memberId))
-          .map(m => `<option value="${esc(m.id)}"${params.memberDocId === m.id ? ' selected' : ''}>${esc(m.memberId)} — ${esc(m.nameBn || m.nameEn)}</option>`).join('')}
-      </select><div class="err" data-err="memberDocId"></div></div>`
-    : `<div class="field"><label>সদস্য / Member</label><input value="${esc(member.memberId)} — ${esc(member.nameBn)}" readonly>
+  const memberField = staff ? '<div class="field js-pickhost"><label>সদস্য <span class="req">*</span></label></div>'
+    : `<div class="field"><label>সদস্য</label><input value="${esc(member.memberId)} — ${esc(member.nameBn)}" readonly>
         <input type="hidden" name="memberDocId" value="${esc(member.id)}"></div>`;
 
   form.innerHTML = `
     <div class="grid g2">
       ${memberField}
-      <div class="field"><label>তারিখ / Date <span class="req">*</span></label>
+      <div class="field"><label>তারিখ <span class="req">*</span></label>
         <input name="date" type="date" required value="${todayISO()}" ${session.role === 'maker' ? `max="${todayISO()}" min="${todayISO()}"` : ''}>
         ${session.role === 'maker' ? '<div class="hint">Maker শুধুমাত্র আজকের তারিখে এন্ট্রি করতে পারবেন।</div>' : ''}
         <div class="err" data-err="date"></div></div>
-      <div class="field"><label>জমার ধরন / Deposit Type <span class="req">*</span></label>
-        <select name="type" required>${DEPOSIT_TYPES.map(t => `<option value="${t.id}">${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
-      <div class="field"><label>পরিশোধ পদ্ধতি / Payment Method <span class="req">*</span></label>
-        <select name="method" required>${PAY_METHODS.map(t => `<option value="${t.id}">${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
-      <div class="field"><label>জমার পরিমাণ (৳) / Amount <span class="req">*</span></label>
+      <div class="field"><label>জমার ধরন <span class="req">*</span></label><div class="js-type"></div></div>
+      <div class="field"><label>পরিশোধ পদ্ধতি <span class="req">*</span></label><div class="js-method"></div></div>
+      <div class="field"><label>পরিমাণ (৳) <span class="req">*</span></label>
         <input name="amount" type="number" min="1" step="0.01" required inputmode="decimal" placeholder="0">
-        <div class="hint">যেকোনো পরিমাণ গ্রহণযোগ্য / Any amount is accepted</div>
+        <div class="hint">যেকোনো পরিমাণ গ্রহণযোগ্য</div>
         <div class="err" data-err="amount"></div></div>
-      <div class="field js-desc" hidden><label>বিবরণ / Description <span class="req">*</span></label>
+      <div class="field js-desc" hidden><label>বিবরণ <span class="req">*</span></label>
         <input name="description" placeholder="বিশেষ চাঁদা / অন্যান্য জমার বিবরণ"><div class="err" data-err="description"></div></div>
     </div>
-    <div class="field"><label>মন্তব্য / Comment</label><textarea name="comment" rows="2" placeholder="ঐচ্ছিক / optional"></textarea></div>
-    <div class="form-actions">
-      <button class="btn btn-primary" type="submit">${icon('save')}<span>${staff ? 'Save Deposit / জমা সংরক্ষণ' : 'Submit / জমা দাখিল'}</span></button>
-      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>Clear</span></button>
+    <div class="field"><label>মন্তব্য (ঐচ্ছিক)</label><textarea name="comment" rows="2" placeholder="ঐচ্ছিক"></textarea></div>
+    <div class="form-sticky">
+      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>${t('মুছুন', 'Clear')}</span></button>
+      <button class="btn btn-primary" type="submit">${icon('save')}<span>${staff ? t('জমা যোগ করুন', 'Add deposit') : t('জমা দাখিল করুন', 'Submit deposit')}</span></button>
     </div>`;
+  const typeSeg = segChips('type', TYPE_SHORT, 'monthly');
+  const methodSeg = segChips('method', METHOD_SHORT, 'cash');
+  form.querySelector('.js-type').appendChild(typeSeg.root);
+  form.querySelector('.js-method').appendChild(methodSeg.root);
 
   const descField = form.querySelector('.js-desc');
   const syncDesc = () => {
@@ -247,28 +339,43 @@ export async function pageDeposit(session, params = {}) {
 
   const paintInfo = async () => {
     infoHost.replaceChildren();
-    const id = form.elements.memberDocId.value;
+    /* During preselect construction the picker's hidden input is not in the
+       form yet — read through the picker then. */
+    const id = form.elements.memberDocId ? form.elements.memberDocId.value : (picker ? picker.value : '');
     if (!id) return;
     const m = await getMember(id);
     if (!m) return;
     const s = memberSummary(m, deposits, summaryOpts(cfg));
     const stats = el('div', { class: 'stats' });
     stats.append(
-      statCard({ label: 'মাসিক কিস্তি / Installment', value: taka(m.installment), sub: `${s.months} মাস হিসাবযোগ্য`, ic: 'money' }),
-      statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count} approved`, ic: 'deposit' }),
-      statCard({ label: 'বকেয়া / Due', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
-      statCard({ label: 'অগ্রিম / Advance', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance', tone: 'blue' }),
+      statCard({ label: 'মাসিক কিস্তি', value: taka(m.installment), sub: `${s.months} মাস হিসাবযোগ্য`, ic: 'money' }),
+      statCard({ label: 'মোট জমা', value: taka(s.totalDeposit), sub: `${s.count}টি অনুমোদিত`, ic: 'deposit' }),
+      statCard({ label: 'বকেয়া', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
+      statCard({ label: 'অগ্রিম', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance', tone: 'blue' }),
     );
     infoHost.appendChild(card('সদস্য সারসংক্ষেপ', `Member Summary — ${m.memberId} · ${m.nameBn}`, stats));
   };
-  if (staff) form.elements.memberDocId.addEventListener('change', paintInfo);
+  if (staff) {
+    picker = memberPicker({ members: activeMembers, value: params.memberDocId || '', onPick: () => paintInfo() });
+    const host = form.querySelector('.js-pickhost');
+    host.appendChild(picker.root);
+    host.insertAdjacentHTML('beforeend', '<div class="err" data-err="memberDocId"></div>');
+  }
 
   wrap.appendChild(infoHost);
-  wrap.appendChild(banner('info', 'প্রতি মাসের <b>১২ তারিখের</b> মধ্যে জমা না দিলে বকেয়া দেখাবে। মাসের যেকোনো দিন জমা নেওয়া যাবে। / Due after the 12th if unpaid. Deposits are accepted any day of the month.'));
-  wrap.appendChild(card(staff ? 'জমা এন্ট্রি' : 'জমা দাখিল', staff ? 'Deposit Entry' : 'Submit Deposit', form));
+  wrap.appendChild(banner('info', 'মাসের <b>১২ তারিখের</b> মধ্যে জমা না দিলে বকেয়া দেখাবে। / Due if unpaid after the 12th.'));
+  const entryCard = card(staff ? 'জমা এন্ট্রি' : 'জমা দাখিল', staff ? 'Deposit Entry' : 'Submit Deposit', form);
+  if (staff) entryCard.classList.add('overflow-visible');
+  wrap.appendChild(entryCard);
   await paintInfo();
 
-  form.addEventListener('reset', () => setTimeout(() => { form.elements.date.value = todayISO(); syncDesc(); paintInfo(); }, 0));
+  /* Native reset restores hidden inputs but not chip/picker UI — sync it all. */
+  form.addEventListener('reset', () => setTimeout(() => {
+    if (picker) picker.set(params.memberDocId || '');
+    typeSeg.reset(); methodSeg.reset();
+    form.elements.date.value = todayISO();
+    syncDesc(); paintInfo();
+  }, 0));
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
@@ -300,22 +407,114 @@ export async function pageDeposit(session, params = {}) {
 
 function depositSuccess(rec) {
   return modal({
-    title: 'DEPOSIT SUCCESSFUL', width: 380,
+    title: t('জমা সফল', 'Deposit Successful'), width: 380,
     body: `<div class="success-pop"><div class="tick">${icon('check')}</div></div>
       <div class="kv">
-        <div>Member</div><div><b>${esc(rec.memberName)}</b> (${esc(rec.memberId)})</div>
-        <div>তারিখ / Date</div><div>${esc(fmtDate(rec.date))}</div>
-        <div>ধরন / Type</div><div>${esc(typeLabel(rec.type).bn)}</div>
-        <div>পদ্ধতি / Method</div><div>${esc(methodLabel(rec.method).bn)}</div>
-        <div>পরিমাণ / Amount</div><div><b style="color:var(--green-dark);font-size:11px">${taka(rec.amount)}</b></div>
-        <div>Status</div><div>${statusTag(rec.status)}</div>
+        <div>সদস্য</div><div><b>${esc(rec.memberName)}</b> (${esc(rec.memberId)})</div>
+        <div>তারিখ</div><div>${esc(fmtDate(rec.date))}</div>
+        <div>ধরন</div><div>${esc(typeLabel(rec.type).bn)}</div>
+        <div>পদ্ধতি</div><div>${esc(methodLabel(rec.method).bn)}</div>
+        <div>পরিমাণ</div><div><b style="color:var(--green-dark);font-size:11px">${taka(rec.amount)}</b></div>
+        <div>স্ট্যাটাস</div><div>${statusTag(rec.status)}</div>
       </div>
       <div class="banner ${rec.status === 'approved' ? 'ok' : 'info'}" style="margin-top:9px">${icon('info')}<span>${
         rec.status === 'approved'
           ? 'জমা সফলভাবে সংরক্ষিত ও অনুমোদিত হয়েছে।'
           : 'আপনার জমা সফলভাবে দাখিল হয়েছে। Maker/Admin অনুমোদনের পর এটি হিসাবে যুক্ত হবে।'}</span></div>`,
-    actions: [{ label: 'OK', value: true, kind: 'primary' }],
+    actions: [{ label: t('ঠিক আছে', 'OK'), value: true, kind: 'primary' }],
   });
+}
+
+/* Compact transaction card (mobile lists): date · type + tag / member / amount ·
+   method / actions. Shared by the deposit history and the withdrawal history. */
+function txnCard(d, { staff, typeBn, actions = null }) {
+  const c = el('div', { class: 'tcard' });
+  const top = el('div', { class: 'tc-top' });
+  top.innerHTML = `<span class="tc-t">${esc(fmtDate(d.date))} · ${esc(typeBn)}</span>`;
+  top.insertAdjacentHTML('beforeend', statusTag(d.status));
+  c.appendChild(top);
+  if (staff) c.appendChild(el('div', { class: 'tc-sub', text: `${d.memberName} · ${d.memberId}` }));
+  const amt = el('div', { class: 'tc-amt' });
+  amt.innerHTML = `<b>${money(d.amount)}</b><span> · ${esc(methodLabel(d.method).bn)}</span>`;
+  c.appendChild(amt);
+  if (d.description) c.appendChild(el('div', { class: 'tc-desc', text: d.description }));
+  if (actions && actions.children.length) {
+    const a = el('div', { class: 'pc-acts' });
+    a.appendChild(actions);
+    c.appendChild(a);
+  }
+  return c;
+}
+
+/* Row actions for one deposit — identical logic for the card and the table,
+   only Bengali labels. Approve/Reject/Edit/Delete/View permissions untouched. */
+function depositActions(session, d, staff) {
+  const acts = el('div', { class: 'btn-row' });
+  if (d.status === 'pending' && can(session, 'deposit:approve')) {
+    acts.appendChild(btn(t('অনুমোদন', 'Approve'), 'approve', 'soft', async () => {
+      if (!(await confirmBox(`${d.memberName} — ${taka(d.amount)} জমাটি অনুমোদন করবেন?`, { okLabel: t('অনুমোদন', 'Approve') }))) return;
+      await setDepositStatus(d.id, 'approved', session); toast('জমা অনুমোদিত / Deposit approved', 'success'); App.refresh();
+    }, { size: 'xs' }));
+    acts.appendChild(btn(t('বাতিল', 'Reject'), 'reject', 'softred', async () => {
+      const r = await rejectReason('জমা বাতিলের কারণ / Deposit Rejection Reason');
+      if (r === null) return;
+      await setDepositStatus(d.id, 'rejected', session, r); toast('জমা বাতিল / Deposit rejected', 'warn'); App.refresh();
+    }, { size: 'xs' }));
+  }
+  const perm = canModifyDeposit(d, session);
+  if (staff && perm.ok) {
+    acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => editDeposit(session, d), { size: 'xs' }));
+    acts.appendChild(btn(t('মুছুন', 'Delete'), 'trash', 'softred', async () => {
+      if (!(await confirmBox(`${d.memberName} — ${taka(d.amount)} (${fmtDate(d.date)}) জমাটি মুছে ফেলবেন? এটি ফেরানো যাবে না।`, { okLabel: t('মুছুন', 'Delete'), danger: true }))) return;
+      try { await deleteDeposit(d.id, session); toast('জমা মুছে ফেলা হয়েছে / Deposit deleted', 'warn'); App.refresh(); }
+      catch (err) { toast(err.message, 'error'); }
+    }, { size: 'xs' }));
+  }
+  acts.appendChild(btn(t('দেখুন', 'View'), 'eye', 'ghost', () => viewDeposit(d), { size: 'xs' }));
+  return acts;
+}
+
+const DEP_STATUS_OPTS = [
+  { value: '', bn: 'সব', en: 'All' },
+  { value: 'pending', bn: 'অপেক্ষমাণ', en: 'Pending' },
+  { value: 'approved', bn: 'অনুমোদিত', en: 'Approved' },
+  { value: 'rejected', bn: 'বাতিল', en: 'Rejected' },
+];
+
+/* Reusable filter sheet: single-select chip groups + date range. Picks stay
+   local until [প্রয়োগ করুন]; [ফিল্টার মুছুন] clears everything. */
+function filterSheet({ state, onApply, onClear }) {
+  const tmp = { ...state };
+  const body = el('div', { class: 'fsheet' });
+  const grp = (label, opts, key) => {
+    const sec = el('div', { class: 'fsheet-sec' });
+    sec.appendChild(el('div', { class: 'fsheet-lbl', text: label }));
+    sec.appendChild(segChips('f_' + key, opts, tmp[key], { onChange: v => { tmp[key] = v; } }).root);
+    body.appendChild(sec);
+  };
+  grp(t('স্ট্যাটাস', 'Status'), DEP_STATUS_OPTS, 'st');
+  grp(t('ধরন', 'Type'), [{ value: '', bn: 'সব', en: 'All' }, ...TYPE_SHORT], 'tp');
+  grp(t('পদ্ধতি', 'Method'), [{ value: '', bn: 'সব', en: 'All' }, ...METHOD_SHORT], 'mt');
+  const dates = el('div', { class: 'fsheet-dates' });
+  const mkD = (lbl, val) => {
+    const f = el('div', { class: 'field' });
+    f.appendChild(el('label', { text: lbl }));
+    const i = el('input', { type: 'date', value: val || '' });
+    f.appendChild(i);
+    dates.appendChild(f);
+    return i;
+  };
+  const fromI = mkD(t('তারিখ: শুরু', 'Date: from'), tmp.from);
+  const toI = mkD(t('শেষ', 'to'), tmp.to);
+  body.appendChild(dates);
+  const bar = el('div', { class: 'fsheet-actions' });
+  const applyB = el('button', { type: 'button', class: 'btn btn-primary', text: t('প্রয়োগ করুন', 'Apply') });
+  const clearB = el('button', { type: 'button', class: 'btn btn-ghost', text: t('ফিল্টার মুছুন', 'Clear filters') });
+  bar.append(applyB, clearB);
+  body.appendChild(bar);
+  const { close } = bottomSheet({ title: t('ফিল্টার', 'Filter'), body });
+  applyB.addEventListener('click', () => { tmp.from = fromI.value; tmp.to = toI.value; close(); onApply(tmp); });
+  clearB.addEventListener('click', () => { close(); onClear(); });
 }
 
 /* ==================== Deposit history ==================== */
@@ -326,47 +525,46 @@ export async function pageDepositHistory(session, params = {}) {
 
   const mine = staff ? deposits : deposits.filter(d => d.memberDocId === session.memberDocId || d.memberId === session.memberId);
 
-  /* filters */
-  const bar = el('div', { class: 'toolbar' });
+  /* filter state lives here now — the sheet only edits a copy until Apply */
+  let st = params.status || '', tp = '', mt = '', from = '', to = '';
+
+  const head = el('div', { class: 'txn-head' });
   const searchBox = el('div', { class: 'search-box', html: icon('search') });
-  const q = el('input', { placeholder: 'Member ID / নাম / বিবরণ', autocomplete: 'off' });
+  const q = el('input', {
+    placeholder: t('সদস্য / বিবরণ / টাকা…', 'Member / note / amount…'),
+    autocomplete: 'off', 'aria-label': t('লেনদেন খুঁজুন', 'Search transactions'),
+  });
   searchBox.appendChild(q);
-  const mk = (label, node, w = '132px') => { const f = el('div', { class: 'field', style: `flex:0 1 ${w}` }); f.appendChild(el('label', { text: label })); f.appendChild(node); return f; };
-  const stSel = el('select');
-  [['', 'সব স্ট্যাটাস / All'], ['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected']].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
-  if (params.status) stSel.value = params.status;
-  const tpSel = el('select');
-  tpSel.appendChild(el('option', { value: '' }, ['সব ধরন / All types']));
-  DEPOSIT_TYPES.forEach(t => tpSel.appendChild(el('option', { value: t.id }, [`${t.bn} / ${t.en}`])));
-  const mtSel = el('select');
-  mtSel.appendChild(el('option', { value: '' }, ['সব পদ্ধতি / All methods']));
-  PAY_METHODS.forEach(t => mtSel.appendChild(el('option', { value: t.id }, [`${t.bn} / ${t.en}`])));
-  const from = el('input', { type: 'date' });
-  const to = el('input', { type: 'date' });
-  bar.append(searchBox, mk('Status', stSel), mk('ধরন / Type', tpSel), mk('পদ্ধতি / Method', mtSel), mk('হইতে / From', from, '120px'), mk('পর্যন্ত / To', to, '120px'));
-  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; stSel.value = ''; tpSel.value = ''; mtSel.value = ''; from.value = ''; to.value = ''; render(); }));
-  wrap.appendChild(bar);
+  const filterBtn = el('button', { type: 'button', class: 'btn btn-ghost filter-btn', 'aria-label': t('ফিল্টার', 'Filter') });
+  const paintBadge = () => {
+    const n = [st, tp, mt, from, to].filter(Boolean).length;
+    filterBtn.innerHTML = `${icon('filter')}<span>${esc(t('ফিল্টার', 'Filter'))}</span>${n ? `<span class="fbadge">${n}</span>` : ''}`;
+  };
+  paintBadge();
+  filterBtn.addEventListener('click', () => filterSheet({
+    state: { st, tp, mt, from, to },
+    onApply: s => { ({ st, tp, mt, from, to } = s); paintBadge(); render(); },
+    onClear: () => { st = tp = mt = from = to = ''; paintBadge(); render(); },
+  }));
+  head.append(searchBox, filterBtn);
+  wrap.appendChild(head);
 
   const sumHost = el('div');
   wrap.appendChild(sumHost);
-
-  const listCard = card('জমার তালিকা', 'Deposit Records', el('div'), [
-    btn('Excel', 'excel', 'soft', () => exportRows('xlsx'), { size: 'xs' }),
-    btn('CSV', 'csv', 'ghost', () => exportRows('csv'), { size: 'xs' }),
-  ]);
-  wrap.appendChild(listCard);
+  const listHost = el('div', { class: 'person-list' });
+  wrap.appendChild(listHost);
 
   let current = [];
   const filtered = () => {
-    const t = q.value.trim().toLowerCase();
+    const query = q.value.trim().toLowerCase();
     return mine.filter(d => {
-      if (stSel.value && d.status !== stSel.value) return false;
-      if (tpSel.value && d.type !== tpSel.value) return false;
-      if (mtSel.value && d.method !== mtSel.value) return false;
+      if (st && d.status !== st) return false;
+      if (tp && d.type !== tp) return false;
+      if (mt && d.method !== mt) return false;
       const dt = String(d.date).slice(0, 10);
-      if (from.value && dt < from.value) return false;
-      if (to.value && dt > to.value) return false;
-      if (t && ![d.memberId, d.memberName, d.description, d.comment, String(d.amount)].some(x => String(x || '').toLowerCase().includes(t))) return false;
+      if (from && dt < from) return false;
+      if (to && dt > to) return false;
+      if (query && ![d.memberId, d.memberName, d.description, d.comment, String(d.amount)].some(x => String(x || '').toLowerCase().includes(query))) return false;
       return true;
     }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.submittedAt).localeCompare(String(a.submittedAt)));
   };
@@ -380,6 +578,10 @@ export async function pageDepositHistory(session, params = {}) {
     if (kind === 'csv') downloadCSV(rows, fn + '.csv');
     else downloadExcel([{ name: 'Deposit History', rows }], fn + '.xlsx');
   };
+  const exportBtn = (kind, ic, label) => el('button', {
+    type: 'button', class: 'icon-btn', html: icon(ic),
+    title: label, 'aria-label': label, onclick: () => exportRows(kind),
+  });
 
   const render = () => {
     current = filtered();
@@ -387,42 +589,37 @@ export async function pageDepositHistory(session, params = {}) {
     const pend = current.filter(d => d.status === 'pending');
     const stats = el('div', { class: 'stats' });
     stats.append(
-      statCard({ label: 'রেকর্ড / Records', value: String(current.length), sub: 'ফিল্টার অনুযায়ী', ic: 'log', tone: 'gray' }),
-      statCard({ label: 'অনুমোদিত জমা / Approved', value: taka(appr.reduce((s, d) => s + num(d.amount), 0)), sub: `${appr.length} entry`, ic: 'approve' }),
-      statCard({ label: 'অপেক্ষমাণ / Pending', value: taka(pend.reduce((s, d) => s + num(d.amount), 0)), sub: `${pend.length} entry`, ic: 'pending', tone: 'amber' }),
+      statCard({ label: 'রেকর্ড', value: String(current.length), sub: 'ফিল্টার অনুযায়ী', ic: 'log', tone: 'gray' }),
+      statCard({ label: 'অনুমোদিত জমা', value: taka(appr.reduce((s, d) => s + num(d.amount), 0)), sub: `${appr.length}টি এন্ট্রি`, ic: 'approve' }),
+      statCard({ label: 'অপেক্ষমাণ', value: taka(pend.reduce((s, d) => s + num(d.amount), 0)), sub: `${pend.length}টি এন্ট্রি`, ic: 'pending', tone: 'amber' }),
     );
-    sumHost.replaceChildren(card('সারসংক্ষেপ', 'Summary', stats));
+    sumHost.replaceChildren(card('সারসংক্ষেপ', 'Summary', stats, [
+      exportBtn('xlsx', 'excel', t('Excel ডাউনলোড', 'Download Excel')),
+      exportBtn('csv', 'csv', t('CSV ডাউনলোড', 'Download CSV')),
+    ]));
 
-    const body = listCard.body;
-    body.replaceChildren();
-    body.appendChild(tableWrap(
-      [{ label: 'SL', cls: 'num' }, { label: 'Date' }, ...(staff ? [{ label: 'Member' }] : []),
-       { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' },
-       { label: 'বিবরণ / Description' }, { label: 'Status' }, { label: 'Action', cls: 'nowrap' }],
-      current.map((d, i) => {
-        const acts = el('div', { class: 'btn-row' });
-        if (d.status === 'pending' && can(session, 'deposit:approve')) {
-          acts.appendChild(btn('Approve', 'approve', 'soft', async () => {
-            if (!(await confirmBox(`${d.memberName} — ${taka(d.amount)} জমাটি অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-            await setDepositStatus(d.id, 'approved', session); toast('জমা অনুমোদিত / Deposit approved', 'success'); App.refresh();
-          }, { size: 'xs' }));
-          acts.appendChild(btn('Reject', 'reject', 'softred', async () => {
-            const r = await rejectReason('জমা বাতিলের কারণ / Deposit Rejection Reason');
-            if (r === null) return;
-            await setDepositStatus(d.id, 'rejected', session, r); toast('জমা বাতিল / Deposit rejected', 'warn'); App.refresh();
-          }, { size: 'xs' }));
-        }
-        const perm = canModifyDeposit(d, session);
-        if (staff && perm.ok) {
-          acts.appendChild(btn('Edit', 'edit', 'ghost', () => editDeposit(session, d), { size: 'xs' }));
-          acts.appendChild(btn('Delete', 'trash', 'softred', async () => {
-            if (!(await confirmBox(`${d.memberName} — ${taka(d.amount)} (${fmtDate(d.date)}) জমাটি মুছে ফেলবেন? এটি ফেরানো যাবে না।`, { okLabel: 'Delete', danger: true }))) return;
-            try { await deleteDeposit(d.id, session); toast('জমা মুছে ফেলা হয়েছে / Deposit deleted', 'warn'); App.refresh(); }
-            catch (err) { toast(err.message, 'error'); }
-          }, { size: 'xs' }));
-        }
-        acts.appendChild(btn('View', 'eye', 'ghost', () => viewDeposit(d), { size: 'xs' }));
-        return [
+    listHost.replaceChildren();
+    if (!current.length) {
+      const filteredOut = q.value.trim() || st || tp || mt || from || to;
+      listHost.appendChild(emptyState({
+        ic: 'deposit',
+        title: t('কোনো জমা পাওয়া যায়নি', 'No deposit records found'),
+        hint: filteredOut ? t('খোঁজ বা ফিল্টার বদলে আবার দেখুন', 'Try a different search or filter') : '',
+        actionLabel: can(session, 'deposit:create-any') ? t('জমা এন্ট্রি', 'Add deposit') : '',
+        onAction: can(session, 'deposit:create-any') ? () => App.go('deposit', { tab: 'entry' }) : null,
+      }));
+      return;
+    }
+    if (window.matchMedia && matchMedia('(max-width: 767px)').matches) {
+      current.forEach(d => listHost.appendChild(txnCard(d, {
+        staff, typeBn: typeLabel(d.type).bn, actions: depositActions(session, d, staff),
+      })));
+    } else {
+      listHost.appendChild(tableWrap(
+        [{ label: 'ক্রম', cls: 'num' }, { label: 'তারিখ' }, ...(staff ? [{ label: 'সদস্য' }] : []),
+         { label: 'ধরন' }, { label: 'পদ্ধতি' }, { label: 'পরিমাণ', cls: 'num' },
+         { label: 'বিবরণ' }, { label: 'স্ট্যাটাস' }, { label: 'অ্যাকশন', cls: 'nowrap' }],
+        current.map((d, i) => [
           { text: String(i + 1), cls: 'num' },
           esc(fmtDate(d.date)),
           ...(staff ? [`${esc(d.memberName)}<br><span class="faint fs8">${esc(d.memberId)}</span>`] : []),
@@ -431,22 +628,31 @@ export async function pageDepositHistory(session, params = {}) {
           { text: money(d.amount), cls: 'num' },
           esc(d.description || '—'),
           { html: statusTag(d.status) },
-          { node: acts, cls: 'nowrap' },
-        ];
-      }),
-      {
-        empty: 'কোনো জমা পাওয়া যায়নি / No deposit records found',
-        emptyIcon: 'deposit',
-        footer: current.length ? [
-          { html: '', cls: '' }, { html: 'সর্বমোট / Total' }, ...(staff ? [{ html: '' }] : []), { html: '' }, { html: '' },
-          { html: `<b>${money(current.reduce((s, d) => s + num(d.amount), 0))}</b>`, cls: 'num' }, { html: '' }, { html: '' }, { html: '' },
-        ] : null,
-      },
-    ));
+          { node: depositActions(session, d, staff), cls: 'nowrap' },
+        ]),
+        {
+          empty: t('কোনো জমা পাওয়া যায়নি', 'No deposit records found'),
+          emptyIcon: 'deposit',
+          footer: [
+            { html: '', cls: '' }, { html: 'সর্বমোট' }, ...(staff ? [{ html: '' }] : []), { html: '' }, { html: '' },
+            { html: `<b>${money(current.reduce((s, d) => s + num(d.amount), 0))}</b>`, cls: 'num' }, { html: '' }, { html: '' }, { html: '' },
+          ],
+        },
+      ));
+    }
   };
 
+  /* Re-render cards ⇄ table when the viewport crosses the breakpoint. */
+  if (window.matchMedia) {
+    const mq = matchMedia('(max-width: 767px)');
+    const onBp = () => {
+      if (!listHost.isConnected) { if (mq.removeEventListener) mq.removeEventListener('change', onBp); return; }
+      render();
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onBp);
+  }
+
   q.addEventListener('input', debounce(render, 180));
-  [stSel, tpSel, mtSel, from, to].forEach(x => x.addEventListener('change', render));
   render();
   return wrap;
 }
@@ -455,39 +661,39 @@ function viewDeposit(d) {
   return modal({
     title: `জমার বিবরণ / Deposit — ${d.memberId}`, width: 420,
     body: kv([
-      ['Member', `<b>${esc(d.memberName)}</b> (${esc(d.memberId)})`],
-      ['তারিখ / Date', esc(fmtDate(d.date))],
-      ['ধরন / Type', `${esc(typeLabel(d.type).bn)} / ${esc(typeLabel(d.type).en)}`],
-      ['পদ্ধতি / Method', `${esc(methodLabel(d.method).bn)} / ${esc(methodLabel(d.method).en)}`],
-      ['পরিমাণ / Amount', `<b>${taka(d.amount)}</b>`],
-      ['বিবরণ / Description', esc(d.description || '')],
-      ['মন্তব্য / Comment', esc(d.comment || '')],
-      ['Status', statusTag(d.status)],
-      ['দাখিল / Submitted', `${esc(fmtDateTime(d.submittedAt))} <span class="faint">(${esc(d.submittedByRole || '')})</span>`],
-      ['অনুমোদন / Approved', d.approvedAt ? esc(fmtDateTime(d.approvedAt)) : ''],
-      ['বাতিলের কারণ / Reject reason', esc(d.rejectReason || '')],
+      ['সদস্য', `<b>${esc(d.memberName)}</b> (${esc(d.memberId)})`],
+      ['তারিখ', esc(fmtDate(d.date))],
+      ['ধরন', esc(typeLabel(d.type).bn)],
+      ['পদ্ধতি', esc(methodLabel(d.method).bn)],
+      ['পরিমাণ', `<b>${taka(d.amount)}</b>`],
+      ['বিবরণ', esc(d.description || '')],
+      ['মন্তব্য', esc(d.comment || '')],
+      ['স্ট্যাটাস', statusTag(d.status)],
+      ['দাখিল', `${esc(fmtDateTime(d.submittedAt))} <span class="faint">(${esc(d.submittedByRole || '')})</span>`],
+      ['অনুমোদন', d.approvedAt ? esc(fmtDateTime(d.approvedAt)) : ''],
+      ['বাতিলের কারণ', esc(d.rejectReason || '')],
       ['Sync', esc(d.syncStatus || 'local')],
     ]),
-    actions: [{ label: 'Close', value: true, kind: 'ghost' }],
+    actions: [{ label: t('বন্ধ করুন', 'Close'), value: true, kind: 'ghost' }],
   });
 }
 
 function editDeposit(session, d) {
   const body = el('div');
   body.innerHTML = `
-    <form class="grid js-f" novalidate>
+    <form class="grid mform js-f" novalidate>
       <div class="grid g2">
-        <div class="field"><label>Member</label><input value="${esc(d.memberId)} — ${esc(d.memberName)}" readonly></div>
-        <div class="field"><label>তারিখ / Date <span class="req">*</span></label>
+        <div class="field"><label>সদস্য</label><input value="${esc(d.memberId)} — ${esc(d.memberName)}" readonly></div>
+        <div class="field"><label>তারিখ <span class="req">*</span></label>
           <input name="date" type="date" value="${esc(String(d.date).slice(0, 10))}" ${session.role === 'maker' ? `min="${todayISO()}" max="${todayISO()}"` : ''}></div>
-        <div class="field"><label>ধরন / Type <span class="req">*</span></label>
-          <select name="type">${DEPOSIT_TYPES.map(t => `<option value="${t.id}"${t.id === d.type ? ' selected' : ''}>${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
-        <div class="field"><label>পদ্ধতি / Method <span class="req">*</span></label>
-          <select name="method">${PAY_METHODS.map(t => `<option value="${t.id}"${t.id === d.method ? ' selected' : ''}>${esc(t.bn)} / ${esc(t.en)}</option>`).join('')}</select></div>
+        <div class="field"><label>ধরন <span class="req">*</span></label>
+          <select name="type">${DEPOSIT_TYPES.map(t => `<option value="${t.id}"${t.id === d.type ? ' selected' : ''}>${esc(t.bn)}</option>`).join('')}</select></div>
+        <div class="field"><label>পদ্ধতি <span class="req">*</span></label>
+          <select name="method">${PAY_METHODS.map(t => `<option value="${t.id}"${t.id === d.method ? ' selected' : ''}>${esc(t.bn)}</option>`).join('')}</select></div>
         <div class="field"><label>পরিমাণ (৳) <span class="req">*</span></label><input name="amount" type="number" min="1" step="0.01" value="${esc(d.amount)}"></div>
-        <div class="field"><label>বিবরণ / Description</label><input name="description" value="${esc(d.description || '')}"></div>
+        <div class="field"><label>বিবরণ</label><input name="description" value="${esc(d.description || '')}"></div>
       </div>
-      <div class="field"><label>মন্তব্য / Comment</label><textarea name="comment" rows="2">${esc(d.comment || '')}</textarea></div>
+      <div class="field"><label>মন্তব্য (ঐচ্ছিক)</label><textarea name="comment" rows="2">${esc(d.comment || '')}</textarea></div>
       <div class="err js-err"></div>
     </form>`;
   const f = body.querySelector('.js-f');
@@ -495,16 +701,16 @@ function editDeposit(session, d) {
   return modal({
     title: 'জমা সম্পাদনা / Edit Deposit', body, width: 480,
     actions: [
-      { label: 'Cancel', value: null, kind: 'ghost' },
+      { label: t('ফিরে যান', 'Cancel'), value: null, kind: 'ghost' },
       {
-        label: 'Update', kind: 'primary', value: true,
+        label: t('পরিবর্তন সংরক্ষণ', 'Save changes'), kind: 'primary', value: true,
         onClick: () => {
           const v = Object.fromEntries(new FormData(f).entries());
           errBox.textContent = '';
           if (!(num(v.amount) > 0)) { errBox.textContent = 'সঠিক পরিমাণ দিন'; return false; }
           if ((v.type === 'special' || v.type === 'other') && !String(v.description || '').trim()) { errBox.textContent = 'বিবরণ আবশ্যক'; return false; }
           updateDeposit(d.id, v, session)
-            .then(() => { toast('জমা হালনাগাদ হয়েছে / Deposit updated', 'success'); App.refresh(); })
+            .then(() => { toast('জমা সংরক্ষণ হয়েছে / Deposit updated', 'success'); App.refresh(); })
             .catch(err => toast(err.message, 'error'));
           return true;
         },

@@ -196,11 +196,14 @@ export async function withSkeleton(host, render, opts = {}) {
 }
 
 /** Mobile bottom sheet (used by the “More” menu). Returns { close }. */
-export function bottomSheet({ title, items = [] } = {}) {
+export function bottomSheet({ title, items = [], body = null } = {}) {
   const back = el('div', { class: 'sheet-backdrop' });
   const sheet = el('div', { class: 'sheet' });
   sheet.appendChild(el('div', { class: 'sheet-grab' }));
   if (title) sheet.appendChild(el('div', { class: 'sheet-title', text: tx(title) }));
+  /* Custom bodies (e.g. filter forms) render above the item list; a body-only
+     sheet leaves the list empty, which renders nothing. */
+  if (body) sheet.appendChild(body);
   const list = el('div', { class: 'sheet-list' });
   items.forEach(it => {
     if (it === 'sep') { list.appendChild(el('div', { class: 'sheet-sep' })); return; }

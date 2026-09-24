@@ -972,3 +972,36 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
 .pc-nums{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted);margin-top:5px}
 .pc-nums b{color:var(--text);font-variant-numeric:tabular-nums}
 .pc-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+
+/* ============ Phase GA — deposit / withdrawal / transactions ============ */
+/* --- segmented single-select chips (forms + filter sheet) --- */
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg-chip{font:inherit;font-size:13px;font-weight:700;min-height:40px;padding:8px 14px;border-radius:20px;
+  border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap}
+.seg-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.form-sticky .btn-ghost{flex:0 0 auto}
+/* --- transaction cards (mobile lists) --- */
+.tcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:11px 13px}
+.tc-top{display:flex;align-items:center;gap:8px;min-height:30px}
+.tc-t{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-top .tag{margin-left:auto;flex:none}
+.tc-sub{font-size:12.5px;color:var(--muted);margin-top:1px}
+.tc-amt{margin-top:5px;font-size:12.5px;color:var(--muted)}
+.tc-amt b{font-size:14.5px;color:var(--text);font-variant-numeric:tabular-nums}
+.tc-desc{font-size:12.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* --- transactions header: search + filter button with badge --- */
+.txn-head{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.txn-head .search-box{flex:1;min-width:0}
+.filter-btn{position:relative;flex:none}
+.fbadge{position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:11px;
+  background:var(--green);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
+/* --- filter sheet body --- */
+.sheet{max-height:92vh;max-height:92dvh;overflow-y:auto}
+.fsheet{padding:2px 18px 4px;display:flex;flex-direction:column;gap:13px}
+.fsheet-lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.fsheet-dates{display:flex;gap:8px}
+.fsheet-dates .field{flex:1;min-width:0}
+.fsheet-actions{display:flex;gap:8px;margin-top:2px}
+.fsheet-actions .btn{flex:1;min-height:48px}
+/* export icon buttons in summary card head */
+.card-head .icon-btn{width:32px;height:32px;font-size:15px}
