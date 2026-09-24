@@ -12,6 +12,11 @@ npx firebase-tools serve --only hosting
 
 Default first login: `admin` / `admin` (change immediately).
 
+> **Note:** `admin` / `admin` only works while no admin exists yet. When cloud
+> sync is on, the app checks Firebase first (this needs internet). Once an admin
+> has been set up on any device, the default login is refused everywhere.
+> Sign in with the username/password chosen during setup.
+
 ## Deploy
 
 - **Firebase Hosting:** see [FIREBASE_HOSTING.md](FIREBASE_HOSTING.md) — `./deploy-to-firebase.sh`

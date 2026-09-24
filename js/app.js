@@ -4,7 +4,7 @@ import { logoSrc } from './brand.js';
 import { setLang, getLang } from './i18n.js';
 import { icon } from './icons.js';
 import { openDB } from './db.js';
-import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS } from './auth.js';
+import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS, checkBootstrapSession } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
@@ -153,6 +153,15 @@ export const App = {
 
     // first-time admin setup / forced password change gates
     if (session.role === 'admin' && (session.isBootstrap || session.profileComplete === false)) {
+      if (session.isBootstrap) {
+        try { await checkBootstrapSession(session); }
+        catch (e) {
+          this.session = null; window.DS_SESSION = null; applyRole('');
+          this.showAuth();
+          alertBox(e.message, 'লগইন / Login');
+          return;
+        }
+      }
       const done = await adminSetupWizard(session);
       if (!done) { await logout(); this.session = null; this.showAuth(); return; }
       this.session = done;

@@ -3,7 +3,7 @@ export const DEFAULT_LOGO = './icons/logo.png';
 
 /** Single source of truth for the app version. Keep in step with the cache
  *  buster on index.html (`?v=`) and css/app.css when releasing. */
-export const APP_VERSION = '6.5.12';
+export const APP_VERSION = '6.5.13';
 
 export function logoSrc(cfg) {
   const v = cfg && cfg.orgLogo;

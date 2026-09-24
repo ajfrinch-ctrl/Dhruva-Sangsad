@@ -114,7 +114,11 @@ export async function removeRecord(store, id, { queue = true } = {}) {
 export async function applyRemote(store, record) {
   if (!record || !record.id) return null;
   const local = await dbGet(store, record.id);
-  if (local) {
+  // The untouched default admin (admin/admin) never wins against a record from
+  // the server — otherwise a fresh device could keep admin/admin alive and then
+  // overwrite the real admin in the cloud.
+  const bootstrapLoses = store === 'users' && local && local.isBootstrap && !record.isBootstrap;
+  if (local && !bootstrapLoses) {
     const lu = Date.parse(local.updatedAt || 0) || 0;
     const ru = Date.parse(record.updatedAt || 0) || 0;
     if (lu > ru) {

@@ -32,6 +32,14 @@ const SYNCMETA_PATH = 'syncMetadata';
 /* Maps a Firebase Auth uid → app account (localId + role) so security rules can
    enforce admin/maker/member separation without storing plaintext credentials. */
 const AUTH_INDEX_PATH = 'authIndex';
+/* Write-once marker set as soon as a real (non-default) admin exists. Readable
+   by any signed-in client — including an anonymous fresh device — so the
+   default admin/admin account can be refused before the users/ list syncs. */
+const ADMIN_READY_PATH = 'bootstrap/adminReady';
+
+const withTimeout = (p, ms, label = 'timeout') => Promise.race([
+  p, new Promise((_, rej) => setTimeout(() => rej(new Error(label)), ms)),
+]);
 
 class FirebaseBridge extends EventTarget {
   constructor() {
@@ -39,6 +47,7 @@ class FirebaseBridge extends EventTarget {
     this.app = null; this.auth = null; this.db = null;
     this.config = null; this.status = 'offline'; this.listeners = [];
     this.ready = false; this.lastError = null; this.syncing = false;
+    this.initPromise = null;
   }
 
   get configured() { return !!this.config && !!this.config.databaseURL; }
@@ -75,7 +84,12 @@ class FirebaseBridge extends EventTarget {
     this.app = null; this.auth = null; this.db = null; this.ready = false;
   }
 
-  async init() {
+  init() {
+    this.initPromise = this._init();
+    return this.initPromise;
+  }
+
+  async _init() {
     await this.loadConfig();
     if (!this.config) { this.setStatus(navigator.onLine ? 'online' : 'offline'); return false; }
     if (typeof window.firebase === 'undefined') { this.setStatus('sync-error', 'Firebase SDK not loaded'); return false; }
@@ -161,6 +175,7 @@ class FirebaseBridge extends EventTarget {
     for (const it of items.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))) {
       if (!SYNCED_STORES.includes(it.store)) { await queueRemove(it.id); continue; }
       if (it.store === 'settings' && it.recordId === 'firebaseConfig') { await queueRemove(it.id); continue; }
+      if (it.store === 'users' && it.op !== 'delete' && it.payload && it.payload.isBootstrap) { await queueRemove(it.id); continue; }
       try {
         const path = `${PATHS[it.store]}/${it.recordId}`;
         if (it.op === 'delete') await this.db.ref(path).remove();
@@ -258,6 +273,59 @@ class FirebaseBridge extends EventTarget {
     }
     return cred;
   }
+  /**
+   * Ask the cloud whether a real admin already exists. Used to decide whether
+   * the default admin/admin account may be used on this device.
+   *   'local'   — Firebase is not configured/disconnected: local-only install
+   *   'none'    — cloud reachable and no admin has been set up yet
+   *   'exists'  — an admin already exists (its records are applied locally)
+   *   'unknown' — cloud could not be reached / read (offline, timeout, denied)
+   */
+  async cloudAdminState({ timeout = 10000 } = {}) {
+    if (this.initPromise) { try { await withTimeout(this.initPromise, timeout); } catch {} }
+    else if (!this.config) await this.loadConfig();
+    if (!this.config) return { state: 'local' };
+    if (!this.ready || !this.db) return { state: 'unknown', error: this.lastError || 'Firebase not ready' };
+    if (this.auth && !this.auth.currentUser) { try { await withTimeout(this.ensureSignedIn(), timeout); } catch {} }
+
+    let flagReadable = false;
+    try {
+      const flag = await withTimeout(this.db.ref(ADMIN_READY_PATH).get(), timeout);
+      flagReadable = true;
+      if (flag.exists() && flag.val()) {
+        const admins = await this._fetchCloudAdmins(timeout).catch(() => []);
+        return { state: 'exists', admins };
+      }
+    } catch (e) { this.lastError = e.message; }
+
+    try {
+      const admins = await this._fetchCloudAdmins(timeout);
+      if (admins.length) { this.markAdminReady(); return { state: 'exists', admins }; }
+      return { state: 'none' };
+    } catch (e) {
+      this.lastError = e.message;
+      // users/ is admin-only under the strict rules; the readable, absent flag
+      // is then the authoritative answer.
+      return flagReadable ? { state: 'none' } : { state: 'unknown', error: e.message };
+    }
+  }
+
+  async _fetchCloudAdmins(timeout) {
+    const snap = await withTimeout(this.db.ref(PATHS.users).get(), timeout);
+    const val = snap.exists() ? snap.val() : {};
+    return Object.values(val || {}).filter(u => u && u.role === 'admin' && !u.isBootstrap);
+  }
+
+  /** Best-effort: record that a real admin exists so fresh devices refuse admin/admin. */
+  async markAdminReady() {
+    if (!this.ready || !this.db) return;
+    try {
+      const ref = this.db.ref(ADMIN_READY_PATH);
+      const cur = await withTimeout(ref.get(), 8000);
+      if (!cur.exists() || cur.val() !== true) await ref.set(true);
+    } catch (e) { this.lastError = e.message; }
+  }
+
   async signOut() { if (this.auth) { try { await this.auth.signOut(); } catch {} } }
   async updatePassword(pw) {
     if (this.auth && this.auth.currentUser) { try { await this.auth.currentUser.updatePassword(pw); } catch {} }
@@ -289,6 +357,7 @@ class FirebaseBridge extends EventTarget {
       for (const r of rows) {
         const key = store === 'settings' ? r.key : r.id;
         if (store === 'settings' && key === 'firebaseConfig') continue;
+        if (store === 'users' && r.isBootstrap) continue; // never publish the default admin/admin
         await this.db.ref(`${PATHS[store]}/${key}`).set({ ...r, syncStatus: 'synced', syncedAt: nowISO() });
         if (store === 'deposits') await this.mirrorDeposit(key, r);
         n++;

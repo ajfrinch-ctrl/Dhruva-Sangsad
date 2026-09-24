@@ -1,5 +1,5 @@
 /* Authentication & session — offline-first local credential vault, optionally mirrored to Firebase Auth. */
-import { dbAll, dbGet, saveRecord, getSetting, setSetting } from './db.js';
+import { dbAll, dbGet, saveRecord, getSetting, setSetting, applyRemote, dbDeleteRaw } from './db.js';
 import { hashPassword, verifyPassword, passwordIssues } from './crypto.js';
 import { nowISO, normalizeMobile, uid } from './util.js';
 import { logActivity, invalidate, DEFAULT_MEMBER_PASSWORD } from './store.js';
@@ -7,6 +7,43 @@ import { firebase } from './firebase.js';
 
 const SESSION_KEY = 'ds_session';
 export const ROLES = { ADMIN: 'admin', MAKER: 'maker', MEMBER: 'member' };
+export const BOOTSTRAP_ADMIN_ID = 'U_admin_bootstrap';
+/* The default admin is stamped with the oldest possible timestamp so any real
+   record arriving from the cloud always wins last-write-wins conflict checks. */
+const BOOTSTRAP_EPOCH = '1970-01-01T00:00:00.000Z';
+
+const MSG_ADMIN_EXISTS = 'অ্যাডমিন আগেই সেটআপ করা হয়েছে — ডিফল্ট admin/admin আর ব্যবহার করা যাবে না। সেটআপে দেওয়া Username ও Password দিয়ে লগইন করুন। / An admin has already been set up — the default admin/admin login is disabled. Sign in with the username and password chosen during setup.';
+const MSG_NEED_ONLINE = 'প্রথমবার অ্যাডমিন সেটআপের জন্য ইন্টারনেট সংযোগ প্রয়োজন (ক্লাউডে আগে থেকে অ্যাডমিন আছে কিনা যাচাই করা হয়)। সংযোগ দিয়ে আবার চেষ্টা করুন। / First-time admin setup needs an internet connection to confirm no admin exists in the cloud. Connect and try again.';
+
+/**
+ * Guard for the default admin/admin account. Allowed only when the install is
+ * local-only (no Firebase) or the cloud confirms no real admin exists yet.
+ * When the cloud already has an admin its records are applied locally and the
+ * default account is removed from this device.
+ */
+async function assertBootstrapAllowed() {
+  let res;
+  try { res = await firebase.cloudAdminState(); }
+  catch (e) { res = { state: 'unknown', error: e.message }; }
+  if (res.state === 'local' || res.state === 'none') return;
+  if (res.state === 'exists') {
+    for (const a of res.admins || []) { try { await applyRemote('users', a); } catch {} }
+    const local = await dbGet('users', BOOTSTRAP_ADMIN_ID);
+    if (local && local.isBootstrap) await dbDeleteRaw('users', BOOTSTRAP_ADMIN_ID);
+    invalidate('users');
+    clearSession();
+    throw new Error(MSG_ADMIN_EXISTS);
+  }
+  throw new Error(MSG_NEED_ONLINE);
+}
+
+/** Re-validate a restored admin/admin session (e.g. from sessionStorage) before
+ *  showing the setup wizard. Throws with a user-facing message if not allowed. */
+export async function checkBootstrapSession(session) {
+  const u = session && await dbGet('users', session.id);
+  if (!u || !u.isBootstrap) { clearSession(); throw new Error(MSG_ADMIN_EXISTS); }
+  await assertBootstrapAllowed();
+}
 
 /** Ensure the bootstrap admin (admin/admin) exists on a fresh install. */
 export async function ensureBootstrapAdmin() {
@@ -14,7 +51,7 @@ export async function ensureBootstrapAdmin() {
   if (users.some(u => u.role === 'admin')) return null;
   const pw = await hashPassword('admin');
   const admin = {
-    id: 'U_admin_bootstrap',
+    id: BOOTSTRAP_ADMIN_ID,
     username: 'admin',
     role: 'admin',
     displayName: 'Administrator',
@@ -23,9 +60,10 @@ export async function ensureBootstrapAdmin() {
     isBootstrap: true,          // default password still in use
     mustChangePassword: true,
     profileComplete: false,
-    createdAt: nowISO(),
+    createdAt: BOOTSTRAP_EPOCH,
+    updatedAt: BOOTSTRAP_EPOCH,
   };
-  await saveRecord('users', admin, { queue: false });
+  await saveRecord('users', admin, { queue: false, touch: false });
   invalidate('users');
   return admin;
 }
@@ -80,6 +118,8 @@ export async function login(identifier, password, { remember = false } = {}) {
   if (u.active === false) throw new Error('আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে। / Your account has been deactivated.');
   const ok = await verifyPassword(password, u.password);
   if (!ok) throw new Error('ভুল User ID অথবা Password / Invalid user ID or password');
+  // The default admin/admin only works while no real admin exists in the cloud.
+  if (u.isBootstrap) await assertBootstrapAllowed();
 
   let member = null;
   if (u.role === ROLES.MEMBER && u.memberDocId) {
@@ -94,6 +134,8 @@ export async function login(identifier, password, { remember = false } = {}) {
 
   // Best-effort mirror to Firebase Auth when configured & online
   firebase.signIn(u, password).catch(() => {});
+
+  if (u.role === ROLES.ADMIN && !u.isBootstrap) firebase.markAdminReady().catch(() => {});
 
   await logActivity('LOGIN', `${u.role} ${u.username} signed in`, session);
   return session;
@@ -137,6 +179,10 @@ export async function completeAdminSetup({ displayName, username, mobile, email,
   const s = getSession();
   if (!s || s.role !== ROLES.ADMIN) throw new Error('Admin only');
   const u = await dbGet('users', s.id);
+  if (!u) { clearSession(); throw new Error(MSG_ADMIN_EXISTS); }
+  // Re-check right before publishing: never let a default account overwrite a
+  // real admin that appeared in the cloud meanwhile.
+  if (u.isBootstrap) await assertBootstrapAllowed();
   const issues = passwordIssues(newPassword);
   if (issues.length) throw new Error(issues[0]);
   if (String(newPassword) === 'admin') throw new Error('Default password “admin” আর ব্যবহার করা যাবে না। / The default password can no longer be used.');
@@ -154,6 +200,7 @@ export async function completeAdminSetup({ displayName, username, mobile, email,
   const ns = { ...publicUser(next) };
   setSession(ns, false);
   await logActivity('ADMIN_SETUP', 'First-time admin setup completed', ns);
+  firebase.markAdminReady().catch(() => {});
   return ns;
 }
 
