@@ -8,7 +8,8 @@ import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSION
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
-import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications } from './store.js';
+import { bottomSheet, switchEl, skeleton, errorState } from './ui.js';
+import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, allMembers, allDeposits, allWithdrawals } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
@@ -18,14 +19,25 @@ import { pageAuthorization, pageSettings, pageMemberPanel } from './pages/admin.
 import { pageReports } from './pages/reports.js';
 import { openNotifications } from './pages/misc.js';
 
+/* Mobile-first navigation.
+   `slots` = which items sit in the bottom bar (the rest live in “More”);
+   members get their own 3 slots. Desktop renders every item in the left rail. */
 const NAV = [
-  { id: 'home', bn: 'ড্যাশবোর্ড', en: 'Dashboard', icon: 'dashboard' },
-  { id: 'members', bn: 'সদস্য ব্যবস্থাপনা', en: 'Member Management', icon: 'members' },
-  { id: 'deposit', bn: 'জমা / লেনদেন', en: 'Deposits', icon: 'money' },
-  { id: 'authorization', bn: 'অনুমোদন অপেক্ষমাণ', en: 'Pending Approval', icon: 'approve' },
-  { id: 'reports', bn: 'রিপোর্ট', en: 'Reports', icon: 'report' },
-  { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings' },
+  { id: 'home', bn: 'হোম', en: 'Home', icon: 'dashboard', slots: ['staff', 'member'] },
+  { id: 'members', bn: 'সদস্য', en: 'Members', icon: 'members', slots: ['staff'] },
+  { id: 'deposit', bn: 'জমা', en: 'Deposits', icon: 'deposit', slots: ['staff', 'member'] },
+  { id: 'authorization', bn: 'অনুমোদন', en: 'Approvals', icon: 'approve', slots: ['staff'] },
+  { id: 'member-panel', bn: 'আমার', en: 'Mine', icon: 'member', slots: ['member'] },
+  { id: 'reports', bn: 'রিপোর্ট', en: 'Reports', icon: 'report', slots: [] },
+  /* Staff see this as the admin hub; members keep the plain “Settings” label. */
+  { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings', bnStaff: 'অ্যাডমিন', enStaff: 'Admin', slots: [] },
 ];
+
+/* Contextual primary action (FAB). Only the screens where one action dominates. */
+const FAB = {
+  members: { ic: 'plus', bn: 'সদস্য যোগ', en: 'Add member', perm: 'member:edit', run: () => App.go('members', { tab: 'register' }) },
+  deposit: { ic: 'plus', bn: 'জমা যোগ', en: 'Add deposit', perm: 'deposit:create-any', run: () => App.go('deposit', { tab: 'entry' }) },
+};
 
 const PAGES = {
   'home': pageHome,
@@ -54,7 +66,7 @@ export const App = {
     resetIdleTimer();
     const view = $('#view');
     clear(view);
-    view.appendChild(el('div', { class: 'empty', html: t('লোড হচ্ছে…', 'Loading…') }));
+    view.appendChild(skeleton({ rows: 3, cards: 4 }));
     try {
       const node = await PAGES[route](s, params);
       clear(view);
@@ -63,7 +75,11 @@ export const App = {
     } catch (e) {
       console.error(e);
       clear(view);
-      view.appendChild(el('div', { class: 'banner err', html: `${icon('warn')}<span>${esc(e.message || 'Error')}</span>` }));
+      view.appendChild(errorState({
+        title: t('এই পেজটি লোড করা যায়নি', 'This page could not be loaded'),
+        hint: e && e.message ? e.message : '',
+        onRetry: () => this.go(route, params),
+      }));
     }
     this.paintNav();
     this.paintFooter();
@@ -94,32 +110,132 @@ export const App = {
   },
   refresh() { return this.go(this.route, this.params || {}); },
 
+  labelOf(item) {
+    const s = this.session;
+    const isStaff = !s || s.role !== 'member';
+    return t(
+      (isStaff && item.bnStaff) ? item.bnStaff : item.bn,
+      (isStaff && item.enStaff) ? item.enStaff : item.en,
+    );
+  },
+
+  /** One nav button, shaped for the bottom bar or the desktop rail. */
+  navButton(item, where) {
+    const label = this.labelOf(item);
+    const b = el('button', {
+      class: `nav-tab${this.route === item.id ? ' on' : ''}`, type: 'button',
+      title: label, dataset: { route: item.id },
+      html: `${icon(item.icon)}<span>${esc(label)}</span>`,
+      onclick: () => this.go(item.id),
+    });
+    if (where === 'rail') b.classList.add('rail-tab');
+    return b;
+  },
+
+  /** The 5th slot of the bottom bar + the last rail item: everything else. */
+  moreButton(where) {
+    const b = el('button', {
+      class: 'nav-tab nav-more', type: 'button', dataset: { route: 'more' },
+      title: t('আরও', 'More'),
+      html: `${icon('grid')}<span>${esc(t('আরও', 'More'))}</span>`,
+      onclick: () => this.openMore(),
+    });
+    if (where === 'rail') b.classList.add('rail-tab');
+    return b;
+  },
+
   paintNav() {
     const s = this.session; if (!s) return;
     const nav = $('#topnav');
+    if (nav) nav.hidden = true;          // replaced by the bottom bar / rail
     const bottom = $('#bottomnav');
-    clear(nav);
-    if (bottom) { clear(bottom); bottom.hidden = s.role !== 'member'; }
-    const items = s.role === 'member'
-      ? NAV.filter(i => i.id === 'home' || i.id === 'deposit' || i.id === 'reports')
-      : NAV;
-    const host = (s.role === 'member' && bottom) ? bottom : nav;
-    if (!host) return;
-    for (const item of items) {
-      if (!can(s, item.id)) continue;
-      const btn = el('button', {
-        class: `nav-tab${this.route === item.id ? ' on' : ''}`, type: 'button',
-        title: t(item.bn, item.en),
-        html: `${icon(item.icon)}<span>${t(item.bn, item.en)}</span>`,
-        onclick: () => this.go(item.id),
-      });
-      host.appendChild(btn);
+    const rail = $('#rail');
+    const group = s.role === 'member' ? 'member' : 'staff';
+
+    /* bottom bar: the 4 (or 3) primary destinations + “More” */
+    if (bottom) {
+      bottom.hidden = false;
+      bottom.replaceChildren();
+      const slots = NAV.filter(i => can(s, i.id) && (i.slots || []).includes(group));
+      slots.forEach(i => bottom.appendChild(this.navButton(i, 'bottom')));
+      bottom.appendChild(this.moreButton('bottom'));
     }
+
+    /* desktop rail: every destination + “More” */
+    if (rail) {
+      rail.hidden = false;
+      rail.replaceChildren();
+      const logo = el('div', { class: 'rail-logo', html: icon('dashboard') });
+      rail.appendChild(logo);
+      NAV.filter(i => can(s, i.id)).forEach(i => rail.appendChild(this.navButton(i, 'rail')));
+      rail.appendChild(this.moreButton('rail'));
+    }
+
+    this.paintApprovalBadge();
+    this.paintFab();
+
     const setBtn = $('#btnSettings');
-    if (setBtn) setBtn.hidden = s.role !== 'member';
+    if (setBtn) setBtn.hidden = true;   // “Settings” now lives in the More sheet
     const userName = s.displayName || s.username || s.memberId || '';
     const brand = $('#brandRole');
     brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc((s.role || '').toUpperCase())}</span>`;
+  },
+
+  /** Contextual FAB — one dominant action per screen, hidden elsewhere. */
+  paintFab() {
+    const s = this.session;
+    const fab = $('#fab');
+    if (!fab) return;
+    const f = FAB[this.route];
+    const allowed = f && (!f.perm || can(s, f.perm) || (f.perm === 'deposit:create-any' && can(s, 'deposit:create-own')));
+    if (!allowed) { fab.hidden = true; return; }
+    fab.hidden = false;
+    fab.innerHTML = `${icon(f.ic)}<span>${esc(t(f.bn, f.en))}</span>`;
+    fab.onclick = f.run;
+  },
+
+  /** “More” sheet: the secondary destinations, theme, language and logout. */
+  openMore() {
+    const s = this.session; if (!s) return;
+    const items = [];
+    NAV.filter(i => can(s, i.id) && !(i.slots || []).includes(s.role === 'member' ? 'member' : 'staff'))
+      .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
+    if (can(s, 'backup:manage')) {
+      items.push({ ic: 'backup', label: t('ব্যাকআপ', 'Backup'), run: () => this.go('settings', { tab: 'backup' }) });
+    }
+    if (can(s, 'staff:manage')) {
+      items.push({ ic: 'maker', label: t('ইউজার ম্যানেজমেন্ট', 'User management'), run: () => this.go('settings', { tab: 'staff' }) });
+    }
+    items.push({ ic: 'log', label: t('অ্যাকটিভিটি লগ', 'Activity Log'), run: () => this.go('settings', { tab: 'activity' }) });
+    items.push({ ic: 'key', label: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'), run: () => shortcutSheet() });
+    items.push('sep');
+    items.push({
+      ic: getTheme() === 'amoled' ? 'moon' : 'sun', label: t('ডার্ক মোড', 'Dark mode'),
+      keepOpen: true, right: switchEl(getTheme() === 'amoled', () => toggleTheme()),
+    });
+    items.push({
+      ic: 'globe', label: t('ভাষা / Language', 'Language'),
+      keepOpen: true, right: switchEl(getLang() === 'en', () => setLang(getLang() === 'en' ? 'bn' : 'en')),
+    });
+    items.push('sep');
+    items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => this.doLogout() });
+    return bottomSheet({ title: t('আরও', 'More'), items });
+  },
+
+  /** Red pill on the Approvals item: how many requests are waiting. */
+  async paintApprovalBadge() {
+    const s = this.session;
+    if (!s || (!can(s, 'member:approve') && !can(s, 'deposit:approve'))) return;
+    try {
+      const [members, deposits, withdrawals] = await Promise.all([allMembers(), allDeposits(), allWithdrawals()]);
+      const n = members.filter(m => m.status === 'pending').length
+        + deposits.filter(d => d.status === 'pending').length
+        + withdrawals.filter(w => w.status === 'pending').length;
+      document.querySelectorAll('.nav-tab[data-route="authorization"]').forEach(tab => {
+        tab.querySelector('.pill')?.remove();
+        if (n > 0) tab.appendChild(el('span', { class: 'pill', text: n > 99 ? '99+' : String(n) }));
+      });
+    } catch { /* non-critical — skip the badge */ }
   },
 
   async refreshNotifBadge() {
@@ -190,17 +306,86 @@ export const App = {
 };
 window.App = App;
 
-/* ---------------- topbar sync border (no text chip) ---------------- */
+/* ---------------- topbar sync border + offline bar ---------------- */
+function paintOfflineBar(on) {
+  let bar = $('#offlineBar');
+  if (!bar) {
+    bar = el('div', { class: 'offline-bar', id: 'offlineBar' });
+    const app = $('#app') || document.body;
+    app.insertBefore(bar, app.firstChild);
+  }
+  bar.innerHTML = `${icon('offline')}<span>${esc(t('অফলাইন — ডেটা ডিভাইসেই থাকবে, অনলাইনে সিঙ্ক হবে', 'Offline — data stays on this device and syncs when online'))}</span>`;
+  bar.hidden = !on;
+  document.documentElement.dataset.offline = on ? '1' : '0';
+}
+
 function paintSync(status) {
   const bar = document.querySelector('.topbar');
-  if (!bar) return;
   const st = status || (navigator.onLine ? 'online' : 'offline');
+  paintOfflineBar(st === 'offline' || st === 'sync-error');
+  if (!bar) return;
   bar.classList.remove('sync-online', 'sync-offline', 'sync-syncing', 'sync-synced', 'sync-error');
   const cls = st === 'sync-error' ? 'sync-error' : `sync-${st}`;
   bar.classList.add(cls);
   document.documentElement.dataset.sync = st;
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail.status));
+
+/* ---------------- keyboard shortcuts (desktop convenience) ---------------- */
+const GO_KEYS = {
+  h: 'home', m: 'members', d: 'deposit', a: 'authorization',
+  r: 'reports', s: 'settings', u: 'users', l: 'activity',
+};
+const SHORTCUTS = [
+  ['g h', t('হোম', 'Home')], ['g m', t('সদস্য', 'Members')], ['g d', t('জমা', 'Deposits')],
+  ['g a', t('অনুমোদন', 'Approvals')], ['g r', t('রিপোর্ট', 'Reports')], ['g s', t('সেটিংস', 'Settings')],
+  ['n', t('প্রধান অ্যাকশন (FAB)', 'Primary action (FAB)')],
+  ['/', t('অনুসন্ধান ফিল্ডে যান', 'Focus the search field')],
+  ['?', t('এই সাহায্য', 'This help')], ['Esc', t('শিট/মোডাল বন্ধ', 'Close sheet or dialog')],
+];
+
+export function shortcutSheet() {
+  bottomSheet({
+    title: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'),
+    items: SHORTCUTS.map(([k, label]) => ({
+      label: `${k} — ${label}`, ic: 'key', keepOpen: true,
+    })),
+  });
+}
+
+let chord = null;
+window.addEventListener('keydown', e => {
+  if (!App.session) return;
+  const tgt = e.target || {};
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName || '') || tgt.isContentEditable) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+
+  if (chord === 'g') {
+    chord = null;
+    const route = GO_KEYS[(k || '').toLowerCase()];
+    if (route) { e.preventDefault(); App.go(route); }
+    return;
+  }
+  if (k === 'Escape') {
+    const back = document.querySelector('.sheet-backdrop');
+    if (back) { back.click(); e.preventDefault(); }
+    return;
+  }
+  if (k === '?') { shortcutSheet(); return; }
+  if (k === '/') {
+    const box = document.querySelector('.main input[type="search"]')
+      || [...document.querySelectorAll('.main input')].find(i => /search/i.test(i.placeholder || ''));
+    if (box) { e.preventDefault(); box.focus(); box.select?.(); }
+    return;
+  }
+  if ((k === 'n' || k === 'N') && !chord) {
+    const f = $('#fab');
+    if (f && !f.hidden) { e.preventDefault(); f.click(); }
+    return;
+  }
+  if (k === 'g') { chord = 'g'; setTimeout(() => { chord = null; }, 1200); }
+});
 
 /* ---------------- automatic session timeout (30 min inactivity) ---------------- */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -243,6 +428,15 @@ async function boot() {
     await ensureBootstrapAdmin();
   } catch (e) {
     console.error('boot db', e);
+    /* A silent console error leaves the user on a blank/broken screen, so say so. */
+    try {
+      const why = (e && e.message) ? e.message : String(e);
+      alertBox(
+        t('লোকাল ডেটাবেস (IndexedDB) খোলা যায়নি — ', 'The local database (IndexedDB) could not be opened — ') + why +
+        t(' অন্য ট্যাব বা পুরনো ভার্সনের অ্যাপ বন্ধ করে পেজটি রিলোড করুন।', ' Close other tabs or older versions of the app and reload the page.'),
+        t('ডেটাবেস সমস্যা', 'Database problem'),
+      );
+    } catch (_) {}
   }
   paintSync(navigator.onLine ? 'online' : 'offline');
   try { firebase.init(); } catch (e) { console.error('firebase', e); }
@@ -259,6 +453,8 @@ async function boot() {
 
   $('#btnNotif').innerHTML = icon('bell');
   $('#btnNotif').onclick = () => { if (App.session) openNotifications(App.session); };
+  const moreBtn = $('#btnMore');
+  if (moreBtn) { moreBtn.innerHTML = icon('grid'); moreBtn.onclick = () => App.openMore(); }
   const paintThemeBtn = () => {
     const b = $('#btnTheme'); if (!b) return;
     const dark = getTheme() === 'amoled';

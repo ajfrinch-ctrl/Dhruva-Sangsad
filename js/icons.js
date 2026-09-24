@@ -53,6 +53,11 @@ const P = {
   phone: '<path d="M7.4 3.8 9.6 8 8 10a11 11 0 0 0 6 6l2-1.6 4.2 2.2v3a2 2 0 0 1-2.2 2A17.5 17.5 0 0 1 3 6a2 2 0 0 1 2-2.2z"/>',
   dashboard: '<rect x="3.5" y="3.5" width="7" height="7.5" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="4.5" rx="1.5"/><rect x="3.5" y="14" width="7" height="6.5" rx="1.5"/><rect x="13.5" y="11" width="7" height="9.5" rx="1.5"/>',
   moon: '<path d="M19.5 14.2A7.6 7.6 0 0 1 9.8 4.5 7.8 7.8 0 1 0 19.5 14.2Z"/>',
+  globe: '<circle cx="12" cy="12" r="8.6"/><path d="M3.6 12h16.8"/><path d="M12 3.4a13 13 0 0 1 0 17.2 13 13 0 0 1 0-17.2Z"/>',
+  building: '<path d="M4.5 20.5V5.5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15"/><path d="M13.5 9.5h4a1 1 0 0 1 1 1v10"/><path d="M3 20.5h18"/><path d="M7.5 8h4M7.5 11.5h4M7.5 15h4M16.5 13h.01M16.5 16.5h.01"/>',
+  back: '<path d="M19.5 12H5"/><path d="m11 5.5-6 6.5 6 6.5"/>',
+  chevron: '<path d="m9 5 7 7-7 7"/>',
+  grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.2M12 19v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.8 12h2.2M19 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>',
 };
 
