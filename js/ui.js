@@ -204,6 +204,7 @@ export function bottomSheet({ title, items = [] } = {}) {
   const list = el('div', { class: 'sheet-list' });
   items.forEach(it => {
     if (it === 'sep') { list.appendChild(el('div', { class: 'sheet-sep' })); return; }
+    if (it && typeof it === 'object' && it.header) { list.appendChild(el('div', { class: 'sheet-header', text: tx(it.header) })); return; }
     const row = el('button', { type: 'button', class: `sheet-item${it.danger ? ' danger' : ''}` });
     row.innerHTML = `<span class="si-ic">${icon(it.ic || 'info')}</span><span class="si-tx">${esc(tx(it.label))}</span>`;
     if (it.right) { const r = el('span', { class: 'si-right' }); r.appendChild(it.right); row.appendChild(r); }

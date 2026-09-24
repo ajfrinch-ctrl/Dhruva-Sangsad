@@ -398,20 +398,10 @@ html[data-role="maker"]{
 html[data-role="member"]{
   --role:#ea580c; --role-soft:#ffedd5; --role-line:#fdba74; --role-dark:#c2410c;
 }
+/* Role accent lives ONLY on the topbar (border + tint) and the user label.
+   Buttons, nav, FAB, stats and inputs stay brand green for every role. */
 html[data-role="admin"] .topbar,html[data-role="maker"] .topbar,html[data-role="member"] .topbar{border-bottom-color:var(--role-line);background:linear-gradient(180deg,var(--role-soft),#fff 70%)}
-html[data-role="admin"] .topnav,html[data-role="maker"] .topnav{border-bottom-color:var(--role-line)}
-html[data-role="admin"] .nav-tab.on,html[data-role="maker"] .nav-tab.on,html[data-role="member"] .bottom-nav .nav-tab.on{
-  color:var(--role-dark);border-bottom-color:var(--role);background:var(--role-soft)
-}
-html[data-role="admin"] .btn-primary,html[data-role="maker"] .btn-primary,html[data-role="member"] .btn-primary{background:var(--role);border-color:var(--role)}
-html[data-role="admin"] .btn-primary:hover,html[data-role="maker"] .btn-primary:hover,html[data-role="member"] .btn-primary:hover{background:var(--role-dark)}
-html[data-role="admin"] .btn-soft,html[data-role="maker"] .btn-soft,html[data-role="member"] .btn-soft{background:var(--role-soft);color:var(--role-dark);border-color:var(--role-line)}
-html[data-role="admin"] .stat::before,html[data-role="maker"] .stat::before,html[data-role="member"] .stat::before{background:var(--role)}
 html[data-role="admin"] .brand-txt .r,html[data-role="maker"] .brand-txt .r,html[data-role="member"] .brand-txt .r{color:var(--role-dark)}
-html[data-role="admin"] .app-footer-org strong,html[data-role="maker"] .app-footer-org strong,html[data-role="member"] .app-footer-org strong{color:var(--role-dark)}
-html[data-role="admin"] .page-head h1 .icon,html[data-role="maker"] .page-head h1 .icon,html[data-role="member"] .page-head h1 .icon{color:var(--role)}
-html[data-role="admin"] input:focus,html[data-role="maker"] input:focus,html[data-role="member"] input:focus,
-html[data-role="admin"] select:focus,html[data-role="maker"] select:focus,html[data-role="member"] select:focus{border-color:var(--role);box-shadow:0 0 0 3px var(--role-soft)}
 
 /* Bottom navigation visuals (layout lives in the MOBILE-FIRST SHELL block below) */
 .bottom-nav .nav-tab{
@@ -419,7 +409,7 @@ html[data-role="admin"] select:focus,html[data-role="maker"] select:focus,html[d
   border-bottom:0;border-top:2.5px solid transparent;font-size:11px;
 }
 .bottom-nav .nav-tab .icon{width:21px;height:21px}
-.bottom-nav .nav-tab.on{border-top-color:var(--role,var(--green));border-bottom:0}
+.bottom-nav .nav-tab.on{border-top-color:var(--green);border-bottom:0}
 
 html[data-theme="amoled"][data-role="admin"],
 html[data-theme="dark"][data-role="admin"]{--role-soft:#1e1033;--role-line:#5b21b6}
@@ -610,9 +600,7 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   position:absolute;top:3px;right:calc(50% - 22px);background:var(--red);color:#fff;
   font-size:9.5px;font-weight:700;border-radius:9px;padding:0 4px;line-height:1.5;min-width:15px;
 }
-html[data-role="admin"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
-html[data-role="maker"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
-html[data-role="member"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
+
 
 /* ---- desktop icon rail ---- */
 .rail{
@@ -647,7 +635,7 @@ html[data-role="member"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
 }
 .fab .icon{width:20px;height:20px}
 .fab:active{transform:scale(.96)}
-html[data-role="admin"] .fab,html[data-role="maker"] .fab,html[data-role="member"] .fab{background:var(--role)}
+
 @media (min-width:1024px){ .fab{bottom:calc(var(--footer-h) + 18px);right:24px} }
 
 /* ---- bottom sheet (More menu) ---- */
@@ -662,6 +650,8 @@ html[data-role="admin"] .fab,html[data-role="maker"] .fab,html[data-role="member
 .sheet.on{transform:none}
 .sheet-grab{width:40px;height:4px;border-radius:3px;background:var(--line);margin:6px auto 4px}
 .sheet-title{font-size:13px;font-weight:700;color:var(--muted);padding:4px 18px 8px}
+.sheet-header{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);padding:10px 18px 2px}
+.sheet-list > .sheet-header:first-child{padding-top:2px}
 .sheet-list{display:flex;flex-direction:column}
 .sheet-item{
   display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:10px 18px;border:0;

@@ -28,7 +28,7 @@ function heroCard({ label, value, sub, target = 0, achieved = 0 }) {
 function quickRow(items) {
   const row = el('div', { class: 'hub-grid quick-grid' });
   items.filter(Boolean).forEach(it => {
-    const b = el('button', { type: 'button', class: 'hub-tile', onclick: it.run });
+    const b = el('button', { type: 'button', class: `hub-tile${it.tone ? ' ' + it.tone : ''}`, onclick: it.run });
     b.innerHTML = `<span class="tic">${icon(it.ic)}</span>
       <span class="tb"><span class="tt">${esc(it.label)}</span></span>`;
     row.appendChild(b);
@@ -102,8 +102,8 @@ async function staffHome(session) {
   const quick = [];
   if (session.role !== 'member') quick.push({ ic: 'member', label: t('সদস্য যোগ', 'Add member'), run: () => App.go('members', { tab: 'register' }) });
   quick.push({ ic: 'deposit', label: t('জমা যোগ', 'Add deposit'), run: () => App.go('deposit', { tab: 'entry' }) });
-  if (session.role !== 'member') quick.push({ ic: 'approve', label: t('অনুমোদন', 'Approvals'), run: () => App.go('authorization') });
-  quick.push({ ic: 'report', label: t('রিপোর্ট', 'Reports'), run: () => App.go('reports') });
+  if (session.role !== 'member') quick.push({ ic: 'approve', tone: 'warn', label: t('অনুমোদন', 'Approvals'), run: () => App.go('authorization') });
+  quick.push({ ic: 'report', tone: 'info', label: t('রিপোর্ট', 'Reports'), run: () => App.go('reports') });
   wrap.appendChild(quickRow(quick));
 
   /* 3 — stats (unchanged numbers, 2 columns on a phone) */
@@ -177,9 +177,9 @@ async function memberHome(session) {
   const quick = [];
   if (m.status === 'active') {
     quick.push({ ic: 'deposit', label: t('জমা দাখিল', 'Submit deposit'), run: () => App.go('deposit') });
-    quick.push({ ic: 'withdraw', label: t('উত্তোলন', 'Withdrawal'), run: () => App.go('deposit', { tab: 'withdrawal' }) });
+    quick.push({ ic: 'withdraw', tone: 'danger', label: t('উত্তোলন', 'Withdrawal'), run: () => App.go('deposit', { tab: 'withdrawal' }) });
   }
-  quick.push({ ic: 'report', label: t('আমার স্টেটমেন্ট', 'My statement'), run: () => App.go('reports', { report: 'statement' }) });
+  quick.push({ ic: 'report', tone: 'info', label: t('আমার স্টেটমেন্ট', 'My statement'), run: () => App.go('reports', { report: 'statement' }) });
   quick.push({ ic: 'member', label: t('আমার প্রোফাইল', 'My profile'), run: () => App.go('member-panel') });
   wrap.appendChild(quickRow(quick));
 
