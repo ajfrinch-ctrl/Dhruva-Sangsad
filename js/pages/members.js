@@ -7,7 +7,7 @@ import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, tabs, embedPage } from '../ui.js';
 import {
   allMembers, allDeposits, settings, registerMember, updateMember, setMemberStatus,
-  memberSummary, getMember, DEFAULT_MEMBER_PASSWORD,
+  memberSummary, getMember, DEFAULT_MEMBER_PASSWORD, summaryOpts,
 } from '../store.js';
 import { can } from '../auth.js';
 import { App } from '../app.js';
@@ -169,7 +169,7 @@ export async function pageMemberUpdate(session, params = {}) {
 }
 
 export function memberEditor(session, m, deposits, cfg, onSaved) {
-  const s = memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment });
+  const s = memberSummary(m, deposits, summaryOpts(cfg));
   const box = el('div');
 
   const summary = el('div', { class: 'stats' });
@@ -337,7 +337,7 @@ export async function pageSearch(session) {
         .some(x => String(x || '').toLowerCase().includes(q));
     });
     const rows = list.map(m => {
-      const s = memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment });
+      const s = memberSummary(m, deposits, summaryOpts(cfg));
       return { m, s };
     }).filter(r => fl === 'due' ? r.s.due > 0 : fl === 'advance' ? r.s.advance > 0 : true);
     countTag.textContent = `${rows.length} member(s)`;

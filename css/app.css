@@ -514,4 +514,9 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   .card,.sheet-holder{border:0;box-shadow:none;padding:0;margin:0;background:#fff}
   .print-sheet{box-shadow:none;width:auto;padding:0}
   @page{size:A4;margin:10mm}
+  /* Report “Print”: keep only the sheet, drop the modal chrome */
+  body.printing .modal-back{position:static;display:block;background:#fff;inset:auto;padding:0}
+  body.printing .modal{max-width:none;width:auto;max-height:none;border-radius:0;box-shadow:none;background:#fff}
+  body.printing .modal-head,body.printing .modal-foot{display:none !important}
+  body.printing .modal-body{padding:0;overflow:visible}
 }

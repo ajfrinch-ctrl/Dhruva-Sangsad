@@ -4,8 +4,10 @@
 import { queueAll, queueRemove, applyRemote, dbGet, dbPutRaw, getSetting, setSetting } from './db.js';
 import { nowISO, deviceId } from './util.js';
 
-/* Empty until an Admin pastes a new Firebase web-app config
-   (Settings → Cloud Sync). The old dhruvo-sangsad / rtd-ds projects are not used. */
+/* Built-in project default used until an Admin pastes their own web-app config
+   (Settings → Organisation → Cloud Sync). Saving an override replaces this;
+   “Disconnect” stores a {__disabled:true} marker instead. The old
+   dhruvo-sangsad / rtd-ds projects are not used. */
 export const DEFAULT_FIREBASE_CONFIG = {
   apiKey: 'AIzaSyBI0y3gYts4GWsr0UCO1D3L7uA8e3UlJPI',
   authDomain: 'dhruva-sangsad-app.firebaseapp.com',
@@ -167,7 +169,13 @@ class FirebaseBridge extends EventTarget {
           const remoteSnap = await this.db.ref(path).get();
           const remote = remoteSnap.exists() ? remoteSnap.val() : null;
           if (remote && Date.parse(remote.updatedAt || 0) > Date.parse(payload.updatedAt || 0)) {
-            await applyRemote(it.store, remote);   // server wins, do not clobber
+            // Server wins, do not clobber — but keep the losing local copy so the
+            // edit is recoverable, mirroring applyRemote()'s conflict handling.
+            await dbPutRaw('meta', {
+              key: `conflict_${it.store}_${it.recordId}_${Date.parse(payload.updatedAt || 0)}`,
+              value: it.payload, at: nowISO(),
+            });
+            await applyRemote(it.store, remote);
           } else {
             await this.db.ref(path).set(payload);
             const { markSynced } = await import('./db.js');

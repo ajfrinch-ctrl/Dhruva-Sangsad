@@ -87,7 +87,7 @@ export const App = {
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
-        + `<span class="app-footer-meta">v6.5.12</span>`;
+        + `<span class="app-footer-meta">v${esc(APP_VERSION)}</span>`;
     } catch {
       el.textContent = 'ধ্রুব সংসদ';
     }
@@ -222,6 +222,10 @@ async function onIdleTimeout() {
 
 /* ---------------- boot ---------------- */
 async function boot() {
+  // Prevent double-init if app.js is evaluated twice (with/without ?v=)
+  if (window.__DS_BOOTED) return;
+  window.__DS_BOOTED = true;
+
   try {
     await Promise.race([
       openDB(),
@@ -234,15 +238,18 @@ async function boot() {
   paintSync(navigator.onLine ? 'online' : 'offline');
   try { firebase.init(); } catch (e) { console.error('firebase', e); }
 
+  // onclick replaces any previous handler (safe if boot runs twice)
   $('#btnLogout').innerHTML = icon('logout');
-  $('#btnLogout').addEventListener('click', () => App.doLogout());
+  $('#btnLogout').onclick = () => App.doLogout();
+
   const setBtn = $('#btnSettings');
   if (setBtn) {
     setBtn.innerHTML = icon('settings');
-    setBtn.addEventListener('click', () => { if (App.session) App.go('settings'); });
+    setBtn.onclick = () => { if (App.session) App.go('settings'); };
   }
+
   $('#btnNotif').innerHTML = icon('bell');
-  $('#btnNotif').addEventListener('click', () => { if (App.session) openNotifications(App.session); });
+  $('#btnNotif').onclick = () => { if (App.session) openNotifications(App.session); };
   const paintThemeBtn = () => {
     const b = $('#btnTheme'); if (!b) return;
     const dark = getTheme() === 'amoled';
@@ -251,7 +258,8 @@ async function boot() {
     b.title = dark ? 'লাইট মোড / Light' : 'হার্ড ডার্ক / Hard dark';
   };
   paintThemeBtn();
-  $('#btnTheme').addEventListener('click', () => { toggleTheme(); paintThemeBtn(); });
+  // onclick replaces any previous handler (safe if boot runs twice)
+  $('#btnTheme').onclick = () => { toggleTheme(); paintThemeBtn(); };
   window.addEventListener('ds:theme', paintThemeBtn);
 
   // Reset the idle timer on any meaningful user interaction.

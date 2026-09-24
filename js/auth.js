@@ -99,11 +99,15 @@ export async function login(identifier, password, { remember = false } = {}) {
   return session;
 }
 
+/** Clear session immediately so the UI can switch to the login screen without
+ *  waiting on IndexedDB activity log or Firebase Auth. Logging is best-effort. */
 export async function logout() {
   const s = getSession();
-  if (s) await logActivity('LOGOUT', `${s.role} ${s.username} signed out`, s);
-  firebase.signOut().catch(() => {});
   clearSession();
+  firebase.signOut().catch(() => {});
+  if (s) {
+    logActivity('LOGOUT', `${s.role} ${s.username} signed out`, s).catch(() => {});
+  }
 }
 
 export async function changeOwnPassword(currentPassword, newPassword) {

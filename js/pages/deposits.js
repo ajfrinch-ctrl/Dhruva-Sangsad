@@ -7,7 +7,7 @@ import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage } from '../ui.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, submitDeposit, memberSummary, setDepositStatus,
-  canModifyDeposit, updateDeposit, deleteDeposit, getMember, submitWithdrawal, setWithdrawalStatus,
+  canModifyDeposit, updateDeposit, deleteDeposit, getMember, submitWithdrawal, setWithdrawalStatus, summaryOpts,
   withdrawalBalance, WITHDRAWAL_TYPES, withdrawalTypeLabel,
 } from '../store.js';
 import { can } from '../auth.js';
@@ -251,7 +251,7 @@ export async function pageDeposit(session, params = {}) {
     if (!id) return;
     const m = await getMember(id);
     if (!m) return;
-    const s = memberSummary(m, deposits, { countSpecialTowardsInstallment: cfg.countSpecialTowardsInstallment });
+    const s = memberSummary(m, deposits, summaryOpts(cfg));
     const stats = el('div', { class: 'stats' });
     stats.append(
       statCard({ label: 'মাসিক কিস্তি / Installment', value: taka(m.installment), sub: `${s.months} মাস হিসাবযোগ্য`, ic: 'money' }),

@@ -4,7 +4,7 @@ import {
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, btn } from '../ui.js';
-import { visibleNotifications, markNotificationRead, allLogs } from '../store.js';
+import { visibleNotifications, markNotificationRead, allLogs, logUserName } from '../store.js';
 import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { App } from '../app.js';
 
@@ -137,7 +137,7 @@ export async function pageActivity(session) {
   const doExport = kind => {
     if (!current.length) { toast('রপ্তানির জন্য কোনো তথ্য নেই / Nothing to export', 'warn'); return; }
     const rows = [['SL', 'Date', 'Time', 'User', 'Role', 'Action', 'Details']];
-    current.forEach((l, i) => rows.push([i + 1, fmtDate(l.createdAt), fmtTime(l.createdAt), l.displayName || l.userId || '', l.role || '', l.action, l.details || '']));
+    current.forEach((l, i) => rows.push([i + 1, fmtDate(l.createdAt), fmtTime(l.createdAt), logUserName(l), l.role || '', l.action, l.details || '']));
     const fn = safeName(`Dhruvo_Sangsad_Activity_Log_${todayISO()}`);
     if (kind === 'csv') downloadCSV(rows, fn + '.csv');
     else downloadExcel([{ name: 'Activity Log', rows }], fn + '.xlsx');
@@ -152,7 +152,7 @@ export async function pageActivity(session) {
       const d = String(l.createdAt).slice(0, 10);
       if (from.value && d < from.value) return false;
       if (to.value && d > to.value) return false;
-      if (t && ![l.displayName, l.userId, l.action, l.details, l.role].some(x => String(x || '').toLowerCase().includes(t))) return false;
+      if (t && ![logUserName(l), l.userId, l.action, l.details, l.role].some(x => String(x || '').toLowerCase().includes(t))) return false;
       return true;
     }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
@@ -172,7 +172,7 @@ export async function pageActivity(session) {
         { text: String(start + i + 1), cls: 'num' },
         esc(fmtDate(l.createdAt)),
         esc(fmtTime(l.createdAt)),
-        esc(l.displayName || l.userId || '—'),
+        esc(logUserName(l)),
         `<span class="tag ${l.role === 'admin' ? 'info' : l.role === 'maker' ? 'approved' : 'gray'}">${esc((l.role || '—').toUpperCase())}</span>`,
         `${icon(actionMeta(l.action).ic)} ${esc(actionMeta(l.action).bn)}<br><span class="faint fs8">${esc(l.action)}</span>`,
         esc(l.details || ''),
