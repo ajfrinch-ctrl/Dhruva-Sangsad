@@ -243,6 +243,15 @@ async function boot() {
     await ensureBootstrapAdmin();
   } catch (e) {
     console.error('boot db', e);
+    /* A silent console error leaves the user on a blank/broken screen, so say so. */
+    try {
+      const why = (e && e.message) ? e.message : String(e);
+      alertBox(
+        t('লোকাল ডেটাবেস (IndexedDB) খোলা যায়নি — ', 'The local database (IndexedDB) could not be opened — ') + why +
+        t(' অন্য ট্যাব বা পুরনো ভার্সনের অ্যাপ বন্ধ করে পেজটি রিলোড করুন।', ' Close other tabs or older versions of the app and reload the page.'),
+        t('ডেটাবেস সমস্যা', 'Database problem'),
+      );
+    } catch (_) {}
   }
   paintSync(navigator.onLine ? 'online' : 'offline');
   try { firebase.init(); } catch (e) { console.error('firebase', e); }
