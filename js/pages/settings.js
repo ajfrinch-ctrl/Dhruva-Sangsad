@@ -234,29 +234,29 @@ async function organisationSection(session, host) {
     <div class="grid g2">
       <div class="field"><label>সংগঠনের নাম (বাংলা) <span class="req">*</span></label><input name="orgNameBn" value="${esc(cfg.orgNameBn)}" required></div>
       <div class="field"><label>Organisation Name (English) <span class="req">*</span></label><input name="orgNameEn" value="${esc(cfg.orgNameEn)}" required></div>
-      <div class="field"><label>ঠিকানা / Address</label><input name="orgAddress" value="${esc(cfg.orgAddress || '')}"></div>
-      <div class="field"><label>ফোন / Phone</label><input name="orgPhone" value="${esc(cfg.orgPhone || '')}"></div>
-      <div class="field"><label>ডিফল্ট মাসিক কিস্তি (৳) <span class="req">*</span></label><input name="defaultInstallment" type="number" min="1" value="${esc(cfg.defaultInstallment)}"><div class="hint">${t('মাসিক জমার স্থির হার — নতুন সদস্যে প্রযোজ্য', 'Fixed monthly rate — applied to new members')}</div></div>
-      <div class="field"><label>মাসিক আদায় লক্ষ্যমাত্রা (৳)</label><input name="monthlyTarget" type="number" min="0" value="${esc(cfg.monthlyTarget)}"><div class="hint">০ দিলে সক্রিয় সদস্যদের কিস্তির যোগফল লক্ষ্য ধরা হবে।</div></div>
+      <div class="field"><label>${t('ঠিকানা', 'Address')}</label><input name="orgAddress" value="${esc(cfg.orgAddress || '')}"></div>
+      <div class="field"><label>${t('ফোন', 'Phone')}</label><input name="orgPhone" value="${esc(cfg.orgPhone || '')}"></div>
+      <div class="field"><label>${t('ডিফল্ট মাসিক কিস্তি (৳)', 'Default monthly installment (৳)')} <span class="req">*</span></label><input name="defaultInstallment" type="number" min="1" value="${esc(cfg.defaultInstallment)}"><div class="hint">${t('মাসিক জমার স্থির হার — নতুন সদস্যে প্রযোজ্য', 'Fixed monthly rate — applied to new members')}</div></div>
+      <div class="field"><label>${t('মাসিক আদায় লক্ষ্যমাত্রা (৳)', 'Monthly collection target (৳)')}</label><input name="monthlyTarget" type="number" min="0" value="${esc(cfg.monthlyTarget)}"><div class="hint">${t('০ দিলে সক্রিয় সদস্যদের কিস্তির যোগফল লক্ষ্য ধরা হবে।', 'Set 0 to use the sum of active members’ installments as the target.')}</div></div>
     </div>
-    <label class="check"><input type="checkbox" name="countSpecialTowardsInstallment" ${cfg.countSpecialTowardsInstallment ? 'checked' : ''}> বিশেষ চাঁদা ও অন্যান্য জমাকেও কিস্তি হিসেবে গণনা করুন</label>
+    <label class="check"><input type="checkbox" name="countSpecialTowardsInstallment" ${cfg.countSpecialTowardsInstallment ? 'checked' : ''}> ${t('বিশেষ চাঁদা ও অন্যান্য জমাকেও কিস্তি হিসেবে গণনা করুন', 'Count special and other deposits towards the installment')}</label>
     <div class="field" style="margin-top:8px">
-      <label>প্রতিষ্ঠান / অ্যাপ লোগো</label>
+      <label>${t('প্রতিষ্ঠান / অ্যাপ লোগো', 'Organisation / app logo')}</label>
       <div class="logo-edit">
-        <img class="logo-preview" id="logoPreview" src="${esc(cfg.orgLogo || 'icons/logo.png')}" alt="logo">
+        <img class="logo-preview" id="logoPreview" src="${esc(cfg.orgLogo || logoSrc(cfg))}" alt="${t('লোগো', 'Logo')}">
         <div>
           <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-          <div class="hint">PNG / JPG — সর্বোচ্চ ~৫১২px।</div>
-          <button class="btn btn-ghost btn-xs" type="button" id="logoReset">ডিফল্ট লোগো</button>
+          <div class="hint">${t('PNG / JPG — সর্বোচ্চ ~৫১২px।', 'PNG / JPG — up to about 512 px.')}</div>
+          <button class="btn btn-ghost btn-xs" type="button" id="logoReset">${t('ডিফল্ট লোগো', 'Default logo')}</button>
         </div>
       </div>
     </div>
-    <div class="field" style="margin-top:8px"><label>WhatsApp বকেয়া রিমাইন্ডার টেমপ্লেট</label>
+    <div class="field" style="margin-top:8px"><label>${t('WhatsApp বকেয়া রিমাইন্ডার টেমপ্লেট', 'WhatsApp due-reminder template')}</label>
       <textarea name="waTemplate" rows="7">${esc(cfg.waTemplate)}</textarea>
-      <div class="hint"><b>[Member Name]</b> অংশটি স্বয়ংক্রিয়ভাবে সদস্যের নাম দিয়ে প্রতিস্থাপিত হবে।</div></div>
+      <div class="hint">${t('<b>[Member Name]</b> অংশটি স্বয়ংক্রিয়ভাবে সদস্যের নাম দিয়ে প্রতিস্থাপিত হবে।', 'The <b>[Member Name]</b> placeholder is replaced with the member’s name automatically.')}</div></div>
     <div class="form-actions">
-      <button class="btn btn-primary" type="submit">${icon('save')}<span>Save / সংরক্ষণ</span></button>
-      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>Reset</span></button>
+      <button class="btn btn-primary" type="submit">${icon('save')}<span>${t('সংরক্ষণ করুন', 'Save')}</span></button>
+      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>${t('রিসেট', 'Reset')}</span></button>
     </div>`;
   const preview = f.querySelector('#logoPreview');
   const fileInput = f.querySelector('#logoFile');
@@ -289,8 +289,8 @@ async function organisationSection(session, host) {
   f.addEventListener('submit', async e => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(f).entries());
-    if (!String(v.orgNameBn || '').trim() || !String(v.orgNameEn || '').trim()) { toast('সংগঠনের নাম আবশ্যক', 'error'); return; }
-    if (!String(v.waTemplate || '').includes('[Member Name]')) { toast('টেমপ্লেটে [Member Name] অবশ্যই থাকতে হবে', 'error'); return; }
+    if (!String(v.orgNameBn || '').trim() || !String(v.orgNameEn || '').trim()) { toast(t('সংগঠনের নাম আবশ্যক', 'The organisation name is required'), 'error'); return; }
+    if (!String(v.waTemplate || '').includes('[Member Name]')) { toast(t('টেমপ্লেটে [Member Name] অবশ্যই থাকতে হবে', 'The template must contain [Member Name]'), 'error'); return; }
     const b = f.querySelector('button[type=submit]'); b.disabled = true;
     try {
       await saveSettings({
@@ -308,7 +308,7 @@ async function organisationSection(session, host) {
     }
     b.disabled = false;
     await logActivity('SETTINGS_UPDATE', 'Organisation settings updated', session);
-    toast('সেটিংস সংরক্ষিত হয়েছে / Settings saved', 'success');
+    toast(t('সেটিংস সংরক্ষিত হয়েছে', 'Settings saved'), 'success');
     App.refresh();
   });
   host.appendChild(card('সংগঠন ও হিসাব সেটিংস', 'Organisation & Accounting Settings', f));
@@ -317,8 +317,8 @@ async function organisationSection(session, host) {
   const dz = el('div');
   dz.appendChild(banner('warn', t('নিচের কাজগুলো স্থায়ী। কাজ করার আগে অবশ্যই ব্যাকআপ নিন।', 'These actions are permanent. Always take a backup first.')));
   const dRow = el('div', { class: 'btn-row', style: 'margin-top:8px' });
-  dRow.appendChild(btn('ব্যাকআপ ও রিস্টোর / Backup & Restore', 'backup', 'ghost', () => App.go('settings', { section: 'backup' })));
-  dRow.appendChild(btn('স্থানীয় ডাটা মুছুন / Clear local data', 'trash', 'danger', async () => {
+  dRow.appendChild(btn(t('ব্যাকআপ ও রিস্টোর', 'Backup & Restore'), 'backup', 'ghost', () => App.go('settings', { section: 'backup' })));
+  dRow.appendChild(btn(t('স্থানীয় ডাটা মুছুন', 'Clear local data'), 'trash', 'danger', async () => {
     if (!(await confirmBox(t('এই ডিভাইসের সমস্ত স্থানীয় ডাটা (সদস্য, জমা, লগ, ব্যবহারকারী) মুছে যাবে। Firebase-এ ডাটা থাকলে পুনরায় Pull করা যাবে। নিশ্চিত?', 'All local data (members, deposits, logs, users) on this device will be erased. If the data exists in Firebase it can be pulled again. Continue?'), { okLabel: t('মুছে ফেলুন', 'Erase'), danger: true }))) return;
     if (!(await confirmBox(t('শেষ সতর্কতা — সত্যিই মুছে ফেলবেন?', 'Last warning — really erase everything?'), { okLabel: t('হ্যাঁ, মুছে ফেলুন', 'Yes, erase'), danger: true }))) return;
     for (const st of Object.keys(STORES)) await dbClear(st);
@@ -361,18 +361,18 @@ async function firebaseSection(session, host) {
 
   /* cloud actions (previously on the Backup page header) */
   const cRow = el('div', { class: 'btn-stack', style: 'margin-top:10px' });
-  cRow.appendChild(btn('এখনই সিঙ্ক / Sync now', 'sync', 'soft', async () => {
+  cRow.appendChild(btn(t('এখনই সিঙ্ক', 'Sync now'), 'sync', 'soft', async () => {
     if (!firebase.configured) { toast(t('প্রথমে Firebase কনফিগার করুন', 'Configure Firebase first'), 'warn'); return; }
     try { const n = await firebase.flush(); toast(t(`${n}টি সিঙ্ক হয়েছে`, `${n} item(s) synced`), 'success'); App.refresh(); }
     catch (err) { toast(err.message, 'error'); }
   }, { block: true }));
-  cRow.appendChild(btn('ক্লাউড থেকে আনুন / Pull from cloud', 'download', 'soft', async () => {
+  cRow.appendChild(btn(t('ক্লাউড থেকে আনুন', 'Pull from cloud'), 'download', 'soft', async () => {
     if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
     if (!(await confirmBox(t('Firebase থেকে সব ডাটা টেনে এনে স্থানীয় ডাটার সাথে মিলানো হবে। চালিয়ে যাবেন?', 'All data will be pulled from Firebase and merged with this device. Continue?'), { okLabel: t('আনুন', 'Pull') }))) return;
     try { const n = await firebase.pullAll(); const { dedupeTxnIds } = await import('../store.js'); await dedupeTxnIds(); invalidate(); toast(t(`${n}টি রেকর্ড আনা হয়েছে`, `${n} record(s) pulled`), 'success'); App.refresh(); }
     catch (err) { toast(err.message, 'error'); }
   }, { block: true }));
-  cRow.appendChild(btn('ক্লাউডে পাঠান / Push to cloud', 'upload', 'ghost', async () => {
+  cRow.appendChild(btn(t('ক্লাউডে পাঠান', 'Push to cloud'), 'upload', 'ghost', async () => {
     if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
     if (!(await confirmBox(t('স্থানীয় সব ডাটা Firebase-এ পাঠানো হবে এবং সার্ভারের একই রেকর্ড প্রতিস্থাপিত হবে। চালিয়ে যাবেন?', 'All local data will be uploaded to Firebase, replacing the same records on the server. Continue?'), { okLabel: t('পাঠান', 'Push'), danger: true }))) return;
     try { const n = await firebase.pushAll(); toast(t(`${n}টি রেকর্ড পাঠানো হয়েছে`, `${n} record(s) pushed`), 'success'); }
