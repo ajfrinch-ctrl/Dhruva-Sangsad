@@ -305,19 +305,19 @@ export async function recoverPassword({ identifier, dobDay, dobMonth, field1, va
 /* ---------------- Authorization matrix ---------------- */
 export const PERMISSIONS = {
   admin: new Set([
-    'home', 'members', 'deposit', 'authorization', 'reports', 'settings', 'member-panel',
+    'home', 'members', 'deposits', 'transactions', 'statements', 'authorization', 'reports', 'settings', 'member-panel',
     'member:view-all', 'member:edit', 'member:approve', 'member:delete',
     'deposit:create-any', 'deposit:approve', 'deposit:edit-any', 'deposit:delete-any',
     'staff:manage', 'report:all', 'export:all', 'whatsapp', 'backup:manage', 'settings:manage',
   ]),
   maker: new Set([
-    'home', 'members', 'deposit', 'authorization', 'reports', 'settings',
+    'home', 'members', 'deposits', 'transactions', 'statements', 'authorization', 'reports', 'settings',
     'member:view-all', 'member:edit', 'member:approve',
     'deposit:create-any', 'deposit:approve', 'deposit:edit-today', 'deposit:delete-today',
     'report:all', 'export:all', 'whatsapp',
   ]),
   member: new Set([
-    'home', 'deposit', 'reports', 'settings', 'member-panel',
+    'home', 'deposits', 'transactions', 'statements', 'reports', 'settings', 'member-panel',
     'member:view-own', 'deposit:create-own', 'report:own', 'export:own',
   ]),
 };

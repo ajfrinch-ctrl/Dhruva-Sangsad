@@ -61,6 +61,11 @@ const P = {
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.2M12 19v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.8 12h2.2M19 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  star: '<path d="m12 3.6 2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="2.4"/><path d="M3 10h18"/><path d="M16.5 14.6h.01"/>',
+  receipt: '<path d="M5.5 3.5h13v17l-2.2-1.5-2.2 1.5-2.1-1.5-2.2 1.5-2.1-1.5-2.2 1.5z"/><path d="M8.5 8h7M8.5 11.6h7M8.5 15.2h4.5"/>',
+  send: '<path d="M21 3 10.5 13.5"/><path d="M21 3 14.6 21l-4.1-7.5L3 9.4z"/>',
+  usergear: '<circle cx="9.6" cy="8" r="3.4"/><path d="M3.6 19.6a6 6 0 0 1 12 0"/><circle cx="17.6" cy="16.4" r="2.6"/><path d="M17.6 12.6v1.2M17.6 19v1.2M21.4 16.4h-1.2M15 16.4h-1.2"/>',
 };
 
 export function icon(name, cls = '') {

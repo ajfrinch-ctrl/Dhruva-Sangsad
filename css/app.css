@@ -458,8 +458,7 @@ html[data-theme="amoled"] .chip,html[data-theme="dark"] .chip,
 html[data-theme="amoled"] .auth-tabs,html[data-theme="dark"] .auth-tabs{background:#000;border-color:#333;color:var(--text)}
 html[data-theme="amoled"] .icon-btn:hover,html[data-theme="dark"] .icon-btn:hover,
 html[data-theme="amoled"] .btn-ghost:hover,html[data-theme="dark"] .btn-ghost:hover,
-html[data-theme="amoled"] .nav-tab:hover,html[data-theme="dark"] .nav-tab:hover,
-html[data-theme="amoled"] .log-toggle:hover,html[data-theme="dark"] .log-toggle:hover{background:#111}
+html[data-theme="amoled"] .nav-tab:hover,html[data-theme="dark"] .nav-tab:hover{background:#111}
 html[data-theme="amoled"] input,html[data-theme="dark"] input,
 html[data-theme="amoled"] select,html[data-theme="dark"] select,
 html[data-theme="amoled"] textarea,html[data-theme="dark"] textarea{background:#000;color:var(--text);border-color:#333}
@@ -780,24 +779,6 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 .act .as{font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .act .aw{font-size:10.5px;color:var(--faint);white-space:nowrap;flex:none;text-align:right;line-height:1.35}
 
-/* ---- collapsible “কার্যক্রম লগ” (member profile) ---- */
-.log-card{padding:0}
-.log-toggle{display:flex;align-items:center;gap:11px;width:100%;min-height:52px;padding:12px 14px;
-  border:0;background:transparent;font:inherit;cursor:pointer;text-align:left;border-radius:var(--r)}
-.log-toggle:hover{background:#f9fafb}
-.log-toggle .lt-ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:none;
-  background:var(--green-soft);color:var(--green-dark);font-size:18px}
-.log-toggle .lt-ic .icon{width:19px;height:19px}
-.log-toggle .lt-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.log-toggle .lt-t{font-size:14px;font-weight:700;line-height:1.3}
-.log-toggle .lt-s{font-size:11.5px;color:var(--faint);line-height:1.3}
-.log-toggle .go{color:var(--faint);flex:none;transition:transform .18s ease}
-.log-toggle .go .icon{width:16px;height:16px}
-.log-toggle[aria-expanded="true"] .go{transform:rotate(180deg)}
-.log-body{display:none;padding:0 12px 12px}
-.log-body.open{display:block}
-.log-body .act-list{margin-top:2px}
-.log-foot{display:flex;justify-content:flex-end;margin-top:10px}
 
 /* date mirror under the native date input (always DD-MM-YYYY) */
 .dfmt{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
@@ -1191,3 +1172,206 @@ details.acc .grid{padding:2px 12px 12px}
   border-radius:10px;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
 .install-bar .ib-close:hover{background:var(--bg-2);color:var(--text)}
 html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{background:#000;border-color:#333}
+
+/* =====================================================================
+   =====================  v6.6 — MODERN APP INTERFACE  ===================
+   Android-app-like: icon grids, 2-column options, clean top bar,
+   transaction ids, preview-first reports. Mobile-first down to 320px.
+   ===================================================================== */
+
+/* ---- clean top bar: [Back] · brand (centered) · [Bell] ---- */
+.topbar{padding:0 10px;gap:6px}
+.top-left{flex:none;display:flex;align-items:center}
+.topbar .brand{flex:1;min-width:0;justify-content:center}
+.topbar .brand-txt{text-align:left}
+.topbar .brand-txt .n{overflow:hidden;text-overflow:ellipsis}
+.topbar .brand-txt .r{max-width:40vw;justify-content:flex-start}
+.top-right{margin-left:0}
+@media (max-width:430px){
+  .topbar{padding:0 8px;gap:4px}
+  .topbar .brand{gap:8px}
+  .topbar .icon-btn{width:34px;height:34px}
+  .topbar .brand-txt .r{max-width:32vw}
+}
+
+/* ---- hub section menu (Deposits / Transactions / Settings) — 2 columns,
+   an odd last tile keeps the SAME size (auto-placement, never stretched) ---- */
+.sec-menu{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.sec-tile{
+  position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:9px;
+  text-align:left;width:100%;padding:14px 12px 13px;border:1px solid var(--line);
+  border-radius:14px;background:var(--card);cursor:pointer;font:inherit;color:inherit;
+  box-shadow:var(--shadow);transition:transform .12s ease,border-color .12s;min-height:92px;
+}
+.sec-tile:active{transform:scale(.97)}
+.sec-tile:hover{border-color:var(--green-line)}
+.sec-tile .st-ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;flex:none;
+  background:var(--green-soft);color:var(--green-dark);font-size:21px}
+.sec-tile .st-ic .icon{width:22px;height:22px}
+.sec-tile .st-tx{min-width:0;display:flex;flex-direction:column;gap:2px}
+.sec-tile .st-t{font-size:13.5px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
+.sec-tile .st-s{font-size:10.5px;color:var(--muted);line-height:1.35;overflow-wrap:anywhere}
+.sec-tile .pill{position:absolute;top:10px;right:10px;background:var(--red);color:#fff;font-size:10.5px;
+  font-weight:800;border-radius:9px;padding:1px 7px;line-height:1.5}
+.sec-tile.info .st-ic{background:var(--blue-soft);color:#1d4ed8}
+.sec-tile.warn .st-ic{background:var(--amber-soft);color:var(--amber-dark)}
+.sec-tile.danger .st-ic{background:var(--red-soft);color:var(--red-dark)}
+.sec-tile.gray .st-ic{background:#f3f4f6;color:var(--muted)}
+@media (max-width:640px){
+  .sec-menu{gap:8px}
+  .sec-tile{padding:12px 10px 11px;min-height:86px;border-radius:13px}
+  .sec-tile .st-t{font-size:12.5px}
+  .sec-tile .st-s{font-size:10px}
+}
+
+/* ---- back-to-menu bar inside a hub section ---- */
+.sec-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.sec-back{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);
+  color:var(--text);font:inherit;font-size:12.5px;font-weight:700;padding:8px 12px;border-radius:11px;
+  cursor:pointer;min-height:40px;flex:none}
+.sec-back:active{transform:scale(.96)}
+.sec-bar-t{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:800;min-width:0;
+  overflow-wrap:anywhere}
+.sec-bar-t .icon{width:18px;height:18px;color:var(--green)}
+
+/* ---- selectable option cards (জমার ধরন / পরিশোধ পদ্ধতি …): 2 columns,
+   icon on top, label below; odd last card keeps normal size ---- */
+.opt-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.opt-card{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  padding:13px 8px 11px;border:1.5px solid var(--line);border-radius:13px;background:var(--card);
+  color:var(--text);font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;text-align:center;
+  transition:border-color .12s, background .12s, transform .12s;min-height:82px;line-height:1.3;
+}
+.opt-card .oc-ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;
+  background:#f3f4f6;color:var(--muted);font-size:18px;transition:.12s}
+.opt-card .oc-ic .icon{width:19px;height:19px}
+.opt-card:active{transform:scale(.97)}
+.opt-card.on{border-color:var(--green);background:var(--green-soft);color:var(--green-dark);
+  box-shadow:0 0 0 2px var(--green-line)}
+.opt-card.on .oc-ic{background:var(--green);color:#fff}
+.opt-card .oc-tx{overflow-wrap:anywhere}
+@media (max-width:430px){
+  .opt-grid{gap:8px}
+  .opt-card{min-height:76px;font-size:11.5px;border-radius:12px}
+  .opt-card .oc-ic{width:30px;height:30px;font-size:16px}
+}
+
+/* ---- fixed (non-editable) monthly amount ---- */
+.fixed-amt{display:flex;align-items:center;gap:10px;border:1.5px dashed var(--green-line);
+  background:var(--green-soft);border-radius:var(--r-sm);padding:10px 12px;min-height:48px;flex-wrap:wrap}
+.fixed-amt b{font-size:19px;color:var(--green-dark);font-variant-numeric:tabular-nums}
+.fixed-amt span{font-size:10.5px;color:var(--muted);font-weight:700}
+
+/* ---- unique transaction id chip ---- */
+.txn-id{display:inline-flex;align-items:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:11px;font-weight:700;letter-spacing:.2px;color:var(--green-dark);background:var(--green-soft);
+  border:1px solid var(--green-line);border-radius:7px;padding:2px 7px;cursor:pointer;user-select:all;
+  overflow-wrap:anywhere;text-align:left;max-width:100%}
+.txn-id.copied{background:var(--green);color:#fff;border-color:var(--green)}
+.txn-id-static{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.3px;overflow-wrap:anywhere}
+td .txn-id, .kv .txn-id{margin:0}
+
+/* ---- modern transaction card (rule 11) ---- */
+.txn-list{display:flex;flex-direction:column;gap:9px}
+.txncard{
+  display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;border:1px solid var(--line);
+  border-radius:14px;background:var(--card);box-shadow:var(--shadow);padding:11px 12px;font:inherit;
+  color:inherit;cursor:pointer;transition:transform .12s}
+.txncard:active{transform:scale(.98)}
+.txncard .tx-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;
+  background:var(--green-soft);color:var(--green-dark);font-size:18px}
+.txncard .tx-ic.r{background:var(--red-soft);color:var(--red-dark)}
+.txncard .tx-ic .icon{width:19px;height:19px}
+.txncard .tx-bd{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.txncard .tx-top{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.txncard .tx-top .tag{margin-left:auto}
+.txncard .tx-mid{display:flex;align-items:baseline;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.txncard .tx-mid b:first-child{font-size:13.5px;overflow-wrap:anywhere}
+.txncard .tx-amt{font-size:14.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.txncard .tx-sub{font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+.txncard .tx-go{align-self:center;color:var(--faint);flex:none;font-size:16px}
+
+/* ---- deposit/withdrawal feed card (Deposits hub) — v6.6 markup ---- */
+.tcard{border-radius:14px}
+.tcard .tc-top{display:flex;align-items:center;gap:8px}
+.tcard .tc-ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;flex:none;
+  background:var(--green-soft);color:var(--green-dark);font-size:15px}
+.tcard .tc-ic .icon{width:16px;height:16px}
+.tcard .tc-id{flex:1;min-width:0}
+.tcard .tc-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:6px;flex-wrap:wrap}
+.tcard .tc-title b:first-child{font-size:13.5px;overflow-wrap:anywhere}
+.tcard .tc-title span{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--green-dark)}
+.tcard .tc-meta{font-size:11.5px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.tcard .tc-top .tag-wrap{margin-left:auto;flex:none}
+
+/* ---- member rows: long names WRAP, never overlap controls (rule 21) ---- */
+.pcard .pc-head{align-items:flex-start;gap:10px}
+.pcard .pc-ava{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;
+  background:var(--green-soft);color:var(--green-dark);font-size:17px}
+.pcard .pc-ava .icon{width:18px;height:18px}
+.pcard .pc-idcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.pcard .pc-name{white-space:normal;overflow:visible;text-overflow:clip;font-size:14.5px;font-weight:800;
+  line-height:1.3;overflow-wrap:anywhere}
+.pcard .pc-name-en{font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+.pcard .pc-idline{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.pcard .pc-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none;margin-left:6px}
+.pcard .pc-go{color:var(--faint);font-size:17px;line-height:1}
+
+/* ---- dashboard greeting + notices ---- */
+.greet{margin:6px 2px 14px}
+.greet-hi{font-size:21px;font-weight:800;line-height:1.25;letter-spacing:.1px}
+.greet-sub{font-size:12.5px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.greet-date{display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:11px;font-weight:700;
+  color:var(--faint);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
+.greet-date .icon{width:13px;height:13px}
+@media (max-width:430px){.greet-hi{font-size:18.5px}.greet-sub{font-size:12px}}
+.notice-card .card-head h3{display:flex;align-items:center;gap:7px}
+.notice-card .card-head h3 .icon{width:16px;height:16px;color:var(--amber-dark)}
+
+/* ---- report summary-before-filters ---- */
+.report-summary{margin-bottom:6px}
+
+/* ---- report preview modal (exact sheet; single source of truth with PDF) ---- */
+.rpv{padding:8px}
+.rpv-modal{max-width:min(920px,100%);width:100%;border-radius:16px}
+.rpv-body{padding:10px 12px}
+.rpv-x{width:34px;height:34px;min-height:34px;font-size:20px;line-height:1}
+.rpv-holder{padding:10px;border-radius:12px;max-height:calc(92dvh - 150px);overflow:auto}
+.rpv-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+.rpv-foot .btn{min-height:46px;font-size:14px}
+.rpv-holder .print-sheet{box-shadow:none;margin:0 auto}
+@media (max-width:640px){.rpv{padding:0}.rpv-modal{border-radius:0;max-height:100dvh;height:100dvh;max-width:none}
+  .rpv-holder{max-height:calc(100dvh - 140px)}}
+
+/* ---- the mobile bottom bar stays ≤5 items; labels tiny ---- */
+.bottom-nav .nav-tab span{font-size:10px}
+
+/* ---- tables: never let ids/names break layout ---- */
+table.tbl td,table.tbl th{overflow-wrap:anywhere}
+table.tbl .num{white-space:nowrap}
+.cell-name{overflow-wrap:anywhere;white-space:normal}
+
+/* ---- dark / AMOLED for the new components ---- */
+html[data-theme="dark"] .sec-tile,html[data-theme="amoled"] .sec-tile,
+html[data-theme="dark"] .opt-card,html[data-theme="amoled"] .opt-card,
+html[data-theme="dark"] .txncard,html[data-theme="amoled"] .txncard,
+html[data-theme="dark"] .tcard,html[data-theme="amoled"] .tcard,
+html[data-theme="dark"] .pcard,html[data-theme="amoled"] .pcard,
+html[data-theme="dark"] .sec-back,html[data-theme="amoled"] .sec-back,
+html[data-theme="dark"] .greet-date,html[data-theme="amoled"] .greet-date{background:#000;color:var(--text);border-color:var(--line)}
+html[data-theme="dark"] .sec-tile:hover,html[data-theme="amoled"] .sec-tile:hover,
+html[data-theme="dark"] .opt-card:hover,html[data-theme="amoled"] .opt-card:hover{border-color:var(--green-line)}
+html[data-theme="dark"] .opt-card .oc-ic,html[data-theme="amoled"] .opt-card .oc-ic,
+html[data-theme="dark"] .pcard .pc-ava,html[data-theme="amoled"] .pcard .pc-ava{background:#141414;color:var(--muted)}
+html[data-theme="dark"] .opt-card.on,html[data-theme="amoled"] .opt-card.on{background:#052e16;color:#86efac}
+html[data-theme="dark"] .opt-card.on .oc-ic,html[data-theme="amoled"] .opt-card.on .oc-ic{background:var(--green);color:#04150a}
+html[data-theme="dark"] .txn-id,html[data-theme="amoled"] .txn-id{background:#052e16;border-color:#14532d;color:#86efac}
+html[data-theme="dark"] .fixed-amt,html[data-theme="amoled"] .fixed-amt{background:#052e16;border-color:#14532d}
+html[data-theme="dark"] .fixed-amt b,html[data-theme="amoled"] .fixed-amt b{color:#86efac}
+html[data-theme="dark"] .rpv-modal,html[data-theme="amoled"] .rpv-modal{background:#000}
+html[data-theme="dark"] .sheet-holder,html[data-theme="amoled"] .sheet-holder{background:#111}
+html[data-theme="dark"] .sec-tile .pill,html[data-theme="amoled"] .sec-tile .pill{background:var(--red);color:#fff}
+
+/* ---- remove legacy FAB visual entirely (rule 5) ---- */
+.fab{display:none !important}

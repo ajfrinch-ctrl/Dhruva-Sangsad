@@ -1,11 +1,10 @@
-/* Notifications (top-right icon popup) + Activity Log */
+/* Notifications (top-right bell) + Activity Log (Settings only). */
 import {
   el, esc, toast, fmtDate, fmtTime, todayISO, debounce, modal, t,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, btn, filterSheet, emptyState } from '../ui.js';
 import { visibleNotifications, markNotificationRead, allLogs, logUserName } from '../store.js';
-import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { App } from '../app.js';
 
 const NOTIF_ICON = { register: 'register', deposit: 'deposit', approve: 'approve', reject: 'reject', info: 'bell', warn: 'warn', due: 'due' };
@@ -55,7 +54,7 @@ export async function openNotifications(session) {
         }
         if (n.action === 'deposit') {
           document.querySelector('.modal-back')?.remove();
-          App.go('deposit');
+          App.go('deposits', { section: 'entry' });
         }
       });
       list.appendChild(li);
@@ -132,52 +131,6 @@ export function actRow(l, opts = {}) {
   return row;
 }
 
-/** Collapsed “কার্যক্রম লগ” card for the member profile (and anywhere else):
-    one tappable row by default; tap expands the most recent 10 own entries,
-    tap again (or “বন্ধ করুন”) collapses. No export, no filters, member-only. */
-export async function memberLogCard(session, { open = false } = {}) {
-  const all = await allLogs();
-  const mine = all.filter(l => l.userId === session.id)
-    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  const top = mine.slice(0, 10);
-
-  const box = el('div', { class: 'card log-card' });
-  const headBtn = el('button', { type: 'button', class: 'log-toggle', 'aria-expanded': String(open) });
-  const sub = top.length
-    ? t(`সর্বশেষ ${bnD(top.length)}টি · ট্যাপ করে দেখুন`, `Last ${top.length} entries · tap to view`)
-    : t('এখনো কোনো কার্যক্রম নেই', 'No activity yet');
-  headBtn.innerHTML = `<span class="lt-ic">${icon('log')}</span>
-    <span class="lt-tx"><span class="lt-t">${esc(t('কার্যক্রম লগ', 'Activity Log'))}</span><span class="lt-s">${esc(sub)}</span></span>
-    <span class="go">${icon('chevron')}</span>`;
-
-  const body = el('div', { class: 'log-body' });
-  let painted = false;
-  const paint = () => {
-    body.replaceChildren();
-    if (!top.length) {
-      body.appendChild(el('div', { class: 'empty', html: `${icon('log')}${esc(t('এখনো কোনো কার্যক্রম নেই', 'No activity yet'))}` }));
-    } else {
-      const list = el('div', { class: 'act-list' });
-      top.forEach(l => list.appendChild(actRow(l, { member: true })));
-      body.appendChild(list);
-      const foot = el('div', { class: 'log-foot' });
-      foot.appendChild(btn(t('বন্ধ করুন', 'Close'), 'clear', 'ghost', () => toggle(false), { size: 'xs' }));
-      body.appendChild(foot);
-    }
-    painted = true;
-  };
-  const toggle = force => {
-    const next = force !== undefined ? force : !body.classList.contains('open');
-    body.classList.toggle('open', next);
-    headBtn.setAttribute('aria-expanded', String(next));
-    if (next && !painted) paint();
-  };
-  headBtn.addEventListener('click', () => toggle());
-  box.append(headBtn, body);
-  if (open) { body.classList.add('open'); headBtn.setAttribute('aria-expanded', 'true'); paint(); }
-  return box;
-}
-
 export async function pageActivity(session) {
   const logs = await allLogs();
   const isMember = session.role === 'member';
@@ -196,21 +149,9 @@ export async function pageActivity(session) {
   let current = [];
   let shown = PAGE_SIZE;
   const resetShown = () => { shown = PAGE_SIZE; };
-  const doExport = kind => {
-    if (!current.length) { toast('রপ্তানির জন্য কোনো তথ্য নেই', 'warn'); return; }
-    const rows = [['SL', 'Date', 'Time', 'User', 'Role', 'Action', 'Details']];
-    current.forEach((l, i) => rows.push([i + 1, fmtDate(l.createdAt), fmtTime(l.createdAt), logUserName(l), l.role || '', l.action, l.details || '']));
-    const fn = safeName(`Dhruvo_Sangsad_Activity_Log_${todayISO()}`);
-    if (kind === 'csv') downloadCSV(rows, fn + '.csv');
-    else downloadExcel([{ name: 'Activity Log', rows }], fn + '.xlsx');
-    toast('রপ্তানি সম্পন্ন', 'success');
-  };
 
-  /* Member view: clean list only — no search, no filter, no Excel/CSV export. */
-  const listCard = card('কার্যক্রম তালিকা', 'Activity Records', el('div'), isMember ? [] : [
-    btn('Excel', 'excel', 'soft', () => doExport('xlsx'), { size: 'xs' }),
-    btn('CSV', 'csv', 'ghost', () => doExport('csv'), { size: 'xs' }),
-  ]);
+  /* One clean list — no download buttons (activity log is a viewer). */
+  const listCard = card('কার্যক্রম তালিকা', 'Activity Records', el('div'));
 
   let qEl = null;
   if (!isMember) {

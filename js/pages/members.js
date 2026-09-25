@@ -25,18 +25,20 @@ export async function pageMembersHub(session, params = {}) {
   ];
   // Daily work starts from the list. A memberDocId shortcut (e.g. from the
   // list's Edit button or approval queues) opens সম্পাদনা directly.
-  let active = params.memberDocId ? 'update' : (params.tab && TABS.some(t => t.id === params.tab) ? params.tab : 'search');
+  // Daily work starts from the list. A memberDocId shortcut (e.g. from the
+  // list's Edit button or approval queues) opens সম্পাদনা directly.
+  const req = params.memberDocId ? 'update' : ((params.section || params.tab) && TABS.some(x => x.id === (params.section || params.tab)) ? (params.section || params.tab) : 'search');
+  let active = req;
   const host = el('div');
   const tabBar = tabs(TABS, active, id => {
     active = id;
-    App.params = { ...(App.params || {}), tab: id };
-    paint();
-    tabBar.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', TABS[i].id === id));
+    App.go('members', { section: id });
   });
   wrap.append(tabBar, host);
 
   async function paint() {
     host.replaceChildren();
+    tabBar.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', TABS[i].id === active));
     if (active === 'register') await embedPage(host, pageRegister, session);
     else if (active === 'update') await embedPage(host, pageMemberUpdate, session, params.memberDocId ? { memberDocId: params.memberDocId } : {});
     else await embedPage(host, pageSearch, session);
@@ -451,14 +453,14 @@ export async function pageSearch(session) {
         title: t('কোনো সদস্য পাওয়া যায়নি', 'No members found'),
         hint: (inp.value.trim() || st || fl) ? t('খোঁজ বা ফিল্টার বদলে আবার দেখুন', 'Try a different search or filter') : '',
         actionLabel: can(session, 'member:edit') ? t('সদস্য যোগ করুন', 'Add member') : '',
-        onAction: can(session, 'member:edit') ? () => App.go('members', { tab: 'register' }) : null,
+        onAction: can(session, 'member:edit') ? () => App.go('members', { section: 'register' }) : null,
       }));
       return;
     }
     if (window.matchMedia && matchMedia('(max-width: 767px)').matches) {
       rows.forEach(({ m, s }) => listHost.appendChild(personCard(m, s, {
         onView: () => viewMember(session, m, s),
-        onEdit: can(session, 'member:edit') ? () => App.go('members', { tab: 'update', memberDocId: m.id }) : null,
+        onEdit: can(session, 'member:edit') ? () => App.go('members', { section: 'update', memberDocId: m.id }) : null,
         onWa: s.due > 0 && can(session, 'whatsapp') ? () => openWa(m) : null,
       })));
     } else {
@@ -469,7 +471,7 @@ export async function pageSearch(session) {
         rows.map(({ m, s }) => {
           const acts = el('div', { class: 'btn-row' });
           acts.appendChild(btn(t('দেখুন', 'View'), 'eye', 'ghost', () => viewMember(session, m, s), { size: 'xs' }));
-          if (can(session, 'member:edit')) acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => App.go('members', { tab: 'update', memberDocId: m.id }), { size: 'xs' }));
+          if (can(session, 'member:edit')) acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => App.go('members', { section: 'update', memberDocId: m.id }), { size: 'xs' }));
           if (s.due > 0 && can(session, 'whatsapp')) acts.appendChild(btn('WhatsApp', 'whatsapp', 'wa', () => openWa(m), { size: 'xs' }));
           return [
             `<b>${esc(m.memberId)}</b>`,
@@ -535,19 +537,23 @@ export function viewMember(session, m, s) {
 export function personCard(m, s, { onView, onEdit, onWa } = {}) {
   const c = el('div', { class: 'pcard' });
   const head = el('button', { type: 'button', class: 'pc-head', 'aria-label': `${m.nameBn || m.nameEn || m.memberId} — ${t('দেখুন', 'View')}` });
-  head.innerHTML = `<span class="pc-name">${esc(m.nameBn || m.nameEn || '')}</span>`;
-  head.insertAdjacentHTML('beforeend', statusTag(m.status));
+  head.innerHTML = `<span class="pc-ava">${icon('member')}</span>
+    <span class="pc-idcol">
+      <span class="pc-name">${esc(m.nameBn || m.nameEn || '')}</span>
+      ${m.nameBn && m.nameEn && m.nameEn !== m.nameBn ? `<span class="pc-name-en">${esc(m.nameEn)}</span>` : ''}
+      <span class="pc-idline">${t('সদস্য আইডি', 'ID')}: <b>${esc(m.memberId)}</b></span>
+    </span>
+    <span class="pc-side">${statusTag(m.status)}<span class="pc-go">${icon('chevron')}</span></span>`;
   if (onView) head.addEventListener('click', onView);
   c.appendChild(head);
-  c.appendChild(el('div', { class: 'pc-sub', text: `${m.memberId} · ${m.mobile || ''}` }));
   const nums = el('div', { class: 'pc-nums' });
-  nums.innerHTML = `<span>কিস্তি <b>${money(m.installment)}</b></span>`
-    + `<span>জমা <b>${money(s.totalDeposit)}</b></span>`
-    + `<span>বকেয়া <b class="${s.due > 0 ? 'due-amt' : ''}">${money(s.due)}</b></span>`
-    + `<span>অগ্রিম <b class="${s.advance > 0 ? 'adv-amt' : ''}">${money(s.advance)}</b></span>`;
+  nums.innerHTML = `<span>${t('কিস্তি', 'Installment')} <b>${money(m.installment)}</b></span>`
+    + `<span>${t('জমা', 'Deposit')} <b>${money(s.totalDeposit)}</b></span>`
+    + `<span>${t('বকেয়া', 'Due')} <b class="${s.due > 0 ? 'due-amt' : ''}">${money(s.due)}</b></span>`
+    + `<span>${t('অগ্রিম', 'Advance')} <b class="${s.advance > 0 ? 'adv-amt' : ''}">${money(s.advance)}</b></span>`;
   c.appendChild(nums);
   const acts = el('div', { class: 'pc-acts' });
-  if (onView) acts.appendChild(btn(t('দেখুন', 'View'), 'eye', 'ghost', onView, { size: 'xs' }));
+  if (onView) acts.appendChild(btn(t('বিস্তারিত', 'Details'), 'eye', 'ghost', onView, { size: 'xs' }));
   if (onEdit) acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', onEdit, { size: 'xs' }));
   if (onWa) acts.appendChild(btn('WhatsApp', 'whatsapp', 'wa', onWa, { size: 'xs' }));
   if (acts.children.length) c.appendChild(acts);

@@ -1,5 +1,5 @@
 /* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.5.23';
+const VERSION = 'ds-v6.6.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -49,6 +49,13 @@ const PRECACHE = [
   'js/pages/members.js',
   'js/pages/misc.js',
   'js/pages/reports.js',
+  'js/pages/transactions.js',
+  'js/pages/statements.js',
+  'js/pages/settings.js',
+  'js/pages/member-panel.js',
+  'js/sheet.js',
+  'js/preview.js',
+  'js/picker.js',
 ];
 
 self.addEventListener('install', event => {

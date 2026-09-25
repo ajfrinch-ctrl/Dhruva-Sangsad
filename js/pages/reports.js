@@ -1,25 +1,27 @@
-/* Reports: Statement, Overall, Daily, Monthly, Due, Advance, Collection,
-   Payment Method, Date Range, Member-wise — with PDF / Excel / CSV export. */
+/* Reports — modern flow per audit:
+   SUMMARY (first) → Report Type dropdown → Filters → [Generate Report]
+   → popup preview that shows the EXACT sheet → PDF only.
+   Excel / CSV / Image / JSON downloads are gone; the member statement lives
+   on its own Statements page (not duplicated here). */
 import {
-  el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, monthKey, monthLabel,
+  el, esc, toast, taka, money, num, fmtDate, todayISO, monthKey, monthLabel,
   typeLabel, methodLabel, PAY_METHODS, waNumber, t,
 } from '../util.js';
-import { logoSrc } from '../brand.js';
-import { icon } from '../icons.js';
-import { page, card, tableWrap, banner, btn, statCard, exportBar } from '../ui.js';
+import { page, card, btn, statCard } from '../ui.js';
 import { memberPicker } from '../picker.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals,
-  statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel, summaryOpts,
+  approvedOf, withdrawalTypeLabel, summaryOpts,
 } from '../store.js';
-import { sheetToPdf, downloadCSV, downloadExcel, safeName } from '../pdf.js';
-import { can } from '../auth.js';
+import { buildSheet, psTable, sechead } from '../sheet.js';
+import { previewReport, reportFileName } from '../preview.js';
+import { DEFAULT_SETTINGS } from '../store.js';
 
 /* ---------------- WhatsApp due reminder ---------------- */
 let WA_TPL = DEFAULT_SETTINGS.waTemplate;
 settings().then(s => { if (s.waTemplate) WA_TPL = s.waTemplate; }).catch(() => {});
 
-/** Exact Bangla due-reminder text with [Member Name] substituted. No amount is included. */
+/** Exact Bangla due-reminder text with [Member Name] substituted. */
 export function dueMessage(name, tpl) {
   return String(tpl || WA_TPL).replace(/\[Member Name\]/g, String(name || '').trim());
 }
@@ -30,211 +32,100 @@ export async function sendWaReminder(member) {
   window.open(`https://wa.me/${waNumber(member.whatsapp || member.mobile)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
-/* ---------------- print-sheet builders ---------------- */
-export function sheetHead(cfg, titleEn, subEn) {
-  const h = el('header', { class: 'ps-head' });
-  const src = (typeof logoSrc === 'function' ? logoSrc(cfg) : 'icons/logo.png');
-  h.innerHTML = `
-    <img class="ps-logo" src="${esc(src)}" alt="">
-    <div class="ps-title">${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}</div>
-    <div class="ps-org">${esc(cfg.orgNameEn || 'Dhruvo Sangsad')}${cfg.orgAddress ? ' · ' + esc(cfg.orgAddress) : ''}${cfg.orgPhone ? ' · ' + esc(cfg.orgPhone) : ''}</div>
-    <div class="ps-sub">${esc(titleEn)}</div>
-    ${subEn ? `<div class="ps-org">${esc(subEn)}</div>` : ''}
-    <hr class="ps-rule">`;
-  return h;
-}
-export function sheetFoot(cfg, extra = '') {
-  const f = el('footer', { class: 'ps-foot' });
-  f.innerHTML = `<span>Generated: ${esc(fmtDateTime(new Date().toISOString()))}${extra ? ' · ' + esc(extra) : ''}</span>
-    <span>${esc(cfg.orgNameBn || 'ধ্রুব সংসদ')}${cfg.orgNameEn ? ' · ' + esc(cfg.orgNameEn) : ''}</span>`;
-  return f;
-}
-export function psTable(headers, rows, footer) {
-  const t = el('table', { class: 'ps-tbl' });
-  const th = el('thead'); const tr = el('tr');
-  headers.forEach(h => tr.appendChild(el('th', { class: h.cls || '', text: h.label })));
-  th.appendChild(tr); t.appendChild(th);
-  const tb = el('tbody');
-  if (!rows.length) {
-    const r = el('tr'); r.appendChild(el('td', { colSpan: headers.length, class: 'c', text: 'No records found' })); tb.appendChild(r);
-  }
-  rows.forEach(r => {
-    const row = el('tr');
-    r.forEach((c, i) => row.appendChild(el('td', { class: (c && typeof c === 'object' ? c.cls : headers[i] && headers[i].cls) || '', text: c && typeof c === 'object' ? String(c.text ?? '') : String(c ?? '') })));
-    tb.appendChild(row);
-  });
-  t.appendChild(tb);
-  if (footer && footer.length) {
-    const tf = el('tfoot');
-    footer.forEach(fr => {
-      const row = el('tr');
-      fr.forEach((c, i) => row.appendChild(el('td', { class: (c && typeof c === 'object' ? c.cls : headers[i] && headers[i].cls) || '', colSpan: (c && c.span) || 1, text: c && typeof c === 'object' ? String(c.text ?? '') : String(c ?? '') })));
-      tf.appendChild(row);
-    });
-    t.appendChild(tf);
-  }
-  return t;
-}
-function psInfo(pairs) {
-  const tbl = el('table', { class: 'ps-info-tbl' });
-  const tb = el('tbody');
-  const cell = (k, v) => {
-    const td = el('td');
-    td.appendChild(el('span', { class: 'ps-k', text: k }));
-    td.appendChild(document.createTextNode(' '));
-    td.appendChild(el('span', { class: 'ps-v', text: v == null || v === '' ? '—' : String(v) }));
-    return td;
-  };
-  for (let i = 0; i < pairs.length; i += 2) {
-    const tr = el('tr');
-    tr.appendChild(cell(pairs[i][0], pairs[i][1]));
-    if (pairs[i + 1]) tr.appendChild(cell(pairs[i + 1][0], pairs[i + 1][1]));
-    else tr.appendChild(el('td'));
-    tb.appendChild(tr);
-  }
-  tbl.appendChild(tb);
-  return tbl;
-}
-function sechead(text) { return el('div', { class: 'ps-sechead', text }); }
-
-/* ---------------- report registry ---------------- */
+/* ---------------- report registry (dropdown entries) ---------------- */
 const REPORTS = [
-  { id: 'statement', bn: 'সদস্য স্টেটমেন্ট', en: 'Member Statement', ic: 'report', roles: ['admin', 'maker', 'member'] },
-  { id: 'overall', bn: 'সার্বিক প্রতিবেদন', en: 'Overall Report', ic: 'dashboard', roles: ['admin', 'maker'] },
-  { id: 'daily', bn: 'দৈনিক প্রতিবেদন', en: 'Daily Report', ic: 'calendar', roles: ['admin', 'maker'] },
-  { id: 'monthly', bn: 'মাসিক প্রতিবেদন', en: 'Monthly Report', ic: 'chart', roles: ['admin', 'maker'] },
-  { id: 'due', bn: 'বকেয়া প্রতিবেদন', en: 'Due Report', ic: 'due', roles: ['admin', 'maker'] },
-  { id: 'advance', bn: 'অগ্রিম প্রতিবেদন', en: 'Advance Report', ic: 'advance', roles: ['admin', 'maker'] },
-  { id: 'collection', bn: 'আদায় প্রতিবেদন', en: 'Collection Report', ic: 'money', roles: ['admin', 'maker'] },
-  { id: 'method', bn: 'পরিশোধ পদ্ধতি প্রতিবেদন', en: 'Payment Method Report', ic: 'deposit', roles: ['admin', 'maker'] },
-  { id: 'range', bn: 'তারিখ অনুযায়ী প্রতিবেদন', en: 'Date Range Report', ic: 'clock', roles: ['admin', 'maker', 'member'] },
-  { id: 'memberwise', bn: 'সদস্যভিত্তিক প্রতিবেদন', en: 'Member-wise Report', ic: 'members', roles: ['admin', 'maker'] },
-  { id: 'withdrawal', bn: 'উত্তোলন প্রতিবেদন', en: 'Withdrawal Report', ic: 'withdraw', roles: ['admin', 'maker', 'member'] },
+  { id: 'daily', bn: 'জমা রিপোর্ট (দৈনিক)', en: 'Deposit Report — Daily', ic: 'calendar', roles: ['admin', 'maker'] },
+  { id: 'monthly', bn: 'মাসিক জমা রিপোর্ট', en: 'Monthly Deposit Report', ic: 'chart', roles: ['admin', 'maker'] },
+  { id: 'range', bn: 'সময়কাল রিপোর্ট', en: 'Transaction Report', ic: 'clock', roles: ['admin', 'maker', 'member'] },
+  { id: 'collection', bn: 'আদার রিপোর্ট (বার্ষিক)', en: 'Collection Report', ic: 'money', roles: ['admin', 'maker'] },
+  { id: 'method', bn: 'পরিশোধ পদ্ধতি রিপোর্ট', en: 'Payment Report', ic: 'deposit', roles: ['admin', 'maker'] },
+  { id: 'overall', bn: 'সদস্য রিপোর্ট (সার্বিক)', en: 'Member Report', ic: 'members', roles: ['admin', 'maker'] },
+  { id: 'memberwise', bn: 'সদস্যভিত্তিক রিপোর্ট', en: 'Member-wise Report', ic: 'usergear', roles: ['admin', 'maker'] },
+  { id: 'due', bn: 'বকেয়া রিপোর্ট', en: 'Due Report', ic: 'due', roles: ['admin', 'maker'] },
+  { id: 'advance', bn: 'অগ্রিম রিপোর্ট', en: 'Advance Report', ic: 'advance', roles: ['admin', 'maker'] },
+  { id: 'withdrawal', bn: 'উত্তোলন রিপোর্ট', en: 'Withdrawal Report', ic: 'withdraw', roles: ['admin', 'maker', 'member'] },
 ];
 
 export async function pageReports(session, params = {}) {
-  const [members, deposits, cfg] = await Promise.all([allMembers(), allDeposits(), settings()]);
+  const [members, deposits, withdrawals, cfg] = await Promise.all([
+    allMembers(), allDeposits(), allWithdrawals(), settings(),
+  ]);
   WA_TPL = cfg.waTemplate || WA_TPL;
   const wrap = page('প্রতিবেদন', 'Reports', 'report');
+
+  /* ============ 1 — SUMMARY (always before filters) ============ */
+  const isMember = session.role === 'member';
+  const stats = el('div', { class: 'stats' });
+  if (!isMember) {
+    const sums = await summariesFor(members.filter(m => m.status !== 'rejected'), deposits, cfg);
+    const tot = orgTotals(sums);
+    const apprD = approvedOf(deposits);
+    const allTxns = apprD.length + (withdrawals || []).filter(w => w.status === 'approved').length;
+    stats.append(
+      statCard({ label: t('মোট সদস্য', 'Total Members'), value: String(members.length), sub: `${members.filter(m => m.status === 'active').length} ${t('সক্রিয়', 'active')}`, ic: 'members', tone: 'blue' }),
+      statCard({ label: t('লেনদেন', 'Transactions'), value: String(allTxns), sub: t('অনুমোদিত', 'approved'), ic: 'receipt' }),
+      statCard({ label: t('মোট জমা', 'Total Deposits'), value: String(apprD.length), sub: `${t('রেকর্ড', 'records')}`, ic: 'deposit' }),
+      statCard({ label: t('মোট amount', 'Total Amount'), value: taka(tot.totalDeposit), sub: `${t('বকেয়া', 'Due')} ${taka(tot.totalDue)}`, ic: 'money', tone: 'amber' }),
+    );
+  } else {
+    const m = members.find(x => x.id === session.memberDocId);
+    const s = m ? memberSummary(m, deposits, summaryOpts(cfg, { withdrawals })) : null;
+    stats.append(
+      statCard({ label: t('আমার জমা', 'My Deposits'), value: String(s ? s.count : 0), sub: t('অনুমোদিত', 'approved'), ic: 'deposit' }),
+      statCard({ label: t('মোট amount', 'Total Amount'), value: taka(s ? s.totalDeposit : 0), sub: `${t('উত্তোলন', 'Withdrawal')} ${taka(s ? s.totalWithdrawal : 0)}`, ic: 'money' }),
+    );
+  }
+  wrap.appendChild(el('div', { class: 'sec-head', html: `<h2>${esc(t('সারসংক্ষেপ', 'Summary'))}</h2><span class="sp"></span>` }));
+  wrap.appendChild(stats);
+
+  /* ============ 2 — Report type (a dropdown, NOT tiles) ============ */
   const list = REPORTS.filter(r => r.roles.includes(session.role));
+  const typeSel = el('select', { 'aria-label': t('প্রতিবেদনের ধরন', 'Report type') });
+  list.forEach(r => typeSel.appendChild(el('option', { value: r.id, ...(r.id === list[0].id ? { selected: true } : {}) }, [`${t(r.bn, r.en)}`])));
+  if (params.report && list.some(r => r.id === params.report)) typeSel.value = params.report;
+  wrap.appendChild(card(t('রিপোর্টের ধরন', 'Report Type'), '', el('div', {}, [typeSel])));
 
-  /* --- report type tiles (single-select; role-filtered) --- */
-  let selected = params.report && list.some(r => r.id === params.report) ? params.report : list[0].id;
-  const grid = el('div', { class: 'hub-grid', role: 'radiogroup', 'aria-label': t('প্রতিবেদনের ধরন', 'Report type') });
-  const paintTiles = () => {
-    [...grid.children].forEach(b => {
-      const on = b.dataset.id === selected;
-      b.classList.toggle('on', on);
-      b.setAttribute('aria-checked', on ? 'true' : 'false');
-    });
-  };
-  list.forEach(r => {
-    const b = el('button', {
-      type: 'button', class: 'hub-tile pick', role: 'radio', 'aria-checked': 'false',
-      html: `<span class="tic">${icon(r.ic)}</span><span class="tb"><span class="tt">${esc(t(r.bn, r.en))}</span></span>`,
-    });
-    b.dataset.id = r.id;
-    b.addEventListener('click', () => { if (selected === r.id) return; selected = r.id; paintTiles(); build(); });
-    grid.appendChild(b);
-  });
-  paintTiles();
-  wrap.appendChild(card('প্রতিবেদনের ধরন', 'Report Type', grid));
-
-  /* --- context filters for the selected report --- */
+  /* ============ 3 — Filters (contextual) ============ */
   const filterHost = el('div', { class: 'toolbar' });
-  const filterCard = card('ফিল্টার', 'Filters', filterHost);
+  const filterCard = card(t('ফিল্টার', 'Filters'), '', filterHost);
   filterCard.classList.add('overflow-visible');
   wrap.appendChild(filterCard);
 
-  /* Results render inline here (appended after the generate button below). */
-  const out = el('div', { class: 'report-out' });
-
-  const ctx = { session, members, deposits, withdrawals: [], cfg, out, filterHost, render: null };
-  ctx.withdrawals = await allWithdrawals().catch(() => []);
-
-  const build = () => {
+  /* ============ 4 — Generate (filters exist BEFORE it) ============ */
+  const ctx = { session, members, deposits, withdrawals: withdrawals || [], cfg, filterHost };
+  /* the selected builder wires its filter widgets once, and returns build() */
+  let buildFn = null;
+  const setup = () => {
     filterHost.replaceChildren();
-    out.replaceChildren();
-    ctx.render = null;
-    const r = REPORTS.find(x => x.id === selected) || list[0];
-    selected = r.id; paintTiles();
-    BUILDERS[r.id](ctx, r);
+    const meta = REPORTS.find(x => x.id === typeSel.value) || list[0];
+    try { buildFn = BUILDERS[meta.id](ctx, meta); }
+    catch (err) { buildFn = null; toast(err.message || String(err), 'error'); }
   };
+  typeSel.addEventListener('change', setup);
+  setup();
 
-  // "Generate Report" button — the report is rendered only on click, using fresh data.
-  const genRow = el('div', { class: 'gen-row' });
-  genRow.appendChild(btn(t('রিপোর্ট তৈরি করুন', 'Generate Report'), 'report', 'primary', async () => {
-    const [m2, d2, c2] = await Promise.all([allMembers(), allDeposits(), settings()]);
-    ctx.members = m2; ctx.deposits = d2; ctx.cfg = c2; WA_TPL = c2.waTemplate || WA_TPL;
-    ctx.withdrawals = await allWithdrawals().catch(() => []);
-    if (!ctx.render) {
-      build(); // (re)initialise the builder with fresh data (e.g. members now exist)
-    }
-    if (!ctx.render) { toast('প্রতিবেদন নির্বাচন করুন', 'warn'); return; }
-    try { await ctx.render(); }
-    catch (err) { toast(err.message || String(err), 'error'); }
-  }, { block: true }));
-  wrap.appendChild(genRow);
-  wrap.appendChild(out);
-
-  build();
-  if (session.role === 'member' && ctx.render) {
-    Promise.resolve().then(() => ctx.render()).catch(err => toast(err.message || String(err), 'error'));
-  }
+  const gen = btn(t('রিপোর্ট তৈরি করুন', 'Generate Report'), 'report', 'primary', async () => {
+    /* fresh data at click time — the same values feed preview AND pdf */
+    const [m2, d2, w2, c2] = await Promise.all([allMembers(), allDeposits(), allWithdrawals(), settings()]);
+    ctx.members = m2; ctx.deposits = d2; ctx.withdrawals = w2; ctx.cfg = c2; WA_TPL = c2.waTemplate || WA_TPL;
+    const meta = REPORTS.find(x => x.id === typeSel.value) || list[0];
+    try {
+      const out = buildFn ? buildFn() : null;
+      if (!out || !out.sheet) { toast(t('রিপোর্ট তৈরি করা যায়নি', 'Report could not be generated'), 'error'); return; }
+      await previewReport({
+        title: `${t(meta.bn, meta.en)}`,
+        sheet: out.sheet,
+        orientation: out.orientation || 'p',
+        fileName: reportFileName({ memberName: out.memberName || '', reportType: `${meta.en.replace(/[^A-Za-z0-9 ]/g, '')}`, orgName: (c2.orgNameEn || 'Dhruva_Sangsad') }),
+      });
+    } catch (err) { toast(err.message || String(err), 'error'); }
+  }, { block: true });
+  gen.style.minHeight = '48px'; gen.style.fontSize = '15px'; gen.style.marginTop = '4px';
+  wrap.appendChild(gen);
   return wrap;
 }
 
-/* ---------------- shared output shell (inline results + sticky export bar) ---------------- */
-function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase, orientation = 'p', criteria = '' }) {
-  ctx.out.replaceChildren();
-
-  const box = el('div');
-  if (criteria) {
-    box.appendChild(el('div', { class: 'banner info', html: `${icon('filter')}<span>${esc(criteria)}</span>` }));
-  }
-  if (screen) { screen.classList.add('no-print'); box.appendChild(card(titleBn, titleEn, screen)); }
-  sheet.classList.add('sheet-offscreen');
-  box.appendChild(sheet);
-
-  const doPdf = async () => {
-    toast('PDF তৈরি হচ্ছে… / Generating PDF…', 'info', 1600);
-    try {
-      await sheetToPdf(sheet, safeName(fileBase) + '.pdf', { orientation });
-      toast('PDF ডাউনলোড হয়েছে / PDF downloaded', 'success');
-    } catch (err) { toast('PDF তৈরি ব্যর্থ: ' + err.message, 'error'); }
-  };
-  const doExcel = () => {
-    downloadExcel([{ name: titleEn.slice(0, 28), rows: excelRows() }], safeName(fileBase) + '.xlsx');
-    toast('Excel ডাউনলোড হয়েছে / Excel downloaded', 'success');
-  };
-  const doCsv = () => {
-    downloadCSV(excelRows(), safeName(fileBase) + '.csv');
-    toast('CSV ডাউনলোড হয়েছে / CSV downloaded', 'success');
-  };
-  /* Send the print sheet to the printer/“Save as PDF” dialog. The on-screen
-     table is marked .no-print so only the sheet is printed. */
-  const doPrint = () => {
-    sheet.classList.remove('sheet-offscreen');
-    document.body.classList.add('printing');
-    let restored = false;
-    const restore = () => {
-      if (restored) return;
-      restored = true;
-      document.body.classList.remove('printing');
-      sheet.classList.add('sheet-offscreen');
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    setTimeout(restore, 60000); // fallback for browsers without afterprint
-    window.print();
-  };
-
-  box.appendChild(exportBar({ pdf: doPdf, excel: doExcel, csv: doCsv, print: doPrint }));
-  ctx.out.replaceChildren(box);
-  /* Bring the results into view (no-op under test DOMs without scrolling). */
-  try { if (box.scrollIntoView) box.scrollIntoView({ block: 'start' }); } catch { /* ignore */ }
-}
-
+/* ---------------- helpers ---------------- */
 function mkField(label, node, w = '140px') {
   const f = el('div', { class: 'field', style: `flex:0 1 ${w}` });
   f.appendChild(el('label', { text: label }));
@@ -242,306 +133,135 @@ function mkField(label, node, w = '140px') {
   return f;
 }
 const cfgOf = ctx => summaryOpts(ctx.cfg);
+const txnCol = { label: 'Txn ID', cls: 'c' };
+const txnCell = r => ({ text: r.txnId || '—', cls: 'c' });
 
-/* ================= 1. Member Statement ================= */
-function rStatement(ctx, meta) {
+/* ================= 1/3. Period + range collection reports ================= */
+function periodReport(ctx, meta, mode) {
   const { session } = ctx;
   const own = session.role === 'member';
-  const pool = () => own ? ctx.members.filter(m => m.id === session.memberDocId) : ctx.members;
-  if (!pool().length) { ctx.out.appendChild(banner('info', 'কোনো সদস্য পাওয়া যায়নি / No member found')); return; }
-
-  /* Staff search by ID/name/mobile; members see only themselves (read-only). */
-  let getMemberId;
-  if (own) {
-    const m0 = pool()[0];
-    const hidden = el('input', { type: 'hidden', value: m0 ? m0.id : '' });
-    const ro = el('input', { value: m0 ? `${m0.memberId} — ${m0.nameBn || m0.nameEn}` : '', readonly: true });
-    const f = mkField('সদস্য', ro, '220px');
-    f.appendChild(hidden);
-    ctx.filterHost.append(f);
-    getMemberId = () => hidden.value || session.memberDocId;
-  } else {
-    const pick = memberPicker({ members: pool(), value: (pool()[0] && pool()[0].id) || '' });
-    ctx.filterHost.append(mkField('সদস্য', pick.root, '220px'));
-    getMemberId = () => pick.value;
-  }
-  const from = el('input', { type: 'date' });
-  const to = el('input', { type: 'date' });
-  ctx.filterHost.append(mkField('শুরু', from, '130px'), mkField('শেষ', to, '130px'));
-
-  function render() {
-    const currentPool = pool();
-    const m = currentPool.find(x => x.id === getMemberId()) || currentPool[0];
-    if (!m) { toast('সদস্য নির্বাচন করুন / Select a member', 'warn'); return; }
-    const s = memberSummary(m, ctx.deposits, cfgOf(ctx));
-    let rows = statementRows(s);
-    if (from.value) rows = rows.filter(r => String(r.deposit.date).slice(0, 10) >= from.value);
-    if (to.value) rows = rows.filter(r => String(r.deposit.date).slice(0, 10) <= to.value);
-    // recompute cumulative within the filtered window while keeping global cumulative meaning
-    const periodTotal = rows.reduce((a, r) => a + num(r.deposit.amount), 0);
-
-    const sheet = el('div', { class: 'print-sheet' });
-    sheet.appendChild(sheetHead(ctx.cfg, 'Member Statement', (from.value || to.value) ? `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}` : ''));
-    sheet.appendChild(psInfo([
-      ['Member ID', m.memberId], ['Status', (m.status || '').toUpperCase()],
-      ['Name (Bangla)', m.nameBn], ['Name (English)', m.nameEn],
-      ['Join Date', fmtDate(m.joinDate)], ['Mobile', m.mobile],
-      ["Father's Name", m.fatherBn || m.fatherEn || '-'], ['Address', m.address || '-'],
-      ['Monthly Installment', money(m.installment) + ' Tk'], ['Statement Date', fmtDate(todayISO())],
-    ]));
-    sheet.appendChild(sechead('Deposit Statement'));
-    sheet.appendChild(psTable(
-      [{ label: 'SL', cls: 'c' }, { label: 'Date', cls: 'c' }, { label: 'Deposit Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }, { label: 'Cumulative Amount', cls: 'num' }],
-      rows.map(r => [
-        { text: r.sl, cls: 'c' }, { text: fmtDate(r.deposit.date), cls: 'c' },
-        typeLabel(r.deposit.type).en, methodLabel(r.deposit.method).en,
-        { text: money(r.deposit.amount), cls: 'num' }, { text: money(r.cumulative), cls: 'num' },
-      ]),
-      [[{ text: 'Total', span: 4 }, { text: money(periodTotal), cls: 'num' }, { text: money(rows.length ? rows[rows.length - 1].cumulative : 0), cls: 'num' }]],
-    ));
-    sheet.appendChild(sheetFoot(ctx.cfg, `Member ${m.memberId}`));
-
-    const stats = el('div', { class: 'stats' });
-    stats.append(
-      statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count}টি অনুমোদিত`, ic: 'money' }),
-      statCard({ label: 'বকেয়া / Due', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
-      statCard({ label: 'অগ্রিম / Advance', value: taka(s.advance), sub: `${s.months} মাস`, ic: 'advance', tone: 'blue' }),
-      statCard({ label: 'এই সময়কালে / In period', value: taka(periodTotal), sub: `${rows.length}টি এন্ট্রি`, ic: 'calendar', tone: 'gray' }),
-    );
-
-    outputCard(ctx, {
-      titleBn: `${meta.bn} — ${m.nameBn}`, titleEn: `${meta.en} — ${m.memberId}`,
-      sheet, screen: stats,
-      criteria: `সদস্য / Member: ${m.memberId}${(from.value || to.value) ? ` · সময়কাল / Period: ${from.value ? fmtDate(from.value) : 'Beginning'} → ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}` : ''}`,
-      fileBase: `Dhruvo_Sangsad_Member_${m.memberId}_Statement`,
-      excelRows: () => {
-        const out = [['SL', 'Date', 'Deposit Type', 'Payment Method', 'Amount', 'Cumulative Amount']];
-        rows.forEach(r => out.push([r.sl, fmtDate(r.deposit.date), typeLabel(r.deposit.type).en, methodLabel(r.deposit.method).en, num(r.deposit.amount), r.cumulative]));
-        out.push(['', '', '', 'Total', periodTotal, '']);
-        out.push([]);
-        out.push(['Member ID', m.memberId, 'Name', m.nameEn]);
-        out.push(['Monthly Installment', num(m.installment), 'Months', s.months]);
-        out.push(['Total Deposit', s.totalDeposit, 'Total Due', s.due]);
-        out.push(['Total Advance', s.advance, 'Required', s.required]);
-        return out;
-      },
-    });
-  }
-  ctx.render = render;
-}
-
-/* ================= 2. Overall Report ================= */
-async function rOverall(ctx, meta) {
-  const stSel = el('select');
-  [['active', 'শুধু সক্রিয়'], ['', 'সব সদস্য'], ['pending', 'অপেক্ষমাণ']].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
-  ctx.filterHost.append(mkField('সদস্য স্ট্যাটাস', stSel, '160px'));
-
-  function render() {
-    const pool = ctx.members.filter(m => (stSel.value ? m.status === stSel.value : m.status !== 'rejected'));
-    const sums = pool.map(m => memberSummary(m, ctx.deposits, cfgOf(ctx)))
-      .sort((a, b) => (a.member.memberId || '').localeCompare(b.member.memberId || ''));
-    const tot = orgTotals(sums);
-
-    const sheet = el('div', { class: 'print-sheet' });
-    sheet.appendChild(sheetHead(ctx.cfg, 'Overall Report', `As on ${fmtDate(todayISO())}${stSel.value ? ' · ' + stSel.value.toUpperCase() + ' members' : ''}`));
-    sheet.appendChild(psTable(
-      [{ label: 'Member Name' }, { label: 'Monthly Installment', cls: 'num' }, { label: 'Total Deposit', cls: 'num' }, { label: 'Total Due', cls: 'num' }],
-      sums.map(s => [
-        `${s.member.nameEn || s.member.nameBn} (${s.member.memberId})`,
-        { text: money(s.member.installment), cls: 'num' },
-        { text: money(s.totalDeposit), cls: 'num' },
-        { text: money(s.due), cls: 'num' },
-      ]),
-      [
-        [{ text: 'Total Collection' }, { text: '', cls: 'num' }, { text: money(tot.totalDeposit), cls: 'num' }, { text: '', cls: 'num' }],
-        [{ text: 'Total Due' }, { text: '', cls: 'num' }, { text: '', cls: 'num' }, { text: money(tot.totalDue), cls: 'num' }],
-      ],
-    ));
-    sheet.appendChild(sheetFoot(ctx.cfg, `${sums.length} member(s)`));
-
-    const screen = tableWrap(
-      [{ label: 'সদস্য' }, { label: 'মাসিক কিস্তি', cls: 'num' }, { label: 'মোট জমা', cls: 'num' }, { label: 'বকেয়া', cls: 'num' }],
-      sums.map(s => [
-        `${esc(s.member.nameBn)}<br><span class="faint fs8">${esc(s.member.memberId)}</span>`,
-        { text: money(s.member.installment), cls: 'num' },
-        { text: money(s.totalDeposit), cls: 'num' },
-        { html: s.due > 0 ? `<span class="due-amt">${money(s.due)}</span>` : '0', cls: 'num' },
-      ]),
-      {
-        footer: [{ html: '<b>সর্বমোট</b>' }, { html: '' },
-          { html: `<b>${money(tot.totalDeposit)}</b>`, cls: 'num' }, { html: `<b>${money(tot.totalDue)}</b>`, cls: 'num' }],
-      },
-    );
-
-    outputCard(ctx, {
-      titleBn: meta.bn, titleEn: meta.en, sheet, screen,
-      criteria: stSel.value ? `Status: ${stSel.value.toUpperCase()}` : 'Status: All (except rejected)',
-      fileBase: `Dhruvo_Sangsad_Overall_Report_${fmtDate(todayISO())}`,
-      excelRows: () => {
-        const out = [['Member Name', 'Monthly Installment', 'Total Deposit', 'Total Due']];
-        sums.forEach(s => out.push([`${s.member.nameEn || s.member.nameBn} (${s.member.memberId})`, num(s.member.installment), s.totalDeposit, s.due]));
-        out.push(['Total Collection', '', tot.totalDeposit, '']);
-        out.push(['Total Due', '', '', tot.totalDue]);
-        return out;
-      },
-    });
-  }
-  ctx.render = render;
-}
-
-/* ================= 3/4/9. Period collection reports ================= */
-function periodReport(ctx, meta, mode) {
   const dInput = el('input', { type: 'date', value: todayISO() });
   const mInput = el('input', { type: 'month', value: monthKey(todayISO()) });
   const from = el('input', { type: 'date', value: monthKey(todayISO()) + '-01' });
   const to = el('input', { type: 'date', value: todayISO() });
-  if (mode === 'daily') ctx.filterHost.append(mkField('তারিখ', dInput, '150px'));
-  else if (mode === 'monthly') ctx.filterHost.append(mkField('মাস', mInput, '150px'));
-  else ctx.filterHost.append(mkField('শুরু', from, '140px'), mkField('শেষ', to, '140px'));
+  const memPick = !own ? memberPicker({ members: ctx.members, placeholder: t('খালি = সব সদস্য…', 'empty = all members…') }) : null;
+  if (mode === 'daily') ctx_filter(ctx, mkField(t('তারিখ', 'Date'), dInput, '150px'));
+  else if (mode === 'monthly') ctx_filter(ctx, mkField(t('মাস', 'Month'), mInput, '150px'));
+  else { ctx_filter(ctx, mkField(t('শুরু', 'From'), from, '140px')); ctx_filter(ctx, mkField(t('শেষ', 'To'), to, '140px')); }
+  if (memPick) { ctx_filter(ctx, mkField(t('সদস্য', 'Member'), memPick.root, '220px')); ctx.filterHost.closest('.card')?.classList.add('overflow-visible'); }
 
-  function render() {
-    let rows, label, fileBase;
-    const appr = approvedOf(ctx.deposits);
+  function build() {
+    let rows;
+    let sub;
     if (mode === 'daily') {
-      rows = appr.filter(d => String(d.date).slice(0, 10) === dInput.value);
-      label = `Date: ${fmtDate(dInput.value)}`;
-      fileBase = `Dhruvo_Sangsad_Daily_Report_${fmtDate(dInput.value)}`;
+      rows = approvedOf(ctx.deposits).filter(d => String(d.date).slice(0, 10) === dInput.value);
+      sub = `Date: ${fmtDate(dInput.value)}`;
     } else if (mode === 'monthly') {
-      rows = appr.filter(d => monthKey(d.date) === mInput.value);
-      label = `Month: ${monthLabel(mInput.value)}`;
-      fileBase = `Dhruvo_Sangsad_Monthly_Report_${monthLabel(mInput.value).replace(/ /g, '_')}`;
+      rows = approvedOf(ctx.deposits).filter(d => monthKey(d.date) === mInput.value);
+      sub = `Month: ${monthLabel(mInput.value)}`;
     } else {
-      if (from.value && to.value && from.value > to.value) { toast('তারিখের ক্রম সঠিক নয় / From date must be before To date', 'error'); return; }
-      rows = appr.filter(d => {
+      if (from.value && to.value && from.value > to.value) throw new Error(t('তারিখের ক্রম সঠিক নয় / From date must be before To date', 'From date must be before To date'));
+      rows = approvedOf(ctx.deposits).filter(d => {
         const x = String(d.date).slice(0, 10);
         return (!from.value || x >= from.value) && (!to.value || x <= to.value);
       });
-      label = `Period: ${fmtDate(from.value)} to ${fmtDate(to.value)}`;
-      fileBase = `Dhruvo_Sangsad_Date_Range_Report_${fmtDate(from.value)}_to_${fmtDate(to.value)}`;
+      sub = `Period: ${fmtDate(from.value)} to ${fmtDate(to.value)}`;
     }
-    if (ctx.session.role === 'member') rows = rows.filter(d => d.memberDocId === ctx.session.memberDocId);
+    if (own) rows = rows.filter(d => d.memberDocId === session.memberDocId);
+    else if (memPick && memPick.value) rows = rows.filter(d => d.memberDocId === memPick.value);
     rows = rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.memberId).localeCompare(String(b.memberId)));
     const total = rows.reduce((s, d) => s + num(d.amount), 0);
 
-    const sheet = el('div', { class: 'print-sheet' });
-    sheet.appendChild(sheetHead(ctx.cfg, meta.en, label));
-    sheet.appendChild(sechead('Collection Details'));
-    sheet.appendChild(psTable(
-      [{ label: 'SL', cls: 'c' }, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Deposit Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }],
-      rows.map((d, i) => [
-        { text: i + 1, cls: 'c' }, { text: fmtDate(d.date), cls: 'c' }, { text: d.memberId, cls: 'c' },
-        d.memberName, typeLabel(d.type).en, methodLabel(d.method).en, { text: money(d.amount), cls: 'num' },
-      ]),
-      [[{ text: 'Total Collection', span: 6 }, { text: money(total), cls: 'num' }]],
-    ));
-    sheet.appendChild(sheetFoot(ctx.cfg));
-
-    const stats = el('div', { class: 'stats' });
-    stats.append(
-      statCard({ label: 'মোট আদায় / Total Collection', value: taka(total), sub: label, ic: 'money' }),
-      statCard({ label: 'লেনদেন / Transactions', value: String(rows.length), sub: 'অনুমোদিত জমা', ic: 'deposit', tone: 'blue' }),
-    );
-
-    outputCard(ctx, {
-      titleBn: meta.bn, titleEn: `${meta.en} — ${label}`, sheet, screen: stats, fileBase,
-      criteria: label,
-      excelRows: () => {
-        const out = [['SL', 'Date', 'Member ID', 'Member Name', 'Deposit Type', 'Payment Method', 'Amount']];
-        rows.forEach((d, i) => out.push([i + 1, fmtDate(d.date), d.memberId, d.memberName, typeLabel(d.type).en, methodLabel(d.method).en, num(d.amount)]));
-        out.push(['', '', '', '', '', 'Total Collection', total]);
-        return out;
-      },
+    const sheet = buildSheet({
+      cfg: ctx.cfg, titleEn: meta.en, subEn: sub, titleBn: t(meta.bn, meta.en),
+      parts: [
+        sechead(own ? 'My Collection Details' : 'Collection Details'),
+        psTable(
+          [txnCol, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Deposit Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }],
+          rows.map(d => [
+            txnCell(d), { text: fmtDate(d.date), cls: 'c' }, { text: d.memberId, cls: 'c' },
+            d.memberName, typeLabel(d.type).en, methodLabel(d.method).en,
+            { text: money(d.amount), cls: 'num' },
+          ]),
+          [[{ text: 'Total Collection', span: 6 }, { text: money(total), cls: 'num' }]],
+        ),
+      ],
     });
+    const sole = rows.length && rows.every(d => d.memberDocId === rows[0].memberDocId) ? rows[0].memberName : '';
+    return { sheet, memberName: own ? (ctx.members.find(m => m.id === session.memberDocId)?.nameEn || ctx.members.find(m => m.id === session.memberDocId)?.nameBn || '') : (memPick && memPick.value ? rows[0]?.memberName : sole) };
   }
-  ctx.render = render;
+  return build;
+}
+function ctx_filter(ctx, ...nodes) { nodes.forEach(n => ctx.filterHost.appendChild(n)); }
+
+/* ================= Overall / member report ================= */
+function rOverall(ctx, meta) {
+  const stSel = el('select');
+  [['active', t('শুধু সক্রিয়', 'Active only')], ['', t('সব সদস্য (বাতিল বাদে)', 'All except rejected')], ['pending', t('অপেক্ষমাণ', 'Pending')]].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
+  ctx_filter(ctx, mkField(t('সদস্য স্ট্যাটাস', 'Member status'), stSel, '160px'));
+
+  return () => {
+    const pool = ctx.members.filter(m => (stSel.value ? m.status === stSel.value : m.status !== 'rejected'));
+    const sums = pool.map(m => memberSummary(m, ctx.deposits, cfgOf(ctx)))
+      .sort((a, b) => (a.member.memberId || '').localeCompare(b.member.memberId || ''));
+    const tot = orgTotals(sums);
+    const sheet = buildSheet({
+      cfg: ctx.cfg, titleEn: 'Member Report', subEn: `As on ${fmtDate(todayISO())}${stSel.value ? ' · ' + stSel.value.toUpperCase() + ' members' : ''}`, titleBn: t(meta.bn, meta.en),
+      parts: [psTable(
+        [{ label: 'Member Name' }, { label: 'Monthly Installment', cls: 'num' }, { label: 'Total Deposit', cls: 'num' }, { label: 'Total Due', cls: 'num' }],
+        sums.map(s => [
+          `${s.member.nameEn || s.member.nameBn} (${s.member.memberId})`,
+          { text: money(s.member.installment), cls: 'num' },
+          { text: money(s.totalDeposit), cls: 'num' },
+          { text: money(s.due), cls: 'num' },
+        ]),
+        [
+          [{ text: 'Total Collection' }, { text: '', cls: 'num' }, { text: money(tot.totalDeposit), cls: 'num' }, { text: '', cls: 'num' }],
+          [{ text: 'Total Due' }, { text: '', cls: 'num' }, { text: '', cls: 'num' }, { text: money(tot.totalDue), cls: 'num' }],
+        ],
+      )],
+    });
+    return { sheet };
+  };
 }
 
-/* ================= 5/6. Due & Advance ================= */
+/* ================= Due & Advance ================= */
 function rDueAdvance(ctx, meta, kind) {
-  const { session } = ctx;
   const minInput = el('input', { type: 'number', min: '0', step: '1', value: '1', placeholder: '0' });
-  ctx.filterHost.append(mkField(kind === 'due' ? 'ন্যূনতম বকেয়া (৳)' : 'ন্যূনতম অগ্রিম (৳)', minInput, '150px'));
+  ctx_filter(ctx, mkField(kind === 'due' ? t('ন্যূনতম বকেয়া (৳)', 'Min due (৳)') : t('ন্যূনতম অগ্রিম (৳)', 'Min advance (৳)'), minInput, '150px'));
 
-  function render() {
+  return () => {
     const min = num(minInput.value);
     const sums = ctx.members.filter(m => m.status === 'active' || m.status === 'pending')
       .map(m => memberSummary(m, ctx.deposits, cfgOf(ctx)))
       .filter(s => (kind === 'due' ? s.due : s.advance) >= Math.max(min, 0.01))
       .sort((a, b) => (kind === 'due' ? b.due - a.due : b.advance - a.advance));
     const total = sums.reduce((s, x) => s + (kind === 'due' ? x.due : x.advance), 0);
-
-    const sheet = el('div', { class: 'print-sheet' });
-    sheet.appendChild(sheetHead(ctx.cfg, meta.en, `As on ${fmtDate(todayISO())}`));
-    sheet.appendChild(psTable(
-      [{ label: 'SL', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Mobile', cls: 'c' },
-       { label: 'Monthly Installment', cls: 'num' }, { label: 'Total Deposit', cls: 'num' }, { label: kind === 'due' ? 'Total Due' : 'Total Advance', cls: 'num' }],
-      sums.map((s, i) => [
-        { text: i + 1, cls: 'c' }, { text: s.member.memberId, cls: 'c' }, s.member.nameEn || s.member.nameBn,
-        { text: s.member.mobile, cls: 'c' }, { text: money(s.member.installment), cls: 'num' },
-        { text: money(s.totalDeposit), cls: 'num' }, { text: money(kind === 'due' ? s.due : s.advance), cls: 'num' },
-      ]),
-      [[{ text: kind === 'due' ? 'Total Due' : 'Total Advance', span: 6 }, { text: money(total), cls: 'num' }]],
-    ));
-    sheet.appendChild(sheetFoot(ctx.cfg, `${sums.length} member(s)`));
-
-    const screen = tableWrap(
-      [{ label: 'ক্রম', cls: 'num' }, { label: 'ID' }, { label: 'নাম' }, { label: 'মোবাইল' },
-       { label: 'কিস্তি', cls: 'num' }, { label: 'জমা', cls: 'num' }, { label: kind === 'due' ? 'বকেয়া' : 'অগ্রিম', cls: 'num' },
-       ...(kind === 'due' && can(session, 'whatsapp') ? [{ label: 'রিমাইন্ডার', cls: 'nowrap' }] : [])],
-      sums.map((s, i) => {
-        const cells = [
-          { text: String(i + 1), cls: 'num' }, `<b>${esc(s.member.memberId)}</b>`, esc(s.member.nameBn),
-          esc(s.member.mobile), { text: money(s.member.installment), cls: 'num' },
-          { text: money(s.totalDeposit), cls: 'num' },
-          { html: `<span class="${kind === 'due' ? 'due-amt' : 'adv-amt'}">${money(kind === 'due' ? s.due : s.advance)}</span>`, cls: 'num' },
-        ];
-        if (kind === 'due' && can(session, 'whatsapp')) {
-          cells.push({ node: btn('WhatsApp', 'whatsapp', 'wa', () => sendWaReminder(s.member), { size: 'xs' }), cls: 'nowrap' });
-        }
-        return cells;
-      }),
-      {
-        empty: kind === 'due' ? 'কোনো বকেয়া সদস্য নেই' : 'কোনো অগ্রিম জমা নেই',
-        emptyIcon: kind === 'due' ? 'due' : 'advance',
-        footer: sums.length ? [{ html: '' }, { html: '' }, { html: `<b>${sums.length} জন</b>` }, { html: '' }, { html: '' }, { html: '<b>সর্বমোট</b>', cls: 'num' },
-          { html: `<b>${money(total)}</b>`, cls: 'num' }, ...(kind === 'due' && can(session, 'whatsapp') ? [{ html: '' }] : [])] : null,
-      },
-    );
-
-    const head = el('div');
-    if (kind === 'due' && sums.length && can(session, 'whatsapp')) {
-      const bar = el('div', { class: 'btn-row', style: 'margin-bottom:8px' });
-      bar.appendChild(btn('সবাইকে রিমাইন্ডার / Open all reminders', 'whatsapp', 'wa', async () => {
-        for (const s of sums.slice(0, 10)) { await sendWaReminder(s.member); await new Promise(r => setTimeout(r, 400)); }
-        if (sums.length > 10) toast('প্রথম ১০ জনের জন্য খোলা হয়েছে / Opened for first 10 members', 'info');
-      }, { size: 'xs' }));
-      head.appendChild(bar);
-    }
-    head.appendChild(screen);
-
-    outputCard(ctx, {
-      titleBn: meta.bn, titleEn: meta.en, sheet, screen: head,
-      criteria: `ন্যূনতম / Minimum ${kind === 'due' ? 'Due' : 'Advance'} ≥ ৳${min}`,
-      fileBase: `Dhruvo_Sangsad_${kind === 'due' ? 'Due' : 'Advance'}_Report_${fmtDate(todayISO())}`,
-      excelRows: () => {
-        const out = [['SL', 'Member ID', 'Member Name', 'Mobile', 'Monthly Installment', 'Total Deposit', kind === 'due' ? 'Total Due' : 'Total Advance']];
-        sums.forEach((s, i) => out.push([i + 1, s.member.memberId, s.member.nameEn || s.member.nameBn, s.member.mobile, num(s.member.installment), s.totalDeposit, kind === 'due' ? s.due : s.advance]));
-        out.push(['', '', '', '', '', 'Total', total]);
-        return out;
-      },
+    const sheet = buildSheet({
+      cfg: ctx.cfg, titleEn: meta.en, subEn: `As on ${fmtDate(todayISO())} · min ৳${min}`, titleBn: t(meta.bn, meta.en),
+      parts: [psTable(
+        [{ label: 'SL', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Mobile', cls: 'c' },
+         { label: 'Monthly Installment', cls: 'num' }, { label: 'Total Deposit', cls: 'num' }, { label: kind === 'due' ? 'Total Due' : 'Total Advance', cls: 'num' }],
+        sums.map((s, i) => [
+          { text: i + 1, cls: 'c' }, { text: s.member.memberId, cls: 'c' }, s.member.nameEn || s.member.nameBn,
+          { text: s.member.mobile, cls: 'c' }, { text: money(s.member.installment), cls: 'num' },
+          { text: money(s.totalDeposit), cls: 'num' }, { text: money(kind === 'due' ? s.due : s.advance), cls: 'num' },
+        ]),
+        [[{ text: kind === 'due' ? 'Total Due' : 'Total Advance', span: 6 }, { text: money(total), cls: 'num' }]],
+      )],
     });
-  }
-  ctx.render = render;
+    return { sheet };
+  };
 }
 
-/* ================= 7. Collection report (monthly trend) ================= */
+/* ================= Collection (yearly) ================= */
 function rCollection(ctx, meta) {
   const yr = el('select');
   const years = Array.from(new Set(approvedOf(ctx.deposits).map(d => String(d.date).slice(0, 4)).concat([String(new Date().getFullYear())]))).sort();
   years.forEach(y => yr.appendChild(el('option', { value: y, ...(y === String(new Date().getFullYear()) ? { selected: true } : {}) }, [y])));
-  ctx.filterHost.append(mkField('বছর', yr, '120px'));
+  ctx_filter(ctx, mkField(t('বছর', 'Year'), yr, '120px'));
 
-  function render() {
+  return () => {
     const y = yr.value;
     const appr = approvedOf(ctx.deposits).filter(d => String(d.date).slice(0, 4) === y);
     const months = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
@@ -553,47 +273,25 @@ function rCollection(ctx, meta) {
     });
     const total = rows.reduce((s, r) => s + r.total, 0);
     const tCash = rows.reduce((s, r) => s + r.cash, 0), tMob = rows.reduce((s, r) => s + r.mobile, 0), tBank = rows.reduce((s, r) => s + r.bank, 0);
-
-    const sheet = el('div', { class: 'print-sheet' });
-    sheet.appendChild(sheetHead(ctx.cfg, 'Collection Report', `Year: ${y}`));
-    sheet.appendChild(psTable(
-      [{ label: 'Month' }, { label: 'Transactions', cls: 'num' }, { label: 'Cash', cls: 'num' }, { label: 'Mobile Banking', cls: 'num' }, { label: 'Bank', cls: 'num' }, { label: 'Total Collection', cls: 'num' }],
-      rows.map(r => [monthLabel(r.mk), { text: r.n, cls: 'num' }, { text: money(r.cash), cls: 'num' }, { text: money(r.mobile), cls: 'num' }, { text: money(r.bank), cls: 'num' }, { text: money(r.total), cls: 'num' }]),
-      [[{ text: 'Total' }, { text: appr.length, cls: 'num' }, { text: money(tCash), cls: 'num' }, { text: money(tMob), cls: 'num' }, { text: money(tBank), cls: 'num' }, { text: money(total), cls: 'num' }]],
-    ));
-    sheet.appendChild(sheetFoot(ctx.cfg));
-
-    const max = Math.max(1, ...rows.map(r => r.total));
-    const chart = el('div', { class: 'bars' });
-    rows.forEach(r => {
-      const b = el('div', { class: 'bar' });
-      b.innerHTML = `<div class="bar-track"><div class="bar-fill" style="height:${Math.round((r.total / max) * 100)}%"></div></div>
-        <div class="bar-lbl">${monthLabel(r.mk).slice(0, 3)}</div><div class="bar-val">${money(r.total)}</div>`;
-      chart.appendChild(b);
+    const sheet = buildSheet({
+      cfg: ctx.cfg, titleEn: 'Collection Report', subEn: `Year: ${y}`, titleBn: t(meta.bn, meta.en),
+      parts: [psTable(
+        [{ label: 'Month' }, { label: 'Transactions', cls: 'num' }, { label: 'Cash', cls: 'num' }, { label: 'Mobile Banking', cls: 'num' }, { label: 'Bank', cls: 'num' }, { label: 'Total Collection', cls: 'num' }],
+        rows.map(r => [monthLabel(r.mk), { text: r.n, cls: 'num' }, { text: money(r.cash), cls: 'num' }, { text: money(r.mobile), cls: 'num' }, { text: money(r.bank), cls: 'num' }, { text: money(r.total), cls: 'num' }]),
+        [[{ text: 'Total' }, { text: appr.length, cls: 'num' }, { text: money(tCash), cls: 'num' }, { text: money(tMob), cls: 'num' }, { text: money(tBank), cls: 'num' }, { text: money(total), cls: 'num' }]],
+      )],
     });
-
-    outputCard(ctx, {
-      titleBn: meta.bn, titleEn: `${meta.en} — ${y}`, sheet, screen: chart,
-      criteria: `বছর: ${y}`,
-      fileBase: `Dhruvo_Sangsad_Collection_Report_${y}`,
-      excelRows: () => {
-        const out = [['Month', 'Transactions', 'Cash', 'Mobile Banking', 'Bank', 'Total Collection']];
-        rows.forEach(r => out.push([monthLabel(r.mk), r.n, r.cash, r.mobile, r.bank, r.total]));
-        out.push(['Total', appr.length, tCash, tMob, tBank, total]);
-        return out;
-      },
-    });
-  }
-  ctx.render = render;
+    return { sheet };
+  };
 }
 
-/* ================= 8. Payment method report ================= */
+/* ================= Payment method ================= */
 function rMethod(ctx, meta) {
   const from = el('input', { type: 'date', value: monthKey(todayISO()) + '-01' });
   const to = el('input', { type: 'date', value: todayISO() });
-  ctx.filterHost.append(mkField('শুরু', from, '140px'), mkField('শেষ', to, '140px'));
+  ctx_filter(ctx, mkField(t('শুরু', 'From'), from, '140px'), mkField(t('শেষ', 'To'), to, '140px'));
 
-  function render() {
+  return () => {
     const rows = approvedOf(ctx.deposits).filter(d => {
       const x = String(d.date).slice(0, 10);
       return (!from.value || x >= from.value) && (!to.value || x <= to.value);
@@ -604,58 +302,35 @@ function rMethod(ctx, meta) {
       const amt = list.reduce((s, d) => s + num(d.amount), 0);
       return { p, n: list.length, amt, pct: total ? (amt / total) * 100 : 0, list };
     });
-
-    const sheet = el('div', { class: 'print-sheet' });
-    sheet.appendChild(sheetHead(ctx.cfg, 'Payment Method Report', `Period: ${fmtDate(from.value)} to ${fmtDate(to.value)}`));
-    sheet.appendChild(psTable(
+    const parts = [psTable(
       [{ label: 'Payment Method' }, { label: 'Transactions', cls: 'num' }, { label: 'Amount', cls: 'num' }, { label: 'Share (%)', cls: 'num' }],
       grid.map(g => [g.p.en, { text: g.n, cls: 'num' }, { text: money(g.amt), cls: 'num' }, { text: g.pct.toFixed(2), cls: 'num' }]),
       [[{ text: 'Total' }, { text: rows.length, cls: 'num' }, { text: money(total), cls: 'num' }, { text: total ? '100.00' : '0.00', cls: 'num' }]],
-    ));
+    )];
     grid.forEach(g => {
       if (!g.list.length) return;
-      sheet.appendChild(sechead(`${g.p.en} — Details`));
-      sheet.appendChild(psTable(
-        [{ label: 'SL', cls: 'c' }, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Deposit Type' }, { label: 'Amount', cls: 'num' }],
+      parts.push(sechead(`${g.p.en} — Details`));
+      parts.push(psTable(
+        [txnCol, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Deposit Type' }, { label: 'Amount', cls: 'num' }],
         g.list.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)))
-          .map((d, i) => [{ text: i + 1, cls: 'c' }, { text: fmtDate(d.date), cls: 'c' }, { text: d.memberId, cls: 'c' }, d.memberName, typeLabel(d.type).en, { text: money(d.amount), cls: 'num' }]),
+          .map(d => [txnCell(d), { text: fmtDate(d.date), cls: 'c' }, { text: d.memberId, cls: 'c' }, d.memberName, typeLabel(d.type).en, { text: money(d.amount), cls: 'num' }]),
         [[{ text: 'Subtotal', span: 5 }, { text: money(g.amt), cls: 'num' }]],
       ));
     });
-    sheet.appendChild(sheetFoot(ctx.cfg));
-
-    const stats = el('div', { class: 'stats' });
-    stats.append(statCard({ label: 'মোট আদায় / Total', value: taka(total), sub: `${rows.length} transaction(s)`, ic: 'money' }),
-      ...grid.map(g => statCard({ label: `${g.p.bn} / ${g.p.en}`, value: taka(g.amt), sub: `${g.n} entry · ${g.pct.toFixed(1)}%`, ic: 'deposit', tone: 'gray' })));
-
-    outputCard(ctx, {
-      titleBn: meta.bn, titleEn: meta.en, sheet, screen: stats,
-      criteria: `সময়কাল / Period: ${fmtDate(from.value)} → ${fmtDate(to.value)}`,
-      fileBase: `Dhruvo_Sangsad_Payment_Method_Report_${fmtDate(from.value)}_to_${fmtDate(to.value)}`,
-      excelRows: () => {
-        const out = [['Payment Method', 'Transactions', 'Amount', 'Share (%)']];
-        grid.forEach(g => out.push([g.p.en, g.n, g.amt, Number(g.pct.toFixed(2))]));
-        out.push(['Total', rows.length, total, total ? 100 : 0]);
-        out.push([]);
-        out.push(['Date', 'Member ID', 'Member Name', 'Deposit Type', 'Payment Method', 'Amount']);
-        rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)))
-          .forEach(d => out.push([fmtDate(d.date), d.memberId, d.memberName, typeLabel(d.type).en, methodLabel(d.method).en, num(d.amount)]));
-        return out;
-      },
-    });
-  }
-  ctx.render = render;
+    const sheet = buildSheet({ cfg: ctx.cfg, titleEn: meta.en, subEn: `Period: ${fmtDate(from.value)} to ${fmtDate(to.value)}`, titleBn: t(meta.bn, meta.en), parts });
+    return { sheet };
+  };
 }
 
-/* ================= 10. Member-wise report ================= */
+/* ================= Member-wise ================= */
 function rMemberWise(ctx, meta) {
-  /* Empty picker = all members; picking one narrows the report to them. */
-  const pick = memberPicker({ members: ctx.members, placeholder: 'খালি রাখলে সকল সদস্য…' });
+  const pick = memberPicker({ members: ctx.members, placeholder: t('খালি রাখলে সকল সদস্য…', 'empty = all members…') });
   const from = el('input', { type: 'date' });
   const to = el('input', { type: 'date' });
-  ctx.filterHost.append(mkField('সদস্য', pick.root, '220px'), mkField('শুরু', from, '130px'), mkField('শেষ', to, '130px'));
+  ctx_filter(ctx, mkField(t('সদস্য', 'Member'), pick.root, '220px'), mkField(t('শুরু', 'From'), from, '130px'), mkField(t('শেষ', 'To'), to, '130px'));
+  ctx.filterHost.closest('.card')?.classList.add('overflow-visible');
 
-  function render() {
+  return () => {
     const pool = pick.value ? ctx.members.filter(m => m.id === pick.value) : ctx.members.filter(m => m.status !== 'rejected');
     const inRange = d => {
       const x = String(d.date).slice(0, 10);
@@ -669,9 +344,7 @@ function rMemberWise(ctx, meta) {
     const gTotal = data.reduce((s, r) => s + r.periodTotal, 0);
     const period = (from.value || to.value) ? `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}` : `As on ${fmtDate(todayISO())}`;
 
-    const sheet = el('div', { class: 'print-sheet land' });
-    sheet.appendChild(sheetHead(ctx.cfg, 'Member-wise Report', period));
-    sheet.appendChild(psTable(
+    const parts = [psTable(
       [{ label: 'SL', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Mobile', cls: 'c' },
        { label: 'Installment', cls: 'num' }, { label: 'Entries', cls: 'num' }, { label: 'Period Deposit', cls: 'num' },
        { label: 'Total Deposit', cls: 'num' }, { label: 'Total Due', cls: 'num' }, { label: 'Total Advance', cls: 'num' }, { label: 'Status', cls: 'c' }],
@@ -685,118 +358,64 @@ function rMemberWise(ctx, meta) {
         { text: money(data.reduce((s, r) => s + r.s.totalDeposit, 0)), cls: 'num' },
         { text: money(data.reduce((s, r) => s + r.s.due, 0)), cls: 'num' },
         { text: money(data.reduce((s, r) => s + r.s.advance, 0)), cls: 'num' }, { text: '' }]],
-    ));
+    )];
     if (data.length === 1) {
       const r = data[0];
-      sheet.appendChild(sechead('Deposit Details'));
+      parts.push(sechead('Deposit Details'));
       let cum = 0;
-      sheet.appendChild(psTable(
-        [{ label: 'SL', cls: 'c' }, { label: 'Date', cls: 'c' }, { label: 'Deposit Type' }, { label: 'Payment Method' }, { label: 'Description' }, { label: 'Amount', cls: 'num' }, { label: 'Cumulative Amount', cls: 'num' }],
-        r.list.map((d, i) => { cum += num(d.amount); return [{ text: i + 1, cls: 'c' }, { text: fmtDate(d.date), cls: 'c' }, typeLabel(d.type).en, methodLabel(d.method).en, d.description || '-', { text: money(d.amount), cls: 'num' }, { text: money(cum), cls: 'num' }]; }),
+      parts.push(psTable(
+        [txnCol, { label: 'Date', cls: 'c' }, { label: 'Deposit Type' }, { label: 'Payment Method' }, { label: 'Description' }, { label: 'Amount', cls: 'num' }, { label: 'Cumulative', cls: 'num' }],
+        r.list.map((d, i) => { cum += num(d.amount); return [txnCell(d), { text: fmtDate(d.date), cls: 'c' }, typeLabel(d.type).en, methodLabel(d.method).en, d.description || '-', { text: money(d.amount), cls: 'num' }, { text: money(cum), cls: 'num' }]; }),
         [[{ text: 'Total', span: 5 }, { text: money(r.periodTotal), cls: 'num' }, { text: money(cum), cls: 'num' }]],
       ));
     }
-    sheet.appendChild(sheetFoot(ctx.cfg, `${data.length} member(s)`));
-
-    const screen = tableWrap(
-      [{ label: 'ID' }, { label: 'নাম' }, { label: 'কিস্তি', cls: 'num' }, { label: 'এন্ট্রি', cls: 'num' },
-       { label: 'সময়কালীন জমা', cls: 'num' }, { label: 'মোট জমা', cls: 'num' }, { label: 'বকেয়া', cls: 'num' }, { label: 'অগ্রিম', cls: 'num' }],
-      data.map(r => [
-        `<b>${esc(r.m.memberId)}</b>`, esc(r.m.nameBn), { text: money(r.m.installment), cls: 'num' },
-        { text: String(r.list.length), cls: 'num' }, { text: money(r.periodTotal), cls: 'num' },
-        { text: money(r.s.totalDeposit), cls: 'num' },
-        { html: r.s.due > 0 ? `<span class="due-amt">${money(r.s.due)}</span>` : '0', cls: 'num' },
-        { html: r.s.advance > 0 ? `<span class="adv-amt">${money(r.s.advance)}</span>` : '0', cls: 'num' },
-      ]),
-      { footer: [{ html: '<b>সর্বমোট</b>' }, { html: '' }, { html: '' }, { html: '' }, { html: `<b>${money(gTotal)}</b>`, cls: 'num' },
-        { html: `<b>${money(data.reduce((s, r) => s + r.s.totalDeposit, 0))}</b>`, cls: 'num' },
-        { html: `<b>${money(data.reduce((s, r) => s + r.s.due, 0))}</b>`, cls: 'num' },
-        { html: `<b>${money(data.reduce((s, r) => s + r.s.advance, 0))}</b>`, cls: 'num' }] },
-    );
-
-    outputCard(ctx, {
-      titleBn: meta.bn, titleEn: meta.en, sheet, screen, orientation: 'l',
-      criteria: period,
-      fileBase: pick.value ? `Dhruvo_Sangsad_Member_${data[0].m.memberId}_Report` : `Dhruvo_Sangsad_Member_wise_Report_${fmtDate(todayISO())}`,
-      excelRows: () => {
-        const out = [['SL', 'Member ID', 'Member Name', 'Mobile', 'Monthly Installment', 'Entries', 'Period Deposit', 'Total Deposit', 'Total Due', 'Total Advance', 'Status']];
-        data.forEach((r, i) => out.push([i + 1, r.m.memberId, r.m.nameEn || r.m.nameBn, r.m.mobile, num(r.m.installment), r.list.length, r.periodTotal, r.s.totalDeposit, r.s.due, r.s.advance, r.m.status]));
-        out.push(['', '', '', '', '', 'Total', gTotal, data.reduce((s, r) => s + r.s.totalDeposit, 0), data.reduce((s, r) => s + r.s.due, 0), data.reduce((s, r) => s + r.s.advance, 0), '']);
-        return out;
-      },
-    });
-  }
-  ctx.render = render;
+    const sheet = buildSheet({ cfg: ctx.cfg, titleEn: meta.en, subEn: period, titleBn: t(meta.bn, meta.en), parts, orientation: 'l' });
+    return { sheet, memberName: data.length === 1 ? (data[0].m.nameEn || data[0].m.nameBn) : '' };
+  };
 }
 
-/* ================= 11. Withdrawal report ================= */
+/* ================= Withdrawal report ================= */
 function rWithdrawal(ctx, meta) {
   const { session } = ctx;
   const own = session.role === 'member';
   const from = el('input', { type: 'date' });
   const to = el('input', { type: 'date' });
-  ctx.filterHost.append(mkField('শুরু', from, '140px'), mkField('শেষ', to, '140px'));
+  ctx_filter(ctx, mkField(t('শুরু', 'From'), from, '140px'), mkField(t('শেষ', 'To'), to, '140px'));
 
-  function render() {
+  return () => {
     let rows = (own ? ctx.withdrawals.filter(w => w.memberDocId === session.memberDocId || w.memberId === session.memberId) : ctx.withdrawals)
       .filter(w => w.status === 'approved');
     if (from.value) rows = rows.filter(w => String(w.date).slice(0, 10) >= from.value);
     if (to.value) rows = rows.filter(w => String(w.date).slice(0, 10) <= to.value);
     rows = rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.memberId).localeCompare(String(b.memberId)));
     const total = rows.reduce((s, w) => s + num(w.amount), 0);
-    const label = `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}`;
-
-    const sheet = el('div', { class: 'print-sheet' });
-    sheet.appendChild(sheetHead(ctx.cfg, 'Withdrawal Report', label));
-    sheet.appendChild(psTable(
-      [{ label: 'SL', cls: 'c' }, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Withdrawal Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }],
-      rows.map((w, i) => [
-        { text: i + 1, cls: 'c' }, { text: fmtDate(w.date), cls: 'c' }, { text: w.memberId, cls: 'c' },
-        w.memberName, withdrawalTypeLabel(w.type).en, methodLabel(w.method).en, { text: money(w.amount), cls: 'num' },
-      ]),
-      [[{ text: 'Total Withdrawal', span: 6 }, { text: money(total), cls: 'num' }]],
-    ));
-    sheet.appendChild(sheetFoot(ctx.cfg, `${rows.length} withdrawal(s)`));
-
-    const screen = tableWrap(
-      [{ label: 'তারিখ' }, { label: 'সদস্য' }, { label: 'ধরন' }, { label: 'পদ্ধতি' }, { label: 'পরিমাণ', cls: 'num' }],
-      rows.map(w => [
-        esc(fmtDate(w.date)),
-        `${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`,
-        esc(withdrawalTypeLabel(w.type).bn), esc(methodLabel(w.method).bn),
-        { text: money(w.amount), cls: 'num' },
-      ]),
-      {
-        empty: 'কোনো উত্তোলন পাওয়া যায়নি', emptyIcon: 'withdraw',
-        footer: rows.length ? [{ html: '' }, { html: '<b>সর্বমোট</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }] : null,
-      },
-    );
-
-    outputCard(ctx, {
-      titleBn: meta.bn, titleEn: meta.en, sheet, screen,
-      criteria: label,
-      fileBase: `Dhruvo_Sangsad_Withdrawal_Report_${fmtDate(todayISO())}`,
-      excelRows: () => {
-        const out = [['SL', 'Date', 'Member ID', 'Member Name', 'Withdrawal Type', 'Payment Method', 'Amount']];
-        rows.forEach((w, i) => out.push([i + 1, fmtDate(w.date), w.memberId, w.memberName, withdrawalTypeLabel(w.type).en, methodLabel(w.method).en, num(w.amount)]));
-        out.push(['', '', '', '', '', 'Total Withdrawal', total]);
-        return out;
-      },
+    const sheet = buildSheet({
+      cfg: ctx.cfg, titleEn: meta.en,
+      subEn: `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}`,
+      titleBn: t(meta.bn, meta.en),
+      parts: [psTable(
+        [txnCol, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Withdrawal Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }],
+        rows.map(w => [
+          txnCell(w), { text: fmtDate(w.date), cls: 'c' }, { text: w.memberId, cls: 'c' },
+          w.memberName, withdrawalTypeLabel(w.type).en, methodLabel(w.method).en, { text: money(w.amount), cls: 'num' },
+        ]),
+        [[{ text: 'Total Withdrawal', span: 6 }, { text: money(total), cls: 'num' }]],
+      )],
     });
-  }
-  ctx.render = render;
+    const sole = rows.length && rows.every(w => w.memberDocId === rows[0].memberDocId) ? rows[0].memberName : '';
+    return { sheet, memberName: own ? (ctx.members.find(m => m.id === session.memberDocId)?.nameEn || ctx.members.find(m => m.id === session.memberDocId)?.nameBn || '') : sole };
+  };
 }
 
 const BUILDERS = {
-  statement: rStatement,
   overall: rOverall,
   daily: (c, m) => periodReport(c, m, 'daily'),
   monthly: (c, m) => periodReport(c, m, 'monthly'),
+  range: (c, m) => periodReport(c, m, 'range'),
   due: (c, m) => rDueAdvance(c, m, 'due'),
   advance: (c, m) => rDueAdvance(c, m, 'advance'),
   collection: rCollection,
   method: rMethod,
-  range: (c, m) => periodReport(c, m, 'range'),
   memberwise: rMemberWise,
   withdrawal: rWithdrawal,
 };

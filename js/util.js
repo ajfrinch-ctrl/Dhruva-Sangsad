@@ -81,6 +81,13 @@ export function toISO(ddmmyyyy) {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : String(ddmmyyyy);
 }
 export function monthKey(iso) { return String(iso || '').slice(0, 7); }
+/** Compact numeric date key YYYYMMDD — used for transaction ids. */
+export function dateKey8(iso) { return String(iso || '').slice(0, 10).replace(/-/g, ''); }
+/** File-name stamp: 2026-09-25_15-40 */
+export function fileStamp(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${todayISO(d)}_${p(d.getHours())}-${p(d.getMinutes())}`;
+}
 export function monthLabel(key) {
   const en = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const bn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
