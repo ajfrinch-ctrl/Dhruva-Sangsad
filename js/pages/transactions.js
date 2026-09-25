@@ -69,15 +69,15 @@ function txnRowOf(x, session) {
   return txnRow({
     ic: dep ? 'deposit' : 'withdraw', tone,
     name: x.memberName || x.memberId || '',
-    meta: `${tx(x.kindLabel.bn)} · ${tx(STATUS_EN[x.status] || x.status || '')}`,
+    meta: `${t(x.kindLabel.bn, x.kindLabel.en)} · ${tx(STATUS_EN[x.status] || x.status || '')}`,
     amount: `${dep ? '+' : '−'}${money(x.amount)}`,
     amountKind: x.status === 'rejected' ? '' : (dep ? 'in' : 'out'),
     details: [
       [t('পরিমাণ', 'Amount'), `<b class="${dep ? 'adv-amt' : 'due-amt'}">${taka(x.amount)}</b>`],
       [t('তারিখ', 'Date'), esc(fmtDate(x.date))],
       [t('ধরন', 'Kind'), dep ? t('জমা', 'Deposit') : t('উত্তোলন', 'Withdrawal')],
-      [t('বিভাগ', 'Category'), esc(tx(x.kindLabel.bn))],
-      [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(tx(methodLabel(x.method).bn))],
+      [t('বিভাগ', 'Category'), esc(t(x.kindLabel.bn, x.kindLabel.en))],
+      [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(t(methodLabel(x.method).bn, methodLabel(x.method).en))],
       [t('স্ট্যাটাস', 'Status'), statusTag(x.status)],
       [t('লেনদেন আইডি', 'Transaction ID'), `<b class="txn-id-static">${esc(x.txnId || '—')}</b>`],
       ...(staff ? [[t('সদস্য আইডি', 'Member ID'), esc(x.memberId || '')]] : []),

@@ -140,14 +140,14 @@ export function memberCard(session, m, deposits, withdrawals, cfg, onChanged) {
     </span>
     <span class="mrow-st">${statusTag(m.status)}</span>`;
   const acts = el('div', { class: 'row-acts' });
-  acts.append(
+  acts.append(...[
     btn(t('দেখুন', 'View'), 'eye', 'ghost', () => viewMember(session, m, { deposits, withdrawals, cfg, onChanged }), { class: 'btn-sm' }),
     can(session, 'member:edit') ? btn(t('সম্পাদনা', 'Edit'), 'edit', 'soft', () => App.go('members', { section: 'edit', docId: m.id }), { class: 'btn-sm' }) : null,
     /* a REJECTED registration can be removed for good */
     (m.status === 'rejected' && can(session, 'member:delete'))
       ? btn(t('মুছুন', 'Delete'), 'trash', 'softred', () => deleteRejected(session, m, () => App.refresh()), { class: 'btn-sm' })
       : null,
-  );
+  ].filter(Boolean));
   row.appendChild(acts);
   return row;
 }
@@ -415,7 +415,13 @@ export async function editMemberScreen(session, params = {}) {
   const picker = memberPicker({
     members,
     value: params.docId && members.some(m => m.id === params.docId) ? params.docId : '',
-    onPick: m => { load(m ? m.id : ''); if (m) App.go('members', { section: 'edit', docId: m.id }); },
+    /* The picker fires onPick for its initial value too — navigating again to
+       the same member would re-render this screen forever. */
+    onPick: m => {
+      if (m && m.id === params.docId) return;
+      load(m ? m.id : '');
+      if (m) App.go('members', { section: 'edit', docId: m.id });
+    },
   });
   const pickCard = card(t('সদস্য খুঁজুন', 'Find member'), 'Find member', picker.root);
   pickCard.classList.add('overflow-visible');

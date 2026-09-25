@@ -125,12 +125,22 @@ export const App = {
   go(route, section = '') {
     const s = this.session;
     if (!s) { this.goAuth('login'); return; }
+    closeAllSheets();            /* explicit navigation always dismisses an open sheet */
+    /* go('members', { section: 'edit', docId }) — the section goes into the
+       hash, every other key is handed to the page as a param. */
+    let extra = {};
+    if (section && typeof section === 'object') {
+      extra = { ...section };
+      section = extra.section || '';
+      delete extra.section;
+    }
     route = ALIAS[route] || route;
-    if (!PAGES[route]) { route = 'home'; section = ''; }
+    if (!PAGES[route]) { route = 'home'; section = ''; extra = {}; }
     if (!canRoute(s, route)) {
       toast(t('এই মডিউলে প্রবেশাধিকার নেই', 'You do not have access to this module'), 'error');
-      route = 'home'; section = '';
+      route = 'home'; section = ''; extra = {};
     }
+    sessionParams[route] = extra;
     const target = hashFor(route, section);
     if (location.hash === target) { this.render(route, section); return; }
     location.hash = target;   // hashchange → render()
@@ -173,7 +183,7 @@ export const App = {
     view.scrollTop = 0;
     window.scrollTo(0, 0);
     try {
-      const node = await PAGES[route](s, { section: this.section });
+      const node = await PAGES[route](s, { ...(sessionParams[route] || {}), section: this.section });
       if (this.route !== route) return;      // a newer navigation won
       clear(view);
       view.appendChild(node);
@@ -229,6 +239,7 @@ export const App = {
     hideBoot();
     authEl.hidden = true;
     resetIdleTimer();
+    this.paintRole();
 
     const { route, section } = parseHash(location.hash);
     const target = (route && PAGES[route] && canRoute(session, route) && !AUTH_ROUTES.has(route)) ? route : 'home';
@@ -298,7 +309,7 @@ export const App = {
       : s.role === 'maker' ? t('মেকার', 'Maker')
       : t('সদস্য', 'Member');
     const who = s.displayName || s.username || '';
-    roleEl.innerHTML = `${esc(who)}${who ? ' · ' : ''}<span class="brand-role-tag">${esc(label)}</span>`;
+    roleEl.innerHTML = `${esc(who)}${who ? '<span class="brand-role-sep"> · </span>' : ''}<span class="brand-role-tag">${esc(label)}</span>`;
   },
 
   async refreshNotifBadge() {

@@ -11,33 +11,34 @@ import { allLogs, logUserName } from '../store.js';
    it is NOT duplicated here: one feature, one implementation. */
 
 const ACTION_META = {
-  REGISTRATION: { ic: 'register', bn: 'নিবন্ধন' },
-  MEMBER_UPDATE: { ic: 'edit', bn: 'সদস্য হালনাগাদ' },
-  MEMBER_APPROVAL: { ic: 'approve', bn: 'সদস্য অনুমোদন' },
-  MEMBER_REJECTION: { ic: 'reject', bn: 'সদস্য বাতিল' },
-  MEMBER_STATUS: { ic: 'member', bn: 'সদস্য স্ট্যাটাস' },
-  DEPOSIT_SUBMISSION: { ic: 'deposit', bn: 'জমা দাখিল' },
-  DEPOSIT_APPROVAL: { ic: 'approve', bn: 'জমা অনুমোদন' },
-  DEPOSIT_REJECTION: { ic: 'reject', bn: 'জমা বাতিল' },
-  DEPOSIT_EDIT: { ic: 'edit', bn: 'জমা সম্পাদনা' },
-  DEPOSIT_DELETE: { ic: 'trash', bn: 'জমা মুছে ফেলা' },
-  WITHDRAWAL_SUBMISSION: { ic: 'withdraw', bn: 'উত্তোলন দাখিল' },
-  WITHDRAWAL_APPROVAL: { ic: 'approve', bn: 'উত্তোলন অনুমোদন' },
-  WITHDRAWAL_REJECTION: { ic: 'reject', bn: 'উত্তোলন বাতিল' },
-  STAFF_CREATE: { ic: 'maker', bn: 'স্টাফ তৈরি' },
-  STAFF_STATUS: { ic: 'maker', bn: 'স্টাফ স্ট্যাটাস' },
-  STAFF_DELETE: { ic: 'trash', bn: 'স্টাফ মুছে ফেলা' },
-  PASSWORD_RESET: { ic: 'key', bn: 'পাসওয়ার্ড রিসেট' },
-  PASSWORD_CHANGE: { ic: 'lock', bn: 'পাসওয়ার্ড পরিবর্তন' },
-  PASSWORD_RECOVERY: { ic: 'key', bn: 'পাসওয়ার্ড পুনরুদ্ধার' },
-  ADMIN_SETUP: { ic: 'admin', bn: 'অ্যাডমিন সেটআপ' },
-  LOGIN: { ic: 'login', bn: 'লগইন' },
-  LOGOUT: { ic: 'logout', bn: 'লগআউট' },
-  BACKUP: { ic: 'backup', bn: 'ব্যাকআপ' },
-  RESTORE: { ic: 'restore', bn: 'রিস্টোর' },
-  SETTINGS_UPDATE: { ic: 'settings', bn: 'সেটিংস হালনাগাদ' },
+  REGISTRATION: { ic: 'register', bn: 'নিবন্ধন', en: 'Registration' },
+  MEMBER_UPDATE: { ic: 'edit', bn: 'সদস্য হালনাগাদ', en: 'Member updated' },
+  MEMBER_APPROVAL: { ic: 'approve', bn: 'সদস্য অনুমোদন', en: 'Member approved' },
+  MEMBER_REJECTION: { ic: 'reject', bn: 'সদস্য বাতিল', en: 'Member rejected' },
+  MEMBER_STATUS: { ic: 'member', bn: 'সদস্য স্ট্যাটাস', en: 'Member status' },
+  DEPOSIT_SUBMISSION: { ic: 'deposit', bn: 'জমা দাখিল', en: 'Deposit submitted' },
+  DEPOSIT_APPROVAL: { ic: 'approve', bn: 'জমা অনুমোদন', en: 'Deposit approved' },
+  DEPOSIT_REJECTION: { ic: 'reject', bn: 'জমা বাতিল', en: 'Deposit rejected' },
+  DEPOSIT_EDIT: { ic: 'edit', bn: 'জমা সম্পাদনা', en: 'Deposit edited' },
+  DEPOSIT_DELETE: { ic: 'trash', bn: 'জমা মুছে ফেলা', en: 'Deposit deleted' },
+  WITHDRAWAL_SUBMISSION: { ic: 'withdraw', bn: 'উত্তোলন দাখিল', en: 'Withdrawal submitted' },
+  WITHDRAWAL_APPROVAL: { ic: 'approve', bn: 'উত্তোলন অনুমোদন', en: 'Withdrawal approved' },
+  WITHDRAWAL_REJECTION: { ic: 'reject', bn: 'উত্তোলন বাতিল', en: 'Withdrawal rejected' },
+  STAFF_CREATE: { ic: 'maker', bn: 'স্টাফ তৈরি', en: 'Staff created' },
+  STAFF_STATUS: { ic: 'maker', bn: 'স্টাফ স্ট্যাটাস', en: 'Staff status' },
+  STAFF_DELETE: { ic: 'trash', bn: 'স্টাফ মুছে ফেলা', en: 'Staff deleted' },
+  PASSWORD_RESET: { ic: 'key', bn: 'পাসওয়ার্ড রিসেট', en: 'Password reset' },
+  PASSWORD_CHANGE: { ic: 'lock', bn: 'পাসওয়ার্ড পরিবর্তন', en: 'Password changed' },
+  PASSWORD_RECOVERY: { ic: 'key', bn: 'পাসওয়ার্ড পুনরুদ্ধার', en: 'Password recovered' },
+  ADMIN_SETUP: { ic: 'admin', bn: 'অ্যাডমিন সেটআপ', en: 'Admin setup' },
+  LOGIN: { ic: 'login', bn: 'লগইন', en: 'Login' },
+  LOGOUT: { ic: 'logout', bn: 'লগআউট', en: 'Logout' },
+  BACKUP: { ic: 'backup', bn: 'ব্যাকআপ', en: 'Backup' },
+  RESTORE: { ic: 'restore', bn: 'রিস্টোর', en: 'Restore' },
+  SETTINGS_UPDATE: { ic: 'settings', bn: 'সেটিংস হালনাগাদ', en: 'Settings updated' },
+  MEMBER_DELETE: { ic: 'trash', bn: 'নিবন্ধন মুছে ফেলা', en: 'Registration deleted' },
 };
-export const actionMeta = a => ACTION_META[a] || { ic: 'log', bn: a };
+export const actionMeta = a => ACTION_META[a] || { ic: 'log', bn: a, en: a };
 
 /* One compact timeline row (shared with the dashboard recent-activity card).
    opts.member = true renders the member's own view: Bengali action + a short
@@ -68,7 +69,7 @@ export function actRow(l, opts = {}) {
     : esc(logUserName(l)) + (l.details ? ' · ' + esc(l.details) : '');
   const row = el('div', { class: 'act' });
   row.innerHTML = `<span class="ai">${icon(meta.ic)}</span>
-    <span class="ab"><span class="at">${esc(meta.bn)}</span>
+    <span class="ab"><span class="at">${esc(t(meta.bn, meta.en))}</span>
       <span class="as">${sub}</span></span>
     <span class="aw">${esc(fmtDate(l.createdAt))}<br>${esc(fmtTime(l.createdAt))}</span>`;
   return row;
@@ -112,7 +113,7 @@ export async function pageActivity(session) {
     };
     paintBadge();
     const actOpts = [{ value: '', bn: 'সব', en: 'All' },
-      ...Array.from(new Set(mine.map(l => l.action))).sort().map(a => ({ value: a, bn: actionMeta(a).bn, en: a }))];
+      ...Array.from(new Set(mine.map(l => l.action))).sort().map(a => ({ value: a, bn: actionMeta(a).bn, en: actionMeta(a).en }))];
     const roleOpts = [
       { value: '', bn: 'সব', en: 'All' }, { value: 'admin', bn: 'অ্যাডমিন', en: 'Admin' },
       { value: 'maker', bn: 'Maker', en: 'Maker' }, { value: 'member', bn: 'সদস্য', en: 'Member' },

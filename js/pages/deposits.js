@@ -125,14 +125,14 @@ function depositRow(d, session, staff) {
     ic: d.status === 'pending' ? 'clock' : d.status === 'approved' ? 'approve' : 'reject',
     tone,
     name: d.memberName || d.memberId || '',
-    meta: `${tx(typeLabel(d.type).bn)} · ${tx(STATUS_EN[d.status] || d.status || '')}`,
+    meta: `${t(typeLabel(d.type).bn, typeLabel(d.type).en)} · ${tx(STATUS_EN[d.status] || d.status || '')}`,
     amount: taka(d.amount),
     amountKind: d.status === 'rejected' ? '' : 'in',
     details: [
       [t('পরিমাণ', 'Amount'), `<b>${taka(d.amount)}</b>`],
       [t('তারিখ', 'Date'), esc(fmtDate(d.date))],
-      [t('ধরন', 'Type'), esc(tx(typeLabel(d.type).bn))],
-      [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(tx(methodLabel(d.method).bn))],
+      [t('ধরন', 'Type'), esc(t(typeLabel(d.type).bn, typeLabel(d.type).en))],
+      [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(t(methodLabel(d.method).bn, methodLabel(d.method).en))],
       [t('স্ট্যাটাস', 'Status'), statusTag(d.status)],
       [t('লেনদেন আইডি', 'Transaction ID'), `<b class="txn-id-static">${esc(d.txnId || '—')}</b>`],
       ...(staff ? [[t('সদস্য আইডি', 'Member ID'), esc(d.memberId || '')]] : []),
@@ -392,8 +392,8 @@ function depositSuccess(rec) {
         <div>${esc(t('লেনদেন আইডি', 'Transaction ID'))}</div><div><b class="txn-id-static">${esc(rec.txnId || '')}</b></div>
         <div>${esc(t('সদস্য', 'Member'))}</div><div><b>${esc(rec.memberName || '')}</b> (${esc(rec.memberId || '')})</div>
         <div>${esc(t('তারিখ', 'Date'))}</div><div>${esc(fmtDate(rec.date))}</div>
-        <div>${esc(t('ধরন', 'Type'))}</div><div>${esc(tx(typeLabel(rec.type).bn))}</div>
-        <div>${esc(t('পদ্ধতি', 'Method'))}</div><div>${esc(tx(methodLabel(rec.method).bn))}</div>
+        <div>${esc(t('ধরন', 'Type'))}</div><div>${esc(t(typeLabel(rec.type).bn, typeLabel(rec.type).en))}</div>
+        <div>${esc(t('পদ্ধতি', 'Method'))}</div><div>${esc(t(methodLabel(rec.method).bn, methodLabel(rec.method).en))}</div>
         <div>${esc(t('পরিমাণ', 'Amount'))}</div><div><b style="color:var(--green-dark)">${taka(rec.amount)}</b></div>
         <div>${esc(t('স্ট্যাটাস', 'Status'))}</div><div>${statusTag(rec.status)}</div>
       </div>
@@ -415,9 +415,9 @@ function editDeposit(session, d) {
           <input name="date" type="date" value="${esc(String(d.date).slice(0, 10))}" ${session.role === 'maker' ? `min="${todayISO()}" max="${todayISO()}"` : ''}>
           <div class="hint">${esc(t('তারিখ বদলালে নতুন লেনদেন আইডি তৈরি হবে', 'Changing the date re-stamps the transaction ID'))}</div></div>
         <div class="field"><label>${esc(t('ধরন', 'Type'))} <span class="req">*</span></label>
-          <select name="type">${DEPOSIT_TYPES.map(x => `<option value="${x.id}"${x.id === d.type ? ' selected' : ''}>${esc(tx(x.bn))}</option>`).join('')}</select></div>
+          <select name="type">${DEPOSIT_TYPES.map(x => `<option value="${x.id}"${x.id === d.type ? ' selected' : ''}>${esc(t(x.bn, x.en))}</option>`).join('')}</select></div>
         <div class="field"><label>${esc(t('পদ্ধতি', 'Method'))} <span class="req">*</span></label>
-          <select name="method">${PAY_METHODS.map(x => `<option value="${x.id}"${x.id === d.method ? ' selected' : ''}>${esc(tx(x.bn))}</option>`).join('')}</select></div>
+          <select name="method">${PAY_METHODS.map(x => `<option value="${x.id}"${x.id === d.method ? ' selected' : ''}>${esc(t(x.bn, x.en))}</option>`).join('')}</select></div>
         <div class="field"><label>${esc(t('পরিমাণ (৳)', 'Amount (৳)'))} <span class="req">*</span></label>
           <input name="amount" type="number" min="1" step="0.01" value="${esc(d.amount)}"></div>
       </div>
@@ -616,14 +616,14 @@ export async function withdrawalScreen(session) {
       listHost.appendChild(txnRow({
         ic: 'withdraw', tone,
         name: w.memberName || w.memberId || '',
-        meta: `${tx(withdrawalTypeLabel(w.type).bn)} · ${tx(STATUS_EN[w.status] || w.status || '')}`,
+        meta: `${t(withdrawalTypeLabel(w.type).bn, withdrawalTypeLabel(w.type).en)} · ${tx(STATUS_EN[w.status] || w.status || '')}`,
         amount: taka(w.amount),
         amountKind: w.status === 'rejected' ? '' : 'out',
         details: [
           [t('পরিমাণ', 'Amount'), `<b>${taka(w.amount)}</b>`],
           [t('তারিখ', 'Date'), esc(fmtDate(w.date))],
-          [t('উত্তোলনের ধরন', 'Withdrawal type'), esc(tx(withdrawalTypeLabel(w.type).bn))],
-          [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(tx(methodLabel(w.method).bn))],
+          [t('উত্তোলনের ধরন', 'Withdrawal type'), esc(t(withdrawalTypeLabel(w.type).bn, withdrawalTypeLabel(w.type).en))],
+          [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(t(methodLabel(w.method).bn, methodLabel(w.method).en))],
           [t('স্ট্যাটাস', 'Status'), statusTag(w.status)],
           [t('লেনদেন আইডি', 'Transaction ID'), `<b class="txn-id-static">${esc(w.txnId || '—')}</b>`],
           ...(staff ? [[t('সদস্য আইডি', 'Member ID'), esc(w.memberId || '')]] : []),

@@ -338,7 +338,7 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
 .brand-logo{width:32px;height:32px;font-size:15px}
 .brand-txt .n{font-size:14px}
 .brand-txt .r{font-size:10px;max-width:130px}
-.brand-txt .r .brand-role-tag{display:none}
+.brand-txt .r .brand-role-tag,.brand-txt .r .brand-role-sep{display:none}
 .chip{font-size:11px;padding:4px 8px}
 .icon-btn{width:34px;height:34px;font-size:15px}
 .stats{grid-template-columns:1fr 1fr;gap:8px}
@@ -1568,3 +1568,7 @@ html[data-role] .topbar.sync-offline,html[data-role] .topbar.sync-error,
 .txr-body .txn-id-static{font-size:12px}
 .txr-body .row-actions{margin-top:10px;justify-content:flex-end}
 html[data-theme="dark"] .txr,html[data-theme="amoled"] .txr{background:#000;border-color:#222}
+/* member rows: the action row wraps under the name instead of overflowing */
+.mrow{flex-wrap:wrap}
+/* stacked list tools: the search box must not inherit the row flex-basis as a height */
+.list-tools .search-box{flex:0 0 auto}

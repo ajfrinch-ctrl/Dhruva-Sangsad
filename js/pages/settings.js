@@ -205,7 +205,7 @@ async function organisationSection(session, host) {
   const f = el('form', { class: 'grid', novalidate: true });
   f.innerHTML = `
     <div class="grid g2">
-      <div class="field"><label>সংগঠনের নাম (বাংলা) <span class="req">*</span></label><input name="orgNameBn" value="${esc(cfg.orgNameBn)}" required></div>
+      <div class="field"><label>Organisation Name (Bangla) <span class="req">*</span></label><input name="orgNameBn" value="${esc(cfg.orgNameBn)}" required></div>
       <div class="field"><label>Organisation Name (English) <span class="req">*</span></label><input name="orgNameEn" value="${esc(cfg.orgNameEn)}" required></div>
       <div class="field"><label>${t('ঠিকানা', 'Address')}</label><input name="orgAddress" value="${esc(cfg.orgAddress || '')}"></div>
       <div class="field"><label>${t('ফোন', 'Phone')}</label><input name="orgPhone" value="${esc(cfg.orgPhone || '')}"></div>
