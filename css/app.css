@@ -1621,3 +1621,8 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .mpick-box{position:relative;display:flex;align-items:center}
 .ac-sub{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}
 .ac-extra{font-weight:600;color:var(--faint)}
+
+/* long Bengali labels must wrap inside full-width buttons instead of overflowing */
+.btn-block,.cta-block,.form-sticky .btn,.ac-acts .btn,.action-card .ac-t{white-space:normal;overflow-wrap:anywhere}
+.action-card .ac-t{text-align:left}
+.form-sticky .btn,.ac-acts .btn{text-align:center}
