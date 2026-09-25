@@ -49,11 +49,11 @@ p{margin:0 0 8px}
 .auth-card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:16px;
   box-shadow:0 6px 28px rgba(16,24,40,.08);padding:26px 24px 22px}
 .auth-brand{text-align:center;margin-bottom:18px}
-.auth-logo{width:min(72vw,220px);height:auto;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
+.auth-logo{width:68px;height:68px;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
   background:transparent;border:0;overflow:hidden}
-.auth-logo img{width:100%;height:auto;max-height:min(28vh,180px);object-fit:contain;display:block}
+.auth-logo img{width:100%;height:100%;object-fit:contain;display:block}
 .auth-brand h1{font-size:22px;letter-spacing:.2px}
-.auth-brand .sub{font-size:12px;color:var(--muted);letter-spacing:1.4px;text-transform:uppercase;margin-top:3px}
+.auth-brand .sub{font-size:12px;color:var(--muted);letter-spacing:.3px;margin-top:3px}
 .auth-tabs{display:flex;gap:5px;background:#f3f4f6;border-radius:10px;padding:4px;margin-bottom:16px}
 .auth-tabs button{flex:1;border:0;background:transparent;padding:9px 6px;border-radius:8px;font:inherit;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s}
 .auth-tabs button.on{background:#fff;color:var(--green-dark);box-shadow:var(--shadow)}
@@ -76,7 +76,7 @@ p{margin:0 0 8px}
 #app.on{display:flex;height:100dvh;max-height:100dvh;overflow:hidden}
 .topbar{position:fixed;top:0;left:0;right:0;z-index:60;background:#fff;border:3px solid var(--line);
   display:flex;align-items:center;gap:10px;height:var(--header-h);padding:0 18px;box-shadow:0 1px 2px rgba(16,24,40,.04);
-  box-sizing:border-box;transition:border-color .2s}
+  box-sizing:border-box;transition:transform .22s ease,border-color .2s}
 .topbar.sync-synced,.topbar.sync-online{border-color:#16a34a}
 .topbar.sync-offline,.topbar.sync-error{border-color:#e11d48}
 .topbar.sync-syncing{border-color:#16a34a}
@@ -121,6 +121,7 @@ p{margin:0 0 8px}
 /* ---- main content ---- */
 .main{flex:1;min-width:0;width:100%;max-width:var(--content-max);margin:0 auto;
   padding:20px 24px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain; /* custom pull-to-refresh owns the top edge */
   margin-top:calc(var(--header-h) + var(--nav-h));margin-bottom:var(--footer-h);
   height:calc(100dvh - var(--header-h) - var(--nav-h) - var(--footer-h));max-width:none}
 .main > *{max-width:var(--content-max);margin-left:auto;margin-right:auto}
@@ -397,20 +398,10 @@ html[data-role="maker"]{
 html[data-role="member"]{
   --role:#ea580c; --role-soft:#ffedd5; --role-line:#fdba74; --role-dark:#c2410c;
 }
+/* Role accent lives ONLY on the topbar (border + tint) and the user label.
+   Buttons, nav, FAB, stats and inputs stay brand green for every role. */
 html[data-role="admin"] .topbar,html[data-role="maker"] .topbar,html[data-role="member"] .topbar{border-bottom-color:var(--role-line);background:linear-gradient(180deg,var(--role-soft),#fff 70%)}
-html[data-role="admin"] .topnav,html[data-role="maker"] .topnav{border-bottom-color:var(--role-line)}
-html[data-role="admin"] .nav-tab.on,html[data-role="maker"] .nav-tab.on,html[data-role="member"] .bottom-nav .nav-tab.on{
-  color:var(--role-dark);border-bottom-color:var(--role);background:var(--role-soft)
-}
-html[data-role="admin"] .btn-primary,html[data-role="maker"] .btn-primary,html[data-role="member"] .btn-primary{background:var(--role);border-color:var(--role)}
-html[data-role="admin"] .btn-primary:hover,html[data-role="maker"] .btn-primary:hover,html[data-role="member"] .btn-primary:hover{background:var(--role-dark)}
-html[data-role="admin"] .btn-soft,html[data-role="maker"] .btn-soft,html[data-role="member"] .btn-soft{background:var(--role-soft);color:var(--role-dark);border-color:var(--role-line)}
-html[data-role="admin"] .stat::before,html[data-role="maker"] .stat::before,html[data-role="member"] .stat::before{background:var(--role)}
 html[data-role="admin"] .brand-txt .r,html[data-role="maker"] .brand-txt .r,html[data-role="member"] .brand-txt .r{color:var(--role-dark)}
-html[data-role="admin"] .app-footer-org strong,html[data-role="maker"] .app-footer-org strong,html[data-role="member"] .app-footer-org strong{color:var(--role-dark)}
-html[data-role="admin"] .page-head h1 .icon,html[data-role="maker"] .page-head h1 .icon,html[data-role="member"] .page-head h1 .icon{color:var(--role)}
-html[data-role="admin"] input:focus,html[data-role="maker"] input:focus,html[data-role="member"] input:focus,
-html[data-role="admin"] select:focus,html[data-role="maker"] select:focus,html[data-role="member"] select:focus{border-color:var(--role);box-shadow:0 0 0 3px var(--role-soft)}
 
 /* Bottom navigation visuals (layout lives in the MOBILE-FIRST SHELL block below) */
 .bottom-nav .nav-tab{
@@ -418,7 +409,7 @@ html[data-role="admin"] select:focus,html[data-role="maker"] select:focus,html[d
   border-bottom:0;border-top:2.5px solid transparent;font-size:11px;
 }
 .bottom-nav .nav-tab .icon{width:21px;height:21px}
-.bottom-nav .nav-tab.on{border-top-color:var(--role,var(--green));border-bottom:0}
+.bottom-nav .nav-tab.on{border-top-color:var(--green);border-bottom:0}
 
 html[data-theme="amoled"][data-role="admin"],
 html[data-theme="dark"][data-role="admin"]{--role-soft:#1e1033;--role-line:#5b21b6}
@@ -609,9 +600,7 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   position:absolute;top:3px;right:calc(50% - 22px);background:var(--red);color:#fff;
   font-size:9.5px;font-weight:700;border-radius:9px;padding:0 4px;line-height:1.5;min-width:15px;
 }
-html[data-role="admin"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
-html[data-role="maker"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
-html[data-role="member"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
+
 
 /* ---- desktop icon rail ---- */
 .rail{
@@ -646,7 +635,7 @@ html[data-role="member"] .bottom-nav .nav-tab.on{color:var(--role-dark)}
 }
 .fab .icon{width:20px;height:20px}
 .fab:active{transform:scale(.96)}
-html[data-role="admin"] .fab,html[data-role="maker"] .fab,html[data-role="member"] .fab{background:var(--role)}
+
 @media (min-width:1024px){ .fab{bottom:calc(var(--footer-h) + 18px);right:24px} }
 
 /* ---- bottom sheet (More menu) ---- */
@@ -661,6 +650,8 @@ html[data-role="admin"] .fab,html[data-role="maker"] .fab,html[data-role="member
 .sheet.on{transform:none}
 .sheet-grab{width:40px;height:4px;border-radius:3px;background:var(--line);margin:6px auto 4px}
 .sheet-title{font-size:13px;font-weight:700;color:var(--muted);padding:4px 18px 8px}
+.sheet-header{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);padding:10px 18px 2px}
+.sheet-list > .sheet-header:first-child{padding-top:2px}
 .sheet-list{display:flex;flex-direction:column}
 .sheet-item{
   display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:10px 18px;border:0;
@@ -797,7 +788,7 @@ html[data-role="admin"] .fab,html[data-role="maker"] .fab,html[data-role="member
 .sk-row .sk-lines{flex:1;min-width:0;padding-top:2px}
 @keyframes sk{0%{background-position:100% 0}100%{background-position:0 0}}
 @media (prefers-reduced-motion:reduce){
-  .sk-line,.sk-dot{animation:none}
+  .sk-line,.sk-dot,.ptr.loading .ptr-spin{animation:none}
   *{transition-duration:.01ms !important}
 }
 .empty-state{padding:30px 18px;text-align:center;color:var(--muted)}
@@ -866,3 +857,215 @@ html[data-theme="dark"] .empty-state .es-ic,
 html[data-theme="amoled"] .empty-state .es-ic{background:#141414}
 html[data-theme="dark"] .fab,
 html[data-theme="amoled"] .fab{box-shadow:0 6px 18px rgba(0,0,0,.55)}
+
+/* ===================== GESTURES (roadmap step-8 polish) =====================
+   Swipe-to-act · pull-to-refresh · collapse-on-scroll topbar · 44px targets */
+
+/* ---- collapse-on-scroll topbar (body.tb-hidden is set by gestures.js) ---- */
+body.tb-hidden .topbar{transform:translateY(-110%)}
+body.tb-hidden .offline-bar{top:8px}
+@media (max-width:1023px){
+  .main{transition:margin-top .22s ease,height .22s ease}
+  body.tb-hidden .main{margin-top:0;
+    height:calc(100dvh - var(--bottom-nav-h) - env(safe-area-inset-bottom,0px))}
+}
+
+/* ---- swipe-to-act (approval rows) ---- */
+.appr.swipe{padding:0}
+.swipe{position:relative;overflow:hidden}
+.swipe-under{position:absolute;inset:0;display:flex;z-index:0}
+.su-zone{flex:1;display:flex;align-items:center;gap:8px;color:#fff;
+  font-size:13.5px;font-weight:700;padding:0 18px;white-space:nowrap}
+.su-zone .icon{width:22px;height:22px;transition:transform .15s ease}
+.su-lead{background:linear-gradient(100deg,#16a34a,#15803d);justify-content:flex-start}
+.su-trail{background:linear-gradient(260deg,#e11d48,#be123c);justify-content:flex-end;text-align:right}
+.su-zone.past .icon{transform:scale(1.3)}
+.swipe-front{position:relative;z-index:1;width:100%;background:inherit;border-radius:inherit;
+  display:flex;gap:12px;align-items:center;padding:11px 13px;
+  touch-action:pan-y;transition:transform .18s ease;will-change:transform}
+.swipe-front.drag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+@media (max-width:700px){.swipe-front{flex-wrap:wrap}}
+
+/* ---- pull-to-refresh indicator (first child of .main while pulling) ---- */
+.ptr{height:0;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;width:100%}
+.ptr.ease{transition:height .2s ease}
+.ptr-box{display:flex;align-items:center;gap:8px;height:52px;color:var(--muted);
+  font-size:12.5px;font-weight:700;white-space:nowrap}
+.ptr.ready .ptr-box{color:var(--green-dark)}
+.ptr-spin{width:20px;height:20px;flex:none;border-radius:50%;
+  border:2.5px solid var(--line);border-top-color:var(--green);transition:transform .2s ease}
+.ptr.ready .ptr-spin{transform:rotate(180deg)}
+.ptr.loading .ptr-spin{animation:ptrspin .8s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
+html[data-theme="dark"] .ptr.ready .ptr-box,
+html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
+
+/* ---- 44px touch targets for primary mobile actions ---- */
+@media (max-width:640px){
+  .form-actions .btn-primary,.form-actions .btn-danger,
+  .modal-foot .btn,.btn-block{min-height:44px}
+}
+
+/* ============ Phase KHA — member forms + list ============ */
+/* --- registration wizard --- */
+.wsteps{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.wstep-dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  font-size:12px;font-weight:700;background:var(--line-2);color:var(--muted);flex:none}
+.wstep-dot.on{background:var(--green);color:#fff}
+.wstep-dot.done{background:var(--green-soft);color:var(--green-dark)}
+.wstep-line{flex:1;max-width:42px;height:2px;background:var(--line);border-radius:2px}
+.wstep-lbl{margin-left:auto;font-size:12.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.wstep{display:none;flex-direction:column;gap:12px}
+.wstep.on{display:flex}
+/* sticky action bar — flush card footer on mobile */
+.form-sticky{position:sticky;bottom:0;display:flex;gap:8px;background:var(--card);
+  border-top:1px solid var(--line-2);margin:12px -16px -16px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.form-sticky .btn{flex:1;min-height:48px}
+.form-sticky .wiz-back{flex:0 0 auto}
+/* editor section headers inside the g2 grid */
+.form-sec{grid-column:1/-1;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  color:var(--faint);margin-top:6px;padding-top:10px;border-top:1px solid var(--line-2)}
+/* desktop/tablet: wizard renders as one page with a single submit */
+@media (min-width:1024px){
+  .wsteps,.wiz-back,.wiz-next{display:none}
+  .wstep{display:flex}
+  .wiz-submit[hidden]{display:inline-flex}
+  .form-sticky{position:static;border-top:0;margin:12px 0 0;padding:4px 0 0;max-width:340px}
+}
+/* mobile forms: one column, 16px inputs (no iOS auto-zoom), 48px targets */
+@media (max-width:1023px){
+  .mform .g2{grid-template-columns:1fr}
+  .mform input,.mform select,.mform textarea{font-size:16px}
+  .mform input,.mform select{min-height:48px}
+}
+@media (max-width:640px){
+  .form-sticky{margin:12px -12px -12px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+}
+/* --- member picker (combobox) --- */
+.card.overflow-visible{overflow:visible}
+.mpick{position:relative}
+.mpick-in{padding-right:38px}
+.mpick-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+  border:0;background:transparent;color:var(--faint);font-size:19px;line-height:1;cursor:pointer;border-radius:6px}
+.mpick-x:hover{color:var(--text)}
+.mpick-drop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:70;background:var(--card);
+  border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px rgba(16,24,40,.16);
+  max-height:252px;overflow-y:auto;padding:4px}
+.mpick-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:9px 10px;
+  border:0;border-radius:8px;background:transparent;font:inherit;color:var(--text);cursor:pointer}
+.mpick-opt .mo-t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mpick-opt .mo-s{color:var(--muted);font-size:12px;white-space:nowrap}
+.mpick-opt .mo-tag{margin-left:auto;flex:none}
+.mpick-opt.on{background:var(--green-soft)}
+.mpick-empty{padding:12px;text-align:center;color:var(--faint);font-size:13px}
+/* --- member list: filter chips + compact cards --- */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chips .chip{font:inherit;color:var(--text);background:var(--card);cursor:pointer;min-height:34px}
+.chips .chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.count-line{font-size:12.5px;color:var(--muted);margin:2px 0 9px}
+.person-list{display:flex;flex-direction:column;gap:9px}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:11px 13px}
+.pc-head{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:2px 0;
+  font:inherit;cursor:pointer;text-align:left;color:var(--text);min-height:34px}
+.pc-name{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-sub{font-size:12.5px;color:var(--muted);margin-top:1px}
+.pc-nums{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted);margin-top:5px}
+.pc-nums b{color:var(--text);font-variant-numeric:tabular-nums}
+.pc-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+
+/* ============ Phase GA — deposit / withdrawal / transactions ============ */
+/* --- segmented single-select chips (forms + filter sheet) --- */
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg-chip{font:inherit;font-size:13px;font-weight:700;min-height:40px;padding:8px 14px;border-radius:20px;
+  border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap}
+.seg-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+.form-sticky .btn-ghost{flex:0 0 auto}
+/* --- transaction cards (mobile lists) --- */
+.tcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:11px 13px}
+.tc-top{display:flex;align-items:center;gap:8px;min-height:30px}
+.tc-t{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-top .tag{margin-left:auto;flex:none}
+.tc-sub{font-size:12.5px;color:var(--muted);margin-top:1px}
+.tc-amt{margin-top:5px;font-size:12.5px;color:var(--muted)}
+.tc-amt b{font-size:14.5px;color:var(--text);font-variant-numeric:tabular-nums}
+.tc-desc{font-size:12.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* --- transactions header: search + filter button with badge --- */
+.txn-head{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.txn-head .search-box{flex:1;min-width:0}
+.filter-btn{position:relative;flex:none}
+.fbadge{position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:11px;
+  background:var(--green);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
+/* --- filter sheet body --- */
+.sheet{max-height:92vh;max-height:92dvh;overflow-y:auto}
+.fsheet{padding:2px 18px 4px;display:flex;flex-direction:column;gap:13px}
+.fsheet-lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.fsheet-dates{display:flex;gap:8px}
+.fsheet-dates .field{flex:1;min-width:0}
+.fsheet-actions{display:flex;gap:8px;margin-top:2px}
+.fsheet-actions .btn{flex:1;min-height:48px}
+/* export icon buttons in summary card head */
+.card-head .icon-btn{width:32px;height:32px;font-size:15px}
+/* ============ Phase GHA — reports: tiles + inline results + export bar ============ */
+.hub-tile.pick .tb{align-self:center}
+.hub-tile.on{border-color:var(--green);box-shadow:0 0 0 2px var(--green-line);background:#fafffb}
+.report-out{display:flex;flex-direction:column;gap:10px}
+.report-out:empty{display:none}
+.gen-row{margin:12px 0}
+.gen-row .btn{min-height:48px;font-size:15px}
+.export-bar{position:sticky;bottom:0;display:flex;gap:10px;justify-content:center;z-index:5;
+  padding:10px 8px calc(12px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg,transparent,var(--bg) 45%)}
+.export-bar .icon-btn{width:46px;height:46px;font-size:19px;box-shadow:var(--shadow)}
+@media(max-width:640px){.export-bar{gap:12px}}
+/* ============ Phase NGO — admin: backup blocks, danger zone, user cards, activity ============ */
+.btn-stack{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.btn-stack .btn{min-height:46px}
+.card.danger-zone{border:1.5px solid var(--red-line)}
+.card.danger-zone .card-head h3{color:var(--red-dark)}
+.user-card{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.user-card .ul-1{font-size:14px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.user-card .ul-2{font-size:12.5px;color:var(--muted);margin-top:2px}
+.user-card .ul-3{margin-top:5px}
+.user-card .ul-act{margin-top:8px}
+.act-list{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+/* ============ Auth refinement — login / register wizard / forgot ============ */
+/* fixed green primary inside auth (never role-tinted) */
+.auth-card .btn-primary{background:var(--green);border-color:var(--green);color:#fff}
+.auth-card .btn-primary:hover:not(:disabled){background:var(--green-dark);border-color:var(--green-dark)}
+.auth-card .btn-primary:disabled{background:var(--green);border-color:var(--green)}
+/* BN-first: no ALL-CAPS labels/tags inside auth */
+.auth-card .field > label{text-transform:none;letter-spacing:0;font-size:12.5px}
+.auth-card .tag{text-transform:none;letter-spacing:0}
+/* password show/hide — 44px touch target, input text never underlaps */
+.auth-card .pw-wrap{position:relative}
+.auth-card .pw-wrap input{padding-right:52px}
+.auth-card .pw-eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  width:44px;height:44px;min-width:44px;min-height:44px;display:grid;place-items:center;
+  background:none;border:0;border-radius:10px;color:var(--muted);cursor:pointer;padding:0}
+.auth-card .pw-eye:hover{color:var(--green-dark);background:var(--green-soft)}
+.auth-card .pw-eye:focus-visible{outline:2px solid var(--green);outline-offset:1px}
+.auth-card .pw-eye .icon{width:20px;height:20px}
+/* compact banner for wizard steps */
+.banner.sm{padding:8px 10px;font-size:12.5px;margin-bottom:10px}
+/* optional-info accordion */
+details.acc{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card)}
+details.acc summary{list-style:none;cursor:pointer;padding:11px 12px;font-weight:700;font-size:13.5px;
+  color:var(--green-dark);display:flex;align-items:center;gap:8px;min-height:48px}
+details.acc summary::-webkit-details-marker{display:none}
+details.acc summary::after{content:'';margin-left:auto;width:9px;height:9px;flex:none;
+  border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;
+  transform:rotate(45deg) translate(-1px,-1px)}
+details.acc[open] summary::after{transform:rotate(-135deg)}
+details.acc .grid{padding:2px 12px 12px}
+/* wizard indicator wraps on narrow screens */
+.auth-card .wsteps{flex-wrap:wrap;row-gap:8px}
+.auth-card .wstep-lbl{font-size:11.5px}
+/* sticky wizard footer flush with the auth card (card pad: 24px / 22px) */
+@media (max-width:1023px){
+  .auth-card .form-sticky{margin:14px -24px -22px;padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px));
+    border-radius:0 0 15px 15px}
+  /* 16px inputs (no iOS auto-zoom), 48px targets */
+  .auth-card input:not([type=checkbox]),.auth-card select,.auth-card textarea{font-size:16px}
+  .auth-card input:not([type=checkbox]),.auth-card select{min-height:48px}
+  .auth-card .pw-wrap input{padding-right:54px}
+}

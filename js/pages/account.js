@@ -1,11 +1,13 @@
 /* First-time admin setup wizard + forced password change + self-service password change */
-import { el, esc, toast, modal, isValidMobile, isValidEmail } from '../util.js';
+import { el, esc, toast, modal, isValidMobile, isValidEmail, t } from '../util.js';
 import { icon } from '../icons.js';
 import { completeAdminSetup, changeOwnPassword } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 
 /** Generic blocking form-modal: resolves with the value returned by onSubmit, or null on cancel. */
-function formModal({ title, html, width = 480, okLabel = 'Save', cancelLabel = 'Cancel', onSubmit, dismissible = false }) {
+function formModal({ title, html, width = 480, okLabel = '', cancelLabel = '', onSubmit, dismissible = false }) {
+  okLabel = okLabel || t('সংরক্ষণ করুন', 'Save');
+  cancelLabel = cancelLabel || t('বাতিল', 'Cancel');
   return new Promise(resolve => {
     const body = el('div');
     body.innerHTML = `<form class="grid js-form" novalidate>${html}<div class="err js-err"></div></form>`;

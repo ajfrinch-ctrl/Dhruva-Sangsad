@@ -38,6 +38,7 @@ const P = {
   calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.5M16 3.2v3.5"/>',
   clock: '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.2 2"/>',
   eye: '<path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>',
+  eyeOff: '<path d="M4 4l16 16"/><path d="M9.9 6.1A9.8 9.8 0 0 1 12 5.8c5.4 0 9 6.2 9.5 6.2-.3.4-1.4 1.9-3.1 3.3M6 7.5C4.4 9 2.9 11.5 2.5 12c.5 0 4 6.2 9.5 6.2 1 0 2-.2 2.9-.6"/>',
   lock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.2 10.5V7.8a3.8 3.8 0 0 1 7.6 0v2.7"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7"/>',
@@ -59,6 +60,7 @@ const P = {
   chevron: '<path d="m9 5 7 7-7 7"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.2M12 19v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.8 12h2.2M19 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
 };
 
 export function icon(name, cls = '') {

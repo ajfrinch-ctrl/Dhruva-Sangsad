@@ -9,6 +9,7 @@ import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
 import { bottomSheet, switchEl, skeleton, errorState } from './ui.js';
+import { initShellGestures } from './gestures.js';
 import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, allMembers, allDeposits, allWithdrawals } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
@@ -137,7 +138,7 @@ export const App = {
     const b = el('button', {
       class: 'nav-tab nav-more', type: 'button', dataset: { route: 'more' },
       title: t('আরও', 'More'),
-      html: `${icon('grid')}<span>${esc(t('আরও', 'More'))}</span>`,
+      html: `${icon('menu')}<span>${esc(t('আরও', 'More'))}</span>`,
       onclick: () => this.openMore(),
     });
     if (where === 'rail') b.classList.add('rail-tab');
@@ -194,21 +195,43 @@ export const App = {
     fab.onclick = f.run;
   },
 
-  /** “More” sheet: the secondary destinations, theme, language and logout. */
+  /** “More” sheet, grouped: Mine · Admin tools · Preferences · Logout. */
   openMore() {
     const s = this.session; if (!s) return;
+    const isStaff = s.role !== 'member';
+    const group = isStaff ? 'staff' : 'member';
+    const leftovers = NAV.filter(i => can(s, i.id) && !(i.slots || []).includes(group));
     const items = [];
-    NAV.filter(i => can(s, i.id) && !(i.slots || []).includes(s.role === 'member' ? 'member' : 'staff'))
+
+    /* — আমার: reports (+ settings hub for members) — */
+    items.push({ header: t('আমার', 'Mine') });
+    leftovers.filter(i => i.id !== 'settings' || !isStaff)
       .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
-    if (can(s, 'backup:manage')) {
-      items.push({ ic: 'backup', label: t('ব্যাকআপ', 'Backup'), run: () => this.go('settings', { tab: 'backup' }) });
+    if (!isStaff) {
+      items.push({ ic: 'log', label: t('অ্যাকটিভিটি লগ', 'Activity Log'), run: () => this.go('settings', { tab: 'activity' }) });
     }
+
+    /* — অ্যাডমিন টুলস (staff) — */
+    const tools = [];
+    leftovers.filter(i => i.id === 'settings' && isStaff)
+      .forEach(i => tools.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
     if (can(s, 'staff:manage')) {
-      items.push({ ic: 'maker', label: t('ইউজার ম্যানেজমেন্ট', 'User management'), run: () => this.go('settings', { tab: 'staff' }) });
+      tools.push({ ic: 'maker', label: t('ইউজার ম্যানেজমেন্ট', 'User management'), run: () => this.go('settings', { tab: 'staff' }) });
     }
-    items.push({ ic: 'log', label: t('অ্যাকটিভিটি লগ', 'Activity Log'), run: () => this.go('settings', { tab: 'activity' }) });
+    if (can(s, 'backup:manage')) {
+      tools.push({ ic: 'backup', label: t('ব্যাকআপ', 'Backup'), run: () => this.go('settings', { tab: 'backup' }) });
+    }
+    if (isStaff) {
+      tools.push({ ic: 'log', label: t('অ্যাকটিভিটি লগ', 'Activity Log'), run: () => this.go('settings', { tab: 'activity' }) });
+    }
+    if (tools.length) {
+      items.push({ header: t('অ্যাডমিন টুলস', 'Admin tools') });
+      items.push(...tools);
+    }
+
+    /* — পছন্দ — */
+    items.push({ header: t('পছন্দ', 'Preferences') });
     items.push({ ic: 'key', label: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'), run: () => shortcutSheet() });
-    items.push('sep');
     items.push({
       ic: getTheme() === 'amoled' ? 'moon' : 'sun', label: t('ডার্ক মোড', 'Dark mode'),
       keepOpen: true, right: switchEl(getTheme() === 'amoled', () => toggleTheme()),
@@ -441,6 +464,9 @@ async function boot() {
   paintSync(navigator.onLine ? 'online' : 'offline');
   try { firebase.init(); } catch (e) { console.error('firebase', e); }
 
+  /* Step-8 touch polish: pull-to-refresh + collapse-on-scroll topbar. */
+  try { initShellGestures({ onRefresh: () => App.refresh() }); } catch (e) { console.error('gestures', e); }
+
   // onclick replaces any previous handler (safe if boot runs twice)
   $('#btnLogout').innerHTML = icon('logout');
   $('#btnLogout').onclick = () => App.doLogout();
@@ -454,7 +480,7 @@ async function boot() {
   $('#btnNotif').innerHTML = icon('bell');
   $('#btnNotif').onclick = () => { if (App.session) openNotifications(App.session); };
   const moreBtn = $('#btnMore');
-  if (moreBtn) { moreBtn.innerHTML = icon('grid'); moreBtn.onclick = () => App.openMore(); }
+  if (moreBtn) { moreBtn.innerHTML = icon('menu'); moreBtn.onclick = () => App.openMore(); }
   const paintThemeBtn = () => {
     const b = $('#btnTheme'); if (!b) return;
     const dark = getTheme() === 'amoled';

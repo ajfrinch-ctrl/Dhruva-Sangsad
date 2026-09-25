@@ -1,9 +1,9 @@
 /* Notifications (top-right icon popup) + Activity Log */
 import {
-  el, esc, toast, fmtDate, fmtTime, todayISO, debounce, modal,
+  el, esc, toast, fmtDate, fmtTime, todayISO, debounce, modal, t,
 } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, tableWrap, btn } from '../ui.js';
+import { page, card, btn, filterSheet, emptyState } from '../ui.js';
 import { visibleNotifications, markNotificationRead, allLogs, logUserName } from '../store.js';
 import { downloadCSV, downloadExcel, safeName } from '../pdf.js';
 import { App } from '../app.js';
@@ -63,7 +63,7 @@ export async function openNotifications(session) {
   }
   buildList();
 
-  return modal({ title: 'বিজ্ঞপ্তি / Notifications', body, width: 540, actions: [{ label: 'Close', value: true, kind: 'primary' }] });
+  return modal({ title: 'বিজ্ঞপ্তি / Notifications', body, width: 540, actions: [{ label: t('বন্ধ', 'Close'), value: true, kind: 'primary' }] });
 }
 
 /* ==================== Activity Log ==================== */
@@ -96,6 +96,17 @@ const ACTION_META = {
 };
 export const actionMeta = a => ACTION_META[a] || { ic: 'log', bn: a };
 
+/* One compact timeline row (shared with the dashboard recent-activity card). */
+export function actRow(l) {
+  const meta = actionMeta(l.action);
+  const row = el('div', { class: 'act' });
+  row.innerHTML = `<span class="ai">${icon(meta.ic)}</span>
+    <span class="ab"><span class="at">${esc(meta.bn)}</span>
+      <span class="as">${esc(logUserName(l))}${l.details ? ' · ' + esc(l.details) : ''}</span></span>
+    <span class="aw">${esc(fmtDate(l.createdAt))}<br>${esc(fmtTime(l.createdAt))}</span>`;
+  return row;
+}
+
 export async function pageActivity(session) {
   const logs = await allLogs();
   const wrap = page('কার্যক্রম লগ', 'Activity Log', 'log');
@@ -105,27 +116,42 @@ export async function pageActivity(session) {
     : logs.filter(l => l.userId === session.id);
 
   const PAGE_SIZE = 10;
-  let currentPage = 0;
 
-  const bar = el('div', { class: 'toolbar' });
-  const searchBox = el('div', { class: 'search-box', html: icon('search') });
-  const q = el('input', { placeholder: 'ব্যবহারকারী / কার্যক্রম / বিবরণ', autocomplete: 'off' });
-  searchBox.appendChild(q);
-  const mk = (label, node, w = '150px') => { const f = el('div', { class: 'field', style: `flex:0 1 ${w}` }); f.appendChild(el('label', { text: label })); f.appendChild(node); return f; };
-  const actSel = el('select');
-  actSel.appendChild(el('option', { value: '' }, ['সব কার্যক্রম / All actions']));
-  Array.from(new Set(mine.map(l => l.action))).sort().forEach(a => actSel.appendChild(el('option', { value: a }, [`${actionMeta(a).bn} / ${a}`])));
-  const roleSel = el('select');
-  [['', 'সব রোল / All roles'], ['admin', 'Admin'], ['maker', 'Maker'], ['member', 'Member']].forEach(([v, l]) => roleSel.appendChild(el('option', { value: v }, [l])));
-
-  // Default window: the most recent 7 days.
+  // Default window: the most recent 7 days (same as before the sheet).
   const sevenDaysAgo = () => { const d = new Date(); d.setDate(d.getDate() - 6); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
-  const from = el('input', { type: 'date', value: sevenDaysAgo() });
-  const to = el('input', { type: 'date', value: todayISO() });
+  let act = '', role = '', from = sevenDaysAgo(), to = todayISO();
 
-  bar.append(searchBox, mk('কার্যক্রম / Action', actSel, '180px'), mk('রোল / Role', roleSel, '130px'), mk('হইতে / From', from, '130px'), mk('পর্যন্ত / To', to, '130px'));
-  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; actSel.value = ''; roleSel.value = ''; from.value = ''; to.value = ''; currentPage = 0; render(); }, { size: 'xs' }));
-  wrap.appendChild(bar);
+  const head = el('div', { class: 'txn-head' });
+  const searchBox = el('div', { class: 'search-box', html: icon('search') });
+  const q = el('input', {
+    placeholder: t('ব্যবহারকারী / কার্যক্রম / বিবরণ…', 'User / action / details…'),
+    autocomplete: 'off', 'aria-label': t('লগ খুঁজুন', 'Search log'),
+  });
+  searchBox.appendChild(q);
+  const filterBtn = el('button', { type: 'button', class: 'btn btn-ghost filter-btn', 'aria-label': t('ফিল্টার', 'Filter') });
+  const paintBadge = () => {
+    const n = [act, role, from, to].filter(Boolean).length;
+    filterBtn.innerHTML = `${icon('filter')}<span>${esc(t('ফিল্টার', 'Filter'))}</span>${n ? `<span class="fbadge">${n}</span>` : ''}`;
+  };
+  paintBadge();
+  const actOpts = [{ value: '', bn: 'সব', en: 'All' },
+    ...Array.from(new Set(mine.map(l => l.action))).sort().map(a => ({ value: a, bn: actionMeta(a).bn, en: a }))];
+  const roleOpts = [
+    { value: '', bn: 'সব', en: 'All' }, { value: 'admin', bn: 'অ্যাডমিন', en: 'Admin' },
+    { value: 'maker', bn: 'Maker', en: 'Maker' }, { value: 'member', bn: 'সদস্য', en: 'Member' },
+  ];
+  filterBtn.addEventListener('click', () => filterSheet({
+    state: { act, role, from, to },
+    sections: [
+      { key: 'act', label: t('কার্যক্রম', 'Action'), options: actOpts },
+      { key: 'role', label: t('রোল', 'Role'), options: roleOpts },
+    ],
+    dates: { fromLabel: t('শুরু', 'From'), toLabel: t('শেষ', 'To') },
+    onApply: s => { ({ act, role, from, to } = s); paintBadge(); resetShown(); render(); },
+    onClear: () => { act = role = from = to = ''; paintBadge(); resetShown(); render(); },
+  }));
+  head.append(searchBox, filterBtn);
+  wrap.appendChild(head);
 
   const listCard = card('কার্যক্রম তালিকা', 'Activity Records', el('div'), [
     btn('Excel', 'excel', 'soft', () => doExport('xlsx'), { size: 'xs' }),
@@ -134,65 +160,54 @@ export async function pageActivity(session) {
   wrap.appendChild(listCard);
 
   let current = [];
+  let shown = PAGE_SIZE;
+  const resetShown = () => { shown = PAGE_SIZE; };
   const doExport = kind => {
-    if (!current.length) { toast('রপ্তানির জন্য কোনো তথ্য নেই / Nothing to export', 'warn'); return; }
+    if (!current.length) { toast('রপ্তানির জন্য কোনো তথ্য নেই', 'warn'); return; }
     const rows = [['SL', 'Date', 'Time', 'User', 'Role', 'Action', 'Details']];
     current.forEach((l, i) => rows.push([i + 1, fmtDate(l.createdAt), fmtTime(l.createdAt), logUserName(l), l.role || '', l.action, l.details || '']));
     const fn = safeName(`Dhruvo_Sangsad_Activity_Log_${todayISO()}`);
     if (kind === 'csv') downloadCSV(rows, fn + '.csv');
     else downloadExcel([{ name: 'Activity Log', rows }], fn + '.xlsx');
-    toast('রপ্তানি সম্পন্ন / Exported', 'success');
+    toast('রপ্তানি সম্পন্ন', 'success');
   };
 
   const render = () => {
-    const t = q.value.trim().toLowerCase();
+    const term = q.value.trim().toLowerCase();
     current = mine.filter(l => {
-      if (actSel.value && l.action !== actSel.value) return false;
-      if (roleSel.value && l.role !== roleSel.value) return false;
+      if (act && l.action !== act) return false;
+      if (role && l.role !== role) return false;
       const d = String(l.createdAt).slice(0, 10);
-      if (from.value && d < from.value) return false;
-      if (to.value && d > to.value) return false;
-      if (t && ![logUserName(l), l.userId, l.action, l.details, l.role].some(x => String(x || '').toLowerCase().includes(t))) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      if (term && ![logUserName(l), l.userId, l.action, l.details, l.role].some(x => String(x || '').toLowerCase().includes(term))) return false;
       return true;
     }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
-    const totalPages = Math.max(1, Math.ceil(current.length / PAGE_SIZE));
-    if (currentPage > totalPages - 1) currentPage = totalPages - 1;
-    if (currentPage < 0) currentPage = 0;
-    const start = currentPage * PAGE_SIZE;
-    const pageRows = current.slice(start, start + PAGE_SIZE);
-
     const body = listCard.body;
     body.replaceChildren();
-    body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-bottom:6px', text: `${current.length} record(s) — page ${currentPage + 1} of ${totalPages}` }));
-    body.appendChild(tableWrap(
-      [{ label: 'SL', cls: 'num' }, { label: 'তারিখ / Date' }, { label: 'সময় / Time' }, { label: 'ব্যবহারকারী / User' },
-       { label: 'রোল / Role' }, { label: 'কার্যক্রম / Action' }, { label: 'বিবরণ / Details' }],
-      pageRows.map((l, i) => [
-        { text: String(start + i + 1), cls: 'num' },
-        esc(fmtDate(l.createdAt)),
-        esc(fmtTime(l.createdAt)),
-        esc(logUserName(l)),
-        `<span class="tag ${l.role === 'admin' ? 'info' : l.role === 'maker' ? 'approved' : 'gray'}">${esc((l.role || '—').toUpperCase())}</span>`,
-        `${icon(actionMeta(l.action).ic)} ${esc(actionMeta(l.action).bn)}<br><span class="faint fs8">${esc(l.action)}</span>`,
-        esc(l.details || ''),
-      ]),
-      { empty: 'কোনো কার্যক্রম পাওয়া যায়নি / No activity found', emptyIcon: 'log' },
-    ));
-
-    // Pagination controls
-    if (current.length > PAGE_SIZE) {
-      const nav = el('div', { class: 'btn-row', style: 'margin-top:10px;align-items:center' });
-      nav.appendChild(btn('পূর্ববর্তী / Previous', '', 'ghost', () => { if (currentPage > 0) { currentPage--; render(); } }, { size: 'xs', attrs: currentPage <= 0 ? { disabled: true } : {} }));
-      nav.appendChild(el('span', { class: 'fs8 muted', text: `Page ${currentPage + 1} / ${totalPages}` }));
-      nav.appendChild(btn('পরবর্তী / Next', '', 'ghost', () => { if (currentPage < totalPages - 1) { currentPage++; render(); } }, { size: 'xs', attrs: currentPage >= totalPages - 1 ? { disabled: true } : {} }));
-      body.appendChild(nav);
+    if (!current.length) {
+      body.appendChild(emptyState({ ic: 'log', title: t('কোনো কার্যক্রম পাওয়া যায়নি', 'No activity found'), compact: true }));
+      return;
+    }
+    const vis = current.slice(0, shown);
+    body.appendChild(el('div', { class: 'count-line', text: `${vis.length} / ${current.length}টি` }));
+    const tl = el('div', { class: 'act-list' });
+    vis.forEach(l => tl.appendChild(actRow(l)));
+    body.appendChild(tl);
+    if (current.length > shown) {
+      const more = el('button', {
+        type: 'button', class: 'btn btn-ghost btn-block',
+        text: `${t('আরও দেখুন', 'Show more')} (${current.length - shown}টি বাকি)`,
+      });
+      more.addEventListener('click', () => { shown += PAGE_SIZE; render(); });
+      const mrow = el('div', { style: 'margin-top:10px' });
+      mrow.appendChild(more);
+      body.appendChild(mrow);
     }
   };
 
-  const onFilterChange = () => { currentPage = 0; render(); };
-  q.addEventListener('input', debounce(onFilterChange, 180));
-  [actSel, roleSel, from, to].forEach(x => x.addEventListener('change', onFilterChange));
+  q.addEventListener('input', debounce(() => { resetShown(); render(); }, 180));
   render();
   return wrap;
 }

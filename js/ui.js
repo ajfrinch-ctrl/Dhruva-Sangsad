@@ -195,15 +195,106 @@ export async function withSkeleton(host, render, opts = {}) {
   }
 }
 
+/** Sticky icon-only export bar: PDF / Excel / CSV / Print (≥44px touch targets). Omit any handler to hide that button. */
+export function exportBar({ pdf, excel, csv, print } = {}) {
+  const bar = el('div', { class: 'export-bar no-print', role: 'toolbar', 'aria-label': t('রিপোর্ট এক্সপোর্ট', 'Export report') });
+  const add = (ic, label, fn) => {
+    if (!fn) return;
+    bar.appendChild(el('button', { type: 'button', class: 'icon-btn', html: icon(ic), title: label, 'aria-label': label, onclick: fn }));
+  };
+  add('pdf', t('PDF ডাউনলোড', 'Download PDF'), pdf);
+  add('excel', t('Excel ডাউনলোড', 'Download Excel'), excel);
+  add('csv', t('CSV ডাউনলোড', 'Download CSV'), csv);
+  add('print', t('প্রিন্ট', 'Print'), print);
+  return bar;
+}
+
+/** Single-select segmented chips (deposit type/method, restore mode, sheet filters). */
+export function segChips(name, options, value, { onChange = null } = {}) {
+  const wrap = el('div', { class: 'seg', role: 'radiogroup' });
+  const hidden = el('input', { type: 'hidden', name, value: options.some(o => o.value === value) ? value : options[0].value });
+  const paint = () => {
+    [...wrap.querySelectorAll('.seg-chip')].forEach(b => {
+      const on = b.dataset.value === hidden.value;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  };
+  options.forEach(o => {
+    const b = el('button', { type: 'button', class: 'seg-chip', role: 'radio', 'aria-checked': 'false', text: t(o.bn, o.en) });
+    b.dataset.value = o.value;
+    b.addEventListener('click', () => {
+      if (hidden.value === o.value) return;
+      hidden.value = o.value;
+      paint();
+      hidden.dispatchEvent(new Event('change', { bubbles: true }));
+      if (onChange) onChange(o.value);
+    });
+    wrap.appendChild(b);
+  });
+  paint();
+  const root = el('div');
+  root.append(wrap, hidden);
+  return {
+    root, hidden,
+    get value() { return hidden.value; },
+    set(v) { if (options.some(o => o.value === v) && hidden.value !== v) { hidden.value = v; paint(); } },
+    reset() { this.set(options[0].value); },
+  };
+}
+
+/**
+ * Generic filter sheet: chip sections + optional date range + apply/clear.
+ * `sections` = [{ key, label, options:[{value,bn,en}] }]; `dates` = { fromLabel, toLabel } or null.
+ * The sheet edits a copy of `state` until Apply; the caller owns the badge count.
+ */
+export function filterSheet({ title, sections = [], dates = null, state = {}, onApply, onClear }) {
+  const tmp = { ...state };
+  const body = el('div', { class: 'fsheet' });
+  sections.forEach(({ key, label, options }) => {
+    const sec = el('div', { class: 'fsheet-sec' });
+    sec.appendChild(el('div', { class: 'fsheet-lbl', text: label }));
+    sec.appendChild(segChips('f_' + key, options, tmp[key], { onChange: v => { tmp[key] = v; } }).root);
+    body.appendChild(sec);
+  });
+  let fromI = null, toI = null;
+  if (dates) {
+    const box = el('div', { class: 'fsheet-dates' });
+    const mkD = (lbl, val) => {
+      const f = el('div', { class: 'field' });
+      f.appendChild(el('label', { text: lbl }));
+      const i = el('input', { type: 'date', value: val || '' });
+      f.appendChild(i);
+      box.appendChild(f);
+      return i;
+    };
+    fromI = mkD(dates.fromLabel, tmp.from);
+    toI = mkD(dates.toLabel, tmp.to);
+    body.appendChild(box);
+  }
+  const bar = el('div', { class: 'fsheet-actions' });
+  const applyB = el('button', { type: 'button', class: 'btn btn-primary', text: t('প্রয়োগ করুন', 'Apply') });
+  const clearB = el('button', { type: 'button', class: 'btn btn-ghost', text: t('ফিল্টার মুছুন', 'Clear filters') });
+  bar.append(applyB, clearB);
+  body.appendChild(bar);
+  const { close } = bottomSheet({ title: title || t('ফিল্টার', 'Filter'), body });
+  applyB.addEventListener('click', () => { if (dates) { tmp.from = fromI.value; tmp.to = toI.value; } close(); onApply(tmp); });
+  clearB.addEventListener('click', () => { close(); onClear(); });
+}
+
 /** Mobile bottom sheet (used by the “More” menu). Returns { close }. */
-export function bottomSheet({ title, items = [] } = {}) {
+export function bottomSheet({ title, items = [], body = null } = {}) {
   const back = el('div', { class: 'sheet-backdrop' });
   const sheet = el('div', { class: 'sheet' });
   sheet.appendChild(el('div', { class: 'sheet-grab' }));
   if (title) sheet.appendChild(el('div', { class: 'sheet-title', text: tx(title) }));
+  /* Custom bodies (e.g. filter forms) render above the item list; a body-only
+     sheet leaves the list empty, which renders nothing. */
+  if (body) sheet.appendChild(body);
   const list = el('div', { class: 'sheet-list' });
   items.forEach(it => {
     if (it === 'sep') { list.appendChild(el('div', { class: 'sheet-sep' })); return; }
+    if (it && typeof it === 'object' && it.header) { list.appendChild(el('div', { class: 'sheet-header', text: tx(it.header) })); return; }
     const row = el('button', { type: 'button', class: `sheet-item${it.danger ? ' danger' : ''}` });
     row.innerHTML = `<span class="si-ic">${icon(it.ic || 'info')}</span><span class="si-tx">${esc(tx(it.label))}</span>`;
     if (it.right) { const r = el('span', { class: 'si-right' }); r.appendChild(it.right); row.appendChild(r); }
