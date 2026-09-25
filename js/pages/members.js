@@ -18,7 +18,7 @@ import { page, card, banner, btn, kv, statCard, sectionHead, listRow, emptyState
 import { memberPicker } from '../picker.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, registerMember, updateMember, setMemberStatus,
-  memberSummary, summaryOpts, getMember, DEFAULT_MEMBER_PASSWORD, withdrawalBalance,
+  memberSummary, summaryOpts, getMember, DEFAULT_MEMBER_PASSWORD, withdrawalBalance, deleteRejectedMember,
 } from '../store.js';
 import { can } from '../auth.js';
 import { App } from '../app.js';
@@ -143,9 +143,28 @@ export function memberCard(session, m, deposits, withdrawals, cfg, onChanged) {
   acts.append(
     btn(t('দেখুন', 'View'), 'eye', 'ghost', () => viewMember(session, m, { deposits, withdrawals, cfg, onChanged }), { class: 'btn-sm' }),
     can(session, 'member:edit') ? btn(t('সম্পাদনা', 'Edit'), 'edit', 'soft', () => App.go('members', { section: 'edit', docId: m.id }), { class: 'btn-sm' }) : null,
+    /* a REJECTED registration can be removed for good */
+    (m.status === 'rejected' && can(session, 'member:delete'))
+      ? btn(t('মুছুন', 'Delete'), 'trash', 'softred', () => deleteRejected(session, m, () => App.refresh()), { class: 'btn-sm' })
+      : null,
   );
   row.appendChild(acts);
   return row;
+}
+
+/** Delete a rejected registration (confirm → remove member + login → refresh). */
+async function deleteRejected(session, m, after) {
+  const ok = await confirmBox(
+    t(`${m.nameBn || m.nameEn} (${m.memberId}) — বাতিল নিবন্ধনটি স্থায়ীভাবে মুছে ফেলবেন?`,
+      `Permanently delete the rejected registration of ${m.nameBn || m.nameEn} (${m.memberId})? This cannot be undone.`),
+    { title: t('নিবন্ধন মুছুন', 'Delete registration'), okLabel: t('মুছুন', 'Delete'), danger: true },
+  );
+  if (!ok) return;
+  try {
+    await deleteRejectedMember(m.id, session);
+    toast(t('নিবন্ধন মুছে ফেলা হয়েছে', 'Registration deleted'), 'warn');
+    if (after) after();
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 /* ------------------------------ member details ------------------------------ */
@@ -224,7 +243,7 @@ const REG_FIELD_STEP = {
   nameBn: 1, nameEn: 1, fatherBn: 1, fatherEn: 1, motherBn: 1, motherEn: 1,
   installment: 2, address: 2, nid: 2, profession: 2, dob: 2,
 };
-const BN_STEP = ['১', '২', '৩'];
+const BN_STEP = ['1', '2', '3'];
 
 export async function newMemberScreen(session) {
   const cfg = await settings();
@@ -474,6 +493,9 @@ export function memberEditor(session, m, deposits, withdrawals, cfg, onSaved) {
         if (!(await confirmBox(t('সদস্যকে পুনরায় সক্রিয় করবেন?', 'Re-activate this member?'), { okLabel: t('সক্রিয় করুন', 'Activate') }))) return;
         await setMemberStatus(m.id, 'active', session); toast(t('সদস্য পুনর্বহাল হয়েছে', 'Member re-activated'), 'success'); onSaved && onSaved();
       }));
+    }
+    if (m.status === 'rejected' && can(session, 'member:delete')) {
+      acts.appendChild(btn(t('মুছুন', 'Delete'), 'trash', 'danger', () => deleteRejected(session, m, () => App.go('members'))));
     }
     if (m.status === 'active' && session.role === 'admin') {
       acts.appendChild(btn(t('নিষ্ক্রিয়', 'Deactivate'), 'reject', 'softred', async () => {

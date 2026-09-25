@@ -106,6 +106,42 @@ export function amountCell(v, kind = '') {
   return `<b class="${cls} num">${esc(txt === '—' ? '—' : txt)}</b>`;
 }
 
+/* ================= compact transaction rows =================
+   Mobile-finance style: every transaction starts COLLAPSED — one line with the
+   member name and the amount (nothing wraps, nothing overflows). Tapping the
+   row expands the details (and the row actions); tapping again collapses it. */
+
+/** Start of today (ISO) — the only day the small "recent" lists ever show. */
+export const isTodayRecord = (r, today) => String((r && r.date) || '').slice(0, 10) === today;
+
+/** Newest first: payment date, then submission time. */
+export const byNewest = (a, b) => String(b.date || '').localeCompare(String(a.date || ''))
+  || String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''));
+
+/** The rule every transaction list follows: TODAY only, latest 5. */
+export function todaysLatest(rows, today, limit = 5) {
+  return (rows || []).filter(r => isTodayRecord(r, today)).sort(byNewest).slice(0, limit);
+}
+
+export function txnRow({ ic = 'deposit', tone = '', name = '', meta = '', amount = '', amountKind = '', details = [], actions = null, open = false } = {}) {
+  const row = el('div', { class: `txr${open ? ' open' : ''}` });
+  const head = el('button', { type: 'button', class: 'txr-head', 'aria-expanded': open ? 'true' : 'false' });
+  head.innerHTML = `<span class="rw-ic ${tone}">${icon(ic)}</span>
+    <span class="txr-name"><b>${esc(name)}</b>${meta ? `<small>${esc(meta)}</small>` : ''}</span>
+    <span class="txr-amt ${amountKind}">${esc(amount)}</span>
+    <span class="txr-chev">${icon('chevron')}</span>`;
+  const body = el('div', { class: 'txr-body' });
+  body.appendChild(kv(details));
+  if (actions && actions.children && actions.children.length) body.appendChild(actions);
+  head.addEventListener('click', () => {
+    const on = !row.classList.contains('open');
+    row.classList.toggle('open', on);
+    head.setAttribute('aria-expanded', on ? 'true' : 'false');
+  });
+  row.append(head, body);
+  return row;
+}
+
 /* ================= tables ================= */
 
 export function tableWrap(headers, rows, { footer = null, empty = '', emptyIcon = 'info' } = {}) {
@@ -432,13 +468,23 @@ export function filterSheet({ title, sections = [], dates = null, state = {}, on
 
 /* ================= sheet + switch ================= */
 
-export function bottomSheet({ title, items = [], body = null } = {}) {
+/* Every open sheet is tracked so the shell can close them all at once (e.g.
+   when a bottom-bar tab is tapped while a sheet is open — the bar is never
+   hidden behind a sheet). */
+const openSheets = new Set();
+export function closeAllSheets() {
+  [...openSheets].forEach(h => { try { h.close(); } catch { /* already gone */ } });
+}
+
+export function bottomSheet({ title, items = [], body = null, onClose = null } = {}) {
   const back = el('div', { class: 'sheet-backdrop' });
   const sheet = el('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' });
   sheet.appendChild(el('div', { class: 'sheet-grab' }));
   if (title) sheet.appendChild(el('div', { class: 'sheet-title', text: tx(title) }));
   if (body) sheet.appendChild(body);
   const list = el('div', { class: 'sheet-list' });
+  let closed = false;
+  const handle = { close: () => close() };
   items.forEach(it => {
     if (it === 'sep') { list.appendChild(el('div', { class: 'sheet-sep' })); return; }
     if (it && typeof it === 'object' && it.header) { list.appendChild(el('div', { class: 'sheet-header', text: tx(it.header) })); return; }
@@ -446,20 +492,30 @@ export function bottomSheet({ title, items = [], body = null } = {}) {
     row.innerHTML = `<span class="si-ic">${icon(it.ic || 'info')}</span><span class="si-tx">${esc(tx(it.label))}</span>`;
     if (it.right) { const r = el('span', { class: 'si-right' }); r.appendChild(it.right); row.appendChild(r); }
     else if (it.value != null) row.appendChild(el('span', { class: 'si-val', text: it.value }));
-    row.onclick = () => { if (!it.keepOpen) close(); if (typeof it.run === 'function') it.run(); };
+    /* ONE tap: the sheet is removed synchronously first, then the action runs. */
+    row.addEventListener('click', ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      if (!it.keepOpen) close();
+      if (typeof it.run === 'function') it.run();
+    });
     list.appendChild(row);
   });
   sheet.appendChild(list);
   const close = () => {
+    if (closed) return;
+    closed = true;
+    openSheets.delete(handle);
     back.remove(); sheet.remove();
     document.removeEventListener('keydown', onKey);
+    if (typeof onClose === 'function') { try { onClose(); } catch { /* ignore */ } }
   };
   const onKey = e => { if (e.key === 'Escape') close(); };
   back.onclick = close;
   document.addEventListener('keydown', onKey);
   document.body.append(back, sheet);
+  openSheets.add(handle);
   requestAnimationFrame(() => { back.classList.add('on'); sheet.classList.add('on'); });
-  return { close };
+  return handle;
 }
 
 export function switchEl(on, onChange) {

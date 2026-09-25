@@ -42,19 +42,19 @@ export const actionMeta = a => ACTION_META[a] || { ic: 'log', bn: a };
 /* One compact timeline row (shared with the dashboard recent-activity card).
    opts.member = true renders the member's own view: Bengali action + a short
    Bengali description (no raw English details, no user name — it's always them). */
-const bnD = n => String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]);
+const bnD = n => String(n);
 
 /** Short Bengali description per action for the member's own log. */
 const MEMBER_LOG_DETAIL = {
-  LOGIN: () => 'লগইন করেছেন',
-  LOGOUT: () => 'লগআউট করেছেন',
-  PASSWORD_CHANGE: () => 'পাসওয়ার্ড পরিবর্তন করেছেন',
-  PASSWORD_RECOVERY: () => 'পাসওয়ার্ড পুনরুদ্ধার করেছেন',
-  REGISTRATION: () => 'নিবন্ধন সম্পন্ন',
-  DEPOSIT_SUBMISSION: () => 'জমা দাখিল করেছেন',
-  WITHDRAWAL_SUBMISSION: () => 'উত্তোলনের আবেদন দাখিল করেছেন',
-  MEMBER_UPDATE: () => 'প্রোফাইল হালনাগাদ',
-  SESSION_TIMEOUT: () => 'সেশন মেয়াদ শেষ (৩০ মিনিট নিষ্ক্রিয়)',
+  LOGIN: () => 'Signed in',
+  LOGOUT: () => 'Signed out',
+  PASSWORD_CHANGE: () => 'Password changed',
+  PASSWORD_RECOVERY: () => 'Password recovered',
+  REGISTRATION: () => 'Registration completed',
+  DEPOSIT_SUBMISSION: () => 'Deposit submitted',
+  WITHDRAWAL_SUBMISSION: () => 'Withdrawal request submitted',
+  MEMBER_UPDATE: () => 'Profile updated',
+  SESSION_TIMEOUT: () => 'Session expired (30 minutes inactive)',
 };
 const logDetailBn = l => {
   const fn = MEMBER_LOG_DETAIL[l && l.action];
@@ -151,7 +151,7 @@ export async function pageActivity(session) {
       return;
     }
     const vis = current.slice(0, shown);
-    body.appendChild(el('div', { class: 'count-line', text: `${vis.length} / ${current.length}টি` }));
+    body.appendChild(el('div', { class: 'count-line', text: `${vis.length} / ${current.length}` }));
     const tl = el('div', { class: 'act-list' });
     vis.forEach(l => tl.appendChild(actRow(l, { member: isMember })));
     body.appendChild(tl);

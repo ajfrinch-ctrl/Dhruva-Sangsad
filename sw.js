@@ -9,7 +9,7 @@
  *    and statements must work offline; the Excel engine is NOT precached — it
  *    is only fetched if an export is actually used (and then cached).
  */
-const VERSION = 'ds-v7.0.0';
+const VERSION = 'ds-v7.1.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 

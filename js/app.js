@@ -5,25 +5,24 @@
  *     only take it over, decide signed-in vs signed-out, and render the route;
  *   · hash router (`#route` / `#route/section`) so browser Back, Android Back,
  *     refresh and deep links all land on the same screen;
- *   · ONE back control (the top bar arrow) and ONE navigation model
- *     (bottom bar + desktop rail + More sheet);
+ *   · ONE navigation model (bottom bar + desktop rail + More sheet) — the top
+ *     bar carries no back button; browser/Android back drives history;
  *   · background services (database, cloud sync, service worker) never block
  *     the first paint.
  */
 import { $, el, clear, toast, esc, alertBox, confirmBox, t, tx } from './util.js';
 import { logoSrc, applyLogo, APP_VERSION } from './brand.js';
-import { setLang, getLang, applyLang } from './i18n.js';
 import { icon } from './icons.js';
 import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, checkBootstrapSession } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { initFirebase } from './vendor.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
-import { bottomSheet, switchEl, skeleton, errorState } from './ui.js';
+import { bottomSheet, switchEl, skeleton, errorState, closeAllSheets } from './ui.js';
 import { initShellGestures } from './gestures.js';
 import { initInstallPrompt } from './install-prompt.js';
 import {
-  visibleNotifications, logActivity, settings, syncDueNotifications,
+  unreadNotifications, logActivity, settings, syncDueNotifications,
   ensureTxnIds, dedupeTxnIds, allMembers, allDeposits, allWithdrawals,
 } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
@@ -178,7 +177,6 @@ export const App = {
       if (this.route !== route) return;      // a newer navigation won
       clear(view);
       view.appendChild(node);
-      paintBack();
     } catch (e) {
       console.error('[page]', route, e);
       clear(view);
@@ -285,7 +283,9 @@ export const App = {
     try {
       const cfg = await settings();
       applyLogo(cfg);
-      const name = t(cfg.orgNameBn || 'ধ্রুব সংসদ', cfg.orgNameEn || 'Dhruva Sangsad');
+      /* The organisation name is a proper noun, not UI text — the top bar keeps
+         the registered name (ধ্রুব সংসদ) exactly as configured. */
+      const name = cfg.orgNameBn || cfg.orgNameEn || 'ধ্রুব সংসদ';
       const bname = $('#brandName'); if (bname) bname.textContent = name;
     } catch { /* keep the static markup */ }
   },
@@ -304,8 +304,9 @@ export const App = {
   async refreshNotifBadge() {
     const s = this.session; if (!s) return;
     let list = [];
-    try { list = await visibleNotifications(s); } catch { return; }
-    this.unread = list.filter(n => n.sticky || n.kind === 'due' || !(n.readBy || {})[s.id]).length;
+    try { list = await unreadNotifications(s); } catch { return; }
+    /* the badge counts exactly what the list shows: the latest 10 unread */
+    this.unread = list.length;
     const btn = $('#btnNotif');
     if (!btn) return;
     btn.innerHTML = icon('bell');
@@ -315,16 +316,24 @@ export const App = {
 
   /** More sheet — every destination that is not in the bottom bar, plus the
    *  app preferences. Activity Log and Change Password are NOT here: they live
-   *  inside Settings (one feature → one location). */
+   *  inside Settings (one feature → one location).
+   *  Exactly ONE instance: tapping More while it is open closes it, picking an
+   *  item closes it immediately (one tap) and navigation closes it too. */
+  moreSheet: null,
+  closeMore() {
+    if (this.moreSheet) { const sh = this.moreSheet; this.moreSheet = null; try { sh.close(); } catch { /* gone */ } }
+  },
   openMore() {
     const s = this.session; if (!s) return;
+    if (this.moreSheet) { this.closeMore(); return; }
+    closeAllSheets();
     const items = [];
     const rest = NAV.filter(i => canRoute(s, i.id) && !onBottomBar(i.id, s));
     if (rest.length) {
       items.push({ header: t('সব বিভাগ', 'All sections') });
       rest.forEach(i => items.push({
         ic: i.icon, label: t(i.bn, i.en),
-        run: () => this.go(i.id),
+        run: () => { this.closeMore(); this.go(i.id); },
       }));
       items.push('sep');
     }
@@ -334,14 +343,10 @@ export const App = {
       label: t('ডার্ক মোড', 'Dark mode'), keepOpen: true,
       right: switchEl(getTheme() === 'amoled', () => { toggleTheme(); this.refresh(); }),
     });
-    items.push({
-      ic: 'globe', keepOpen: true,
-      label: t('ভাষা', 'Language'),
-      right: switchEl(getLang() === 'en', () => setLang(getLang() === 'en' ? 'bn' : 'en')),
-    });
     items.push('sep');
-    items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => this.doLogout() });
-    return bottomSheet({ title: t('আরও', 'More'), items });
+    items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => { this.closeMore(); this.doLogout(); } });
+    this.moreSheet = bottomSheet({ title: t('আরও', 'More'), items, onClose: () => { this.moreSheet = null; } });
+    return this.moreSheet;
   },
 };
 window.App = App;
@@ -352,10 +357,13 @@ window.App = App;
 function showShell() {
   if (appEl) { appEl.classList.add('on'); appEl.setAttribute('aria-hidden', 'false'); }
   if (authEl) authEl.hidden = true;
+  document.body.classList.add('shell-on');   /* fixed, app-like viewport (no page scroll) */
 }
 function showAuthHost() {
   if (appEl) { appEl.classList.remove('on'); appEl.setAttribute('aria-hidden', 'true'); }
   if (authEl) { authEl.hidden = false; }
+  document.body.classList.remove('shell-on');
+  App.closeMore();
 }
 const onBottomBar = (id, s) => {
   const group = s.role === 'member' ? 'member' : 'staff';
@@ -379,14 +387,6 @@ function paintNav(route) {
       onclick: (ev) => { ev.preventDefault(); App.go(i.id); },
     }));
   });
-}
-
-function paintBack() {
-  const btn = $('#btnBack');
-  if (!btn) return;
-  const show = App.route !== 'home' || !!App.section || App.depth > 0;
-  btn.hidden = !show;
-  btn.innerHTML = icon('back');
 }
 
 /* ------------------------------------------------------------------ *
@@ -433,15 +433,7 @@ function paintSync(status) {
     bar.classList.remove('sync-online', 'sync-offline', 'sync-syncing', 'sync-synced', 'sync-error');
     bar.classList.add(st === 'sync-error' ? 'sync-error' : `sync-${st}`);
   }
-  let offline = $('#offlineBar');
-  const show = st === 'offline' || st === 'sync-error';
-  if (!offline) {
-    offline = el('div', { class: 'offline-bar', id: 'offlineBar' });
-    const host = $('#app') || document.body;
-    host.insertBefore(offline, host.firstChild);
-  }
-  offline.innerHTML = `${icon('offline')}<span>${esc(t('অফলাইন — ডেটা এই ডিভাইসেই থাকবে, অনলাইনে এলে সিঙ্ক হবে', 'Offline — data stays on this device and syncs when you are back online'))}</span>`;
-  offline.hidden = !show;
+  /* No offline banner / text anywhere: the red top bar is the only indicator. */
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail && e.detail.status));
 
@@ -506,9 +498,6 @@ function registerSW() {
  * Boot
  * ------------------------------------------------------------------ */
 function wireChrome() {
-  const backBtn = $('#btnBack');
-  if (backBtn) backBtn.addEventListener('click', () => App.back());
-
   const notifBtn = $('#btnNotif');
   if (notifBtn) {
     notifBtn.innerHTML = icon('bell');
@@ -520,7 +509,7 @@ function wireChrome() {
 
   const moreBtn = $('#navMore');
   if (moreBtn) {
-    moreBtn.innerHTML = `${icon('menu')}<span class="ni-lbl"><span class="i-bn">আরও</span><span class="i-en">More</span></span>`;
+    moreBtn.innerHTML = `${icon('menu')}<span class="ni-lbl">More</span>`;
     moreBtn.addEventListener('click', () => App.openMore());
   }
 
@@ -536,6 +525,7 @@ function wireChrome() {
     a.appendChild(label);
     a.addEventListener('click', ev => {
       ev.preventDefault();
+      closeAllSheets();          /* the bar stays reachable while a sheet is open */
       if (!App.session) { App.goAuth('login'); return; }
       App.go(a.dataset.route || 'home');
     });
@@ -545,10 +535,6 @@ function wireChrome() {
 function wireEvents() {
   window.addEventListener('hashchange', () => App.route_(true));
   window.addEventListener('popstate', () => { if (App.depth > 0) App.depth = Math.max(0, App.depth - 1); });
-  window.addEventListener('ds:lang', () => {
-    applyLang(getLang());
-    if (App.session) { applyLogo(); App.paintRole(); App.refresh(); } else App.showAuth();
-  });
   window.addEventListener('ds:data-changed', e => {
     const st = e.detail && e.detail.store;
     if (st === 'notifications' || st === '*') App.refreshNotifBadge();
@@ -557,8 +543,17 @@ function wireEvents() {
       window.__dsRefresh = setTimeout(() => App.refresh(), 450);
     }
   });
-  window.addEventListener('online', () => { paintSync('online'); toast(t('ইন্টারনেট সংযোগ ফিরে এসেছে', 'Back online'), 'success'); });
-  window.addEventListener('offline', () => { paintSync('offline'); toast(t('অফলাইন মোড — ডেটা এই ডিভাইসে সংরক্ষিত হবে', 'Offline mode — data is saved on this device'), 'warn'); });
+  /* Browsers (Android/iOS in particular) can fire `online` several times for a
+     single reconnection. One restoration = ONE notice: only announce a real
+     offline → online transition, never a repeated `online` event. */
+  let wasOffline = !navigator.onLine;
+  window.addEventListener('online', () => {
+    paintSync('online');
+    if (!wasOffline) return;
+    wasOffline = false;
+    toast(t('ইন্টারনেট সংযোগ ফিরে এসেছে', 'Internet connection restored'), 'success');
+  });
+  window.addEventListener('offline', () => { wasOffline = true; paintSync('offline'); });
   ['mousemove', 'mousedown', 'keydown', 'touchstart', 'touchmove', 'scroll', 'click', 'wheel']
     .forEach(ev => window.addEventListener(ev, resetIdleTimer, { passive: true, capture: true }));
 }
@@ -600,7 +595,7 @@ async function bootApp() {
     }
   }, 60);
 
-  idle(() => { try { initShellGestures({ onRefresh: () => App.refresh() }); } catch (e) { console.error(e); } }, 900);
+  idle(() => { try { initShellGestures({ onRefresh: () => App.refresh(), collapseTopbar: false }); } catch (e) { console.error(e); } }, 900);
   idle(() => { try { initInstallPrompt(); } catch (e) { console.error(e); } }, 2600);
   idle(() => { initFirebase().catch(() => {}); }, 1200);
 }

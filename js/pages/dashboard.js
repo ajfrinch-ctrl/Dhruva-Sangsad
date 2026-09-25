@@ -1,13 +1,17 @@
-/* Dashboard — greeting · summary · ONE full-width Submit Deposit action.
+/* Dashboard — welcome message · ONE full-width Submit Deposit action · summary.
  *
  * There is deliberately NO “Important Notice” card here: approvals, dues and
  * announcements arrive through the notification bell (top bar) and through the
  * dedicated Pending Requests screen. The dashboard only states the current
  * position of the organisation / the member, plus the single primary action.
+ *
+ * Nothing that belongs to another section is shown here: no recent
+ * transactions, no recent deposits, no reports — deposit records live in
+ * Deposits, report data lives in Reports.
  */
 import { el, esc, taka, num, fmtDate, fmtTime, todayISO, t, tx } from '../util.js';
 import { icon } from '../icons.js';
-import { page, statCard, statusTag, heroCard, actionCard, sectionHead } from '../ui.js';
+import { page, statCard, statusTag, heroCard, actionCard } from '../ui.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor,
   orgTotals, getMember, withdrawalBalance, summaryOpts,
@@ -25,10 +29,11 @@ export function greetingLine() {
     : t('শুভ রাত্রি', 'Good night');
 }
 
+/** Welcome message — always the FIRST thing on the dashboard. */
 function greetBox(name, sub) {
   const box = el('div', { class: 'greet' });
-  box.innerHTML = `<div class="greet-hi">${esc(greetingLine())}${name ? `, ${esc(name)}` : ''}</div>
-    <div class="greet-sub">${esc(sub || '')}</div>
+  box.innerHTML = `<div class="greet-hi">${esc(t('স্বাগতম', 'Welcome'))}${name ? `, ${esc(name)}` : ''}</div>
+    <div class="greet-sub">${esc(greetingLine())}${sub ? ` · ${esc(sub)}` : ''}</div>
     <div class="greet-date">${icon('calendar')}${esc(fmtDate(todayISO()))} · ${esc(fmtTime(new Date().toISOString()))}</div>`;
   return box;
 }
@@ -42,19 +47,6 @@ function submitDeposit() {
     ic: 'plus', tone: 'primary',
     onClick: () => App.go('deposits', 'new'),
   });
-}
-
-function recentRows(rows, onOpen) {
-  const box = el('div', { class: 'card' });
-  rows.forEach((r, i) => {
-    const row = el('button', { type: 'button', class: 'row tappable', style: i ? 'border-top:1px solid var(--line-2)' : '' });
-    row.innerHTML = `<span class="rw-ic ${r.tone}">${icon(r.ic)}</span>
-      <span class="rw-bd"><span class="rw-t">${esc(r.title)}</span><span class="rw-s">${esc(r.sub)}</span></span>
-      <span class="rw-amt">${r.amount}</span>`;
-    row.addEventListener('click', onOpen);
-    box.appendChild(row);
-  });
-  return box;
 }
 
 const thisMonth = () => todayISO().slice(0, 7);
@@ -102,34 +94,8 @@ async function memberHome(session, params) {
   );
   wrap.appendChild(stats);
 
-  /* 5 — pending items (status only, not a permanent notice board) */
-  const pending = s.deposits.filter(d => d.status !== 'approved').concat(
-    s.withdrawals.filter(w => w.status !== 'approved'),
-  ).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  if (pending.length) {
-    wrap.appendChild(sectionHead(t('অপেক্ষমাণ জমা/উত্তোলন', 'Waiting for approval'), 'Pending', t('সব দেখুন ›', 'See all ›'), () => App.go('deposits')));
-    wrap.appendChild(recentRows(pending.slice(0, 3).map(d => ({
-      ic: d.status === 'pending' ? 'clock' : 'reject',
-      tone: d.status === 'pending' ? 'a' : 'r',
-      title: `${fmtDate(d.date)} · ${d.kindLabelEn || ''}`.trim(),
-      sub: d.rejectReason || d.description || t('অনুমোদনের অপেক্ষায়', 'Waiting for approval'),
-      amount: statusTag(d.status),
-    })), () => App.go('deposits')));
-  }
-
-  /* 6 — recent account activity (chronological, links to the statement) */
-  const recent = s.deposits.concat(s.withdrawals).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 4);
-  if (recent.length) {
-    wrap.appendChild(sectionHead(t('সাম্প্রতিক লেনদেন', 'Recent activity'), 'Recent', t('স্টেটমেন্ট ›', 'Statement ›'), () => App.go('statements')));
-    wrap.appendChild(recentRows(recent.map(d => ({
-      ic: d.amount && d.kindLabelEn === 'Withdrawal' ? 'withdraw' : 'deposit',
-      tone: d.status === 'approved' ? 'g' : d.status === 'pending' ? 'a' : 'r',
-      title: `${fmtDate(d.date)} · ${taka(d.amount)}`,
-      sub: d.description || (d.txnId ? `#${d.txnId}` : ''),
-      amount: statusTag(d.status),
-    })), () => App.go('statements')));
-  }
-
+  /* Transaction lists (pending / recent activity) belong to Deposits and
+     Statement — they are NOT repeated on the dashboard. */
   return wrap;
 }
 
@@ -181,7 +147,10 @@ async function staffHome(session, params) {
   /* 5 — pending work: a compact status row that links to the dedicated
          Pending Requests screen (the only place approvals are performed). */
   if (pendingTotal) {
-    wrap.appendChild(sectionHead(t('অপেক্ষমাণ অনুরোধ', 'Pending requests'), 'Pending', t('সব দেখুন ›', 'See all ›'), () => App.go('authorization')));
+    const head = el('div', { class: 'sec-head' });
+    head.innerHTML = `<h2>${esc(t('অপেক্ষমাণ অনুরোধ', 'Pending requests'))}</h2><span class="spacer"></span>`;
+    head.appendChild(el('button', { type: 'button', class: 'link-btn', text: t('সব দেখুন ›', 'See all ›'), onclick: () => App.go('authorization') }));
+    wrap.appendChild(head);
     const box = el('div', { class: 'card' });
     [
       pendingMembers.length ? { ic: 'members', tone: 'b', title: t('সদস্য অনুমোদন', 'Member approvals'), sub: t('নতুন নিবন্ধন', 'New registrations'), n: pendingMembers.length } : null,
@@ -198,19 +167,7 @@ async function staffHome(session, params) {
     wrap.appendChild(box);
   }
 
-  /* 6 — latest deposits (glanceable, links into the Deposits ledger) */
-  const latest = deposits.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 4);
-  if (latest.length) {
-    wrap.appendChild(sectionHead(t('সর্বশেষ জমা', 'Latest deposits'), 'Latest', t('সব দেখুন ›', 'See all ›'), () => App.go('deposits')));
-    wrap.appendChild(recentRows(latest.map(d => ({
-      ic: 'deposit',
-      tone: d.status === 'approved' ? 'g' : d.status === 'pending' ? 'a' : 'r',
-      title: `${fmtDate(d.date)} · ${taka(d.amount)}`,
-      sub: `${d.memberName || ''}${d.memberId ? ' · ' + d.memberId : ''}`,
-      amount: statusTag(d.status),
-    })), () => App.go('deposits')));
-  }
-
+  /* Deposit records are shown ONLY in the Deposits section — never here. */
   return wrap;
 }
 

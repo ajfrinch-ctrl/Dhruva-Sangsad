@@ -441,7 +441,7 @@ export async function staffManager(session, host) {
     });
     c.body.replaceChildren();
     if (staff.length > rows.length || term) {
-      c.body.appendChild(el('div', { class: 'count-line', text: `${rows.length} / ${staff.length} জন` }));
+      c.body.appendChild(el('div', { class: 'count-line', text: `${rows.length} / ${staff.length}` }));
     }
     if (isNarrowList()) {
       if (!rows.length) {
@@ -578,7 +578,7 @@ export async function accountManager(session, host) {
       return [m.memberId, m.nameBn, m.nameEn, m.mobile, u && u.username].some(x => String(x || '').toLowerCase().includes(term));
     });
     c.body.replaceChildren();
-    c.body.appendChild(el('div', { class: 'count-line', text: `${shown.length} / ${rows.length} সদস্য` }));
+    c.body.appendChild(el('div', { class: 'count-line', text: `${shown.length} / ${rows.length} members` }));
     if (isNarrowList()) {
       if (!shown.length) {
         c.body.appendChild(emptyState({ ic: 'members', title: t('এই ফিল্টারে কোনো সদস্য নেই', 'No members match this filter'), compact: true }));

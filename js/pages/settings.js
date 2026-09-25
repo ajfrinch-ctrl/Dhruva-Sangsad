@@ -1,5 +1,5 @@
 /* Settings — the single home for cross-cutting features:
-   Activity Log · Change Password · Language · About · (staff) Organisation,
+   Activity Log · Change Password · About · (staff) Organisation,
    Staff, Member Logins, Cloud Sync, Backup. Members get the same Activity Log
    and Change Password here — nothing lives in the Member Panel or Dashboard. */
 import {
@@ -13,7 +13,6 @@ import {
 } from '../store.js';
 import { queueAll, getSetting, dbClear, STORES } from '../db.js';
 import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
-import { getLang, setLang } from '../i18n.js';
 import { APP_VERSION, logoSrc } from '../brand.js';
 import { can } from '../auth.js';
 import { App } from '../app.js';
@@ -37,7 +36,6 @@ export async function pageSettings(session, params = {}) {
     { id: 'activity', ic: 'log', bn: 'কার্যক্রম লগ', en: 'Activity Log', dBn: 'কে, কখন, কী করেছে', dEn: 'who did what, when', tone: '' },
     { id: 'password', ic: 'lock', bn: 'পাসওয়ার্ড পরিবর্তন', en: 'Change Password', dBn: 'অ্যাকাউন্ট নিরাপদ রাখুন', dEn: 'keep your account safe', tone: '' },
     { id: 'account', ic: 'member', bn: 'আমার অ্যাকাউন্ট', en: 'My Account', dBn: 'ইউজার, রোল, ডিভাইস', dEn: 'user, role, device', tone: '' },
-    { id: 'language', ic: 'globe', bn: 'ভাষা', en: 'Language', dBn: 'বাংলা বা ইংরেজি', dEn: 'Bangla or English', tone: '' },
   ];
   if (staff && (can(session, 'member:approve') || can(session, 'deposit:approve'))) {
     SECTIONS.push({
@@ -101,7 +99,6 @@ export async function pageSettings(session, params = {}) {
     if (active === 'activity') await embedPage(pane, pageActivity, session);
     else if (active === 'password') passwordSection(pane);
     else if (active === 'account') accountSection(session, pane);
-    else if (active === 'language') languageSection(pane);
     else if (active === 'about') aboutSection(pane);
     else if (active === 'organisation') await organisationSection(session, pane);
     else if (active === 'firebase') await firebaseSection(session, pane);
@@ -165,30 +162,6 @@ function accountSection(session, host) {
   if (session.role === 'member') {
     host.appendChild(btn(t('আমার প্রোফাইল', 'My Profile'), 'member', 'ghost', () => App.go('profile'), { block: true }));
   }
-}
-
-function languageSection(host) {
-  const cur = getLang();
-  const wrapEl = el('div');
-  wrapEl.appendChild(el('p', { class: 'muted', style: 'margin:0 0 12px', text: t(
-    'অ্যাপের ভাষা বেছে নিন।',
-    'Choose the app language.',
-  ) }));
-  const row = el('div', { class: 'lang-pick' });
-  [
-    { id: 'bn', title: 'বাংলা', sub: 'Bangla' },
-    { id: 'en', title: 'English', sub: 'ইংরেজি' },
-  ].forEach(opt => {
-    const b = el('button', {
-      type: 'button',
-      class: `lang-opt${cur === opt.id ? ' on' : ''}`,
-      onclick: () => { setLang(opt.id); },
-    });
-    b.innerHTML = `<strong>${esc(opt.title)}</strong><span>${esc(opt.sub)}</span>`;
-    row.appendChild(b);
-  });
-  wrapEl.appendChild(row);
-  host.appendChild(card('ভাষা', 'Language', wrapEl));
 }
 
 function aboutSection(host) {
@@ -367,13 +340,13 @@ async function firebaseSection(session, host) {
     catch (err) { toast(err.message, 'error'); }
   }, { block: true }));
   cRow.appendChild(btn(t('ক্লাউড থেকে আনুন', 'Pull from cloud'), 'download', 'soft', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
+    if (!firebase.configured) { toast('Configure Firebase first', 'warn'); return; }
     if (!(await confirmBox(t('Firebase থেকে সব ডাটা টেনে এনে স্থানীয় ডাটার সাথে মিলানো হবে। চালিয়ে যাবেন?', 'All data will be pulled from Firebase and merged with this device. Continue?'), { okLabel: t('আনুন', 'Pull') }))) return;
     try { const n = await firebase.pullAll(); const { dedupeTxnIds } = await import('../store.js'); await dedupeTxnIds(); invalidate(); toast(t(`${n}টি রেকর্ড আনা হয়েছে`, `${n} record(s) pulled`), 'success'); App.refresh(); }
     catch (err) { toast(err.message, 'error'); }
   }, { block: true }));
   cRow.appendChild(btn(t('ক্লাউডে পাঠান', 'Push to cloud'), 'upload', 'ghost', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
+    if (!firebase.configured) { toast('Configure Firebase first', 'warn'); return; }
     if (!(await confirmBox(t('স্থানীয় সব ডাটা Firebase-এ পাঠানো হবে এবং সার্ভারের একই রেকর্ড প্রতিস্থাপিত হবে। চালিয়ে যাবেন?', 'All local data will be uploaded to Firebase, replacing the same records on the server. Continue?'), { okLabel: t('পাঠান', 'Push'), danger: true }))) return;
     try { const n = await firebase.pushAll(); toast(t(`${n}টি রেকর্ড পাঠানো হয়েছে`, `${n} record(s) pushed`), 'success'); }
     catch (err) { toast(err.message, 'error'); }
@@ -397,7 +370,7 @@ async function firebaseSection(session, host) {
     App.refresh();
   });
   fb.querySelector('#fbSync').addEventListener('click', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
+    if (!firebase.configured) { toast('Configure Firebase first', 'warn'); return; }
     try { const n = await firebase.flush(); toast(`${n} item(s) synced`, 'success'); } catch (err) { toast(err.message, 'error'); }
   });
   host.appendChild(card('ক্লাউড সিঙ্ক', 'Firebase Realtime Database', fb));

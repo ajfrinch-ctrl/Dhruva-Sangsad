@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn" data-lang="bn">
+<html lang="en" data-lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -13,7 +13,7 @@
 <!-- ONE logo asset, ~5 KB: starts downloading with the document and is reused
      by every screen (topbar, login, footer, print sheets) from the response cache. -->
 <link rel="preload" as="image" href="./icons/icon-192.png" fetchpriority="high">
-<link rel="stylesheet" href="./css/app.css?v=7.0.0">
+<link rel="stylesheet" href="./css/app.css?v=7.1.0">
 <style>
 /* Critical first-paint styles — the same shell geometry as css/app.css, inlined
    so the app chrome and the login card appear before any stylesheet/JS lands.
@@ -47,8 +47,8 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
   <img src="./icons/icon-192.png" width="76" height="76" alt="ধ্রুব সংসদ" fetchpriority="high">
   <div class="bname">ধ্রুব সংসদ</div>
   <div class="bbar"><i></i></div>
-  <div class="bmsg" id="bootMsg">লোড হচ্ছে… / Loading…</div>
-  <button class="btn bretry" id="bootRetry" type="button">আবার চেষ্টা করুন / Retry</button>
+  <div class="bmsg" id="bootMsg">Loading…</div>
+  <button class="btn bretry" id="bootRetry" type="button">Retry</button>
 </div>
 
 <!-- ============================================================
@@ -57,7 +57,6 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
      ============================================================ -->
 <div id="app" aria-hidden="true">
   <header class="topbar" id="topbar">
-    <button class="icon-btn" id="btnBack" type="button" aria-label="Back" hidden></button>
     <div class="brand">
       <span class="brand-logo"><img data-logo src="./icons/icon-192.png" width="192" height="192" alt="" decoding="async"></span>
       <span class="brand-txt">
@@ -86,13 +85,12 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
 
   <nav class="bottom-nav" id="bottomnav" aria-label="Primary navigation">
     <!-- Native anchors: navigation works even before the module loads, and the
-         browser history (back button / Android back) stays authoritative.
-         Labels carry both languages; CSS shows the active one (html[data-lang]). -->
-    <a class="nav-item" data-roles="staff member" data-route="home" href="#home" data-ic="home"><span class="ni-lbl"><span class="i-bn">হোম</span><span class="i-en">Home</span></span></a>
-    <a class="nav-item" data-roles="staff" data-route="members" href="#members" data-ic="members"><span class="ni-lbl"><span class="i-bn">সদস্য</span><span class="i-en">Members</span></span></a>
-    <a class="nav-item" data-roles="staff member" data-route="deposits" href="#deposits" data-ic="deposit"><span class="ni-lbl"><span class="i-bn">জমা</span><span class="i-en">Deposits</span></span></a>
-    <a class="nav-item" data-roles="member" data-route="transactions" href="#transactions" data-ic="receipt"><span class="ni-lbl"><span class="i-bn">লেনদেন</span><span class="i-en">Transactions</span></span></a>
-    <button class="nav-item" id="navMore" type="button" data-ic="menu"><span class="ni-lbl"><span class="i-bn">আরও</span><span class="i-en">More</span></span></button>
+         browser history (back button / Android back) stays authoritative. -->
+    <a class="nav-item" data-roles="staff member" data-route="home" href="#home" data-ic="home"><span class="ni-lbl">Home</span></a>
+    <a class="nav-item" data-roles="staff" data-route="members" href="#members" data-ic="members"><span class="ni-lbl">Members</span></a>
+    <a class="nav-item" data-roles="staff member" data-route="deposits" href="#deposits" data-ic="deposit"><span class="ni-lbl">Deposits</span></a>
+    <a class="nav-item" data-roles="member" data-route="transactions" href="#transactions" data-ic="receipt"><span class="ni-lbl">Transactions</span></a>
+    <button class="nav-item" id="navMore" type="button" data-ic="menu"><span class="ni-lbl">More</span></button>
   </nav>
 </div>
 
@@ -103,8 +101,8 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
 
 <noscript>
   <div style="padding:24px;font-family:sans-serif">
-    <h2>JavaScript প্রয়োজন / JavaScript is required</h2>
-    <p>ধ্রুব সংসদ চালাতে ব্রাউজারে JavaScript চালু করুন। / Please enable JavaScript to run Dhruva Sangsad.</p>
+    <h2>JavaScript is required</h2>
+    <p>Please enable JavaScript to run Dhruva Sangsad.</p>
   </div>
 </noscript>
 
@@ -112,15 +110,14 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
 /* ------------------------------------------------------------------
    Inline pre-boot: runs before any module, before the first paint.
    Decides which "world" the visitor is in (signed-in shell vs login) and
-   applies the stored language/theme — so there is never a wrong-looking
-   flash and no full-screen spinner while JavaScript starts up.
+   applies the stored theme — so there is never a wrong-looking flash and no
+   full-screen spinner while JavaScript starts up. The UI is English only.
    ------------------------------------------------------------------ */
 (function () {
   var root = document.documentElement;
   try {
-    var lang = localStorage.getItem('ds_lang') === 'en' ? 'en' : 'bn';
-    root.setAttribute('data-lang', lang);
-    root.setAttribute('lang', lang);
+    root.setAttribute('data-lang', 'en');
+    root.setAttribute('lang', 'en');
     root.setAttribute('data-theme', localStorage.getItem('ds_theme') === 'amoled' ? 'amoled' : 'light');
   } catch (e) { /* private mode — defaults are fine */ }
   var session = null;
@@ -138,7 +135,7 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
       var m = document.getElementById('bootMsg');
       if (b && !b.classList.contains('off')) {
         b.classList.add('err');
-        if (m) m.textContent = 'অ্যাপ চালু হতে দেরি হচ্ছে — ইন্টারনেট বা ব্রাউজার ক্যাশ মুছে আবার চেষ্টা করুন। / Startup is taking too long — check your connection and retry.';
+        if (m) m.textContent = 'Startup is taking too long — check your connection and retry.';
       }
     }, 12000);
   });
@@ -148,6 +145,6 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
 })();
 </script>
 
-<script type="module" src="./js/app.js?v=7.0.0"></script>
+<script type="module" src="./js/app.js?v=7.1.0"></script>
 </body>
 </html>

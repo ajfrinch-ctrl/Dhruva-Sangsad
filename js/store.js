@@ -128,6 +128,17 @@ export async function visibleNotifications(session) {
   }).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 }
 
+/** How many notifications the bell / list ever shows: the LATEST 10 UNREAD. */
+export const NOTIF_LIMIT = 10;
+export const isStickyNotification = n => !!(n && (n.sticky || n.kind === 'due'));
+export const isReadNotification = (n, userId) => !isStickyNotification(n) && !!(n && n.readBy && n.readBy[userId]);
+/** Unread notifications for this user, newest first, capped at NOTIF_LIMIT.
+ *  A notification that has been read is never listed again. */
+export async function unreadNotifications(session) {
+  const all = await visibleNotifications(session);
+  return all.filter(n => !isReadNotification(n, session.id)).slice(0, NOTIF_LIMIT);
+}
+
 /* ---------------- uniqueness ---------------- */
 export async function checkUnique({ memberId, mobile, whatsapp, email }, excludeId = null) {
   const members = await allMembers();
@@ -136,9 +147,9 @@ export async function checkUnique({ memberId, mobile, whatsapp, email }, exclude
   for (const m of members) {
     if (excludeId && m.id === excludeId) continue;
     if (memberId && m.memberId === memberId) errs.push({ field: 'memberId', msg: 'এই সদস্য আইডি ইতোমধ্যে ব্যবহৃত হয়েছে। / This Member ID already exists.' });
-    if (mob && normalizeMobile(m.mobile) === mob) errs.push({ field: 'mobile', msg: 'এই মোবাইল নম্বর ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
-    if (wa && normalizeMobile(m.whatsapp) === wa) errs.push({ field: 'whatsapp', msg: 'এই WhatsApp নম্বর ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
-    if (em && (m.email || '').trim().toLowerCase() === em) errs.push({ field: 'email', msg: 'এই ইমেইল আইডি ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
+    if (mob && normalizeMobile(m.mobile) === mob) errs.push({ field: 'mobile', msg: 'This mobile number is already used by another member.' });
+    if (wa && normalizeMobile(m.whatsapp) === wa) errs.push({ field: 'whatsapp', msg: 'This WhatsApp number is already used by another member.' });
+    if (em && (m.email || '').trim().toLowerCase() === em) errs.push({ field: 'email', msg: 'This email is already used by another member.' });
   }
   // de-dup by field
   const seen = new Set();
@@ -197,7 +208,7 @@ export async function registerMember(form, opts = {}) {
   await saveRecord('users', user, { queue: true });
 
   await logActivity('REGISTRATION', `New member registration: ${mid} — ${member.nameBn}`, { id: user.id, role: 'member', displayName: member.nameBn });
-  await notify({ title: 'নতুন সদস্য নিবন্ধন / New Member Registration', body: `${member.nameBn} (${mid}) — অনুমোদনের অপেক্ষায়`, audience: 'staff', kind: 'register' });
+  await notify({ title: 'New Member Registration', body: `${member.nameBn || member.nameEn} (${mid}) — awaiting approval`, audience: 'staff', kind: 'register' });
   invalidate();
   return member;
 }
@@ -255,12 +266,34 @@ export async function setMemberStatus(memberDocId, status, actor, reason = '') {
   await saveRecord('members', next, { queue: true, actorId: actor && actor.id });
   await logActivity(status === 'active' ? 'MEMBER_APPROVAL' : status === 'rejected' ? 'MEMBER_REJECTION' : 'MEMBER_STATUS', `Member ${m.memberId} → ${status}${reason ? ' (' + reason + ')' : ''}`, actor);
   await notify({
-    title: status === 'active' ? 'সদস্য অনুমোদিত / Member Approved' : status === 'rejected' ? 'সদস্য বাতিল / Member Rejected' : 'সদস্য স্ট্যাটাস',
-    body: `${m.nameBn} (${m.memberId}) — ${status}`, audience: 'member', memberId: m.memberId,
+    title: status === 'active' ? 'Member Approved' : status === 'rejected' ? 'Member Rejected' : 'Member Status',
+    body: `${m.nameBn || m.nameEn} (${m.memberId}) — ${status}${reason ? ' · ' + reason : ''}`, audience: 'member', memberId: m.memberId,
     kind: status === 'active' ? 'approve' : 'reject',
   });
   invalidate('members');
   return next;
+}
+
+/** Permanently remove a REJECTED registration (member record + its login).
+ *  Only rejected registrations can be deleted; a member who ever held money
+ *  (any deposit/withdrawal record) is refused so no financial history is lost. */
+export async function deleteRejectedMember(memberDocId, actor) {
+  const m = await dbGet('members', memberDocId);
+  if (!m) throw new Error('Member not found');
+  if (m.status !== 'rejected') throw new Error('Only a rejected registration can be deleted.');
+  const [deposits, withdrawals, users] = await Promise.all([allDeposits(), allWithdrawals(), allUsers()]);
+  const owns = r => r.memberDocId === m.id || (m.memberId && r.memberId === m.memberId);
+  if (deposits.some(owns) || withdrawals.some(owns)) {
+    throw new Error('This registration has deposit/withdrawal records and cannot be deleted.');
+  }
+  await removeRecord('members', m.id, { queue: true });
+  for (const u of users.filter(u => u.memberDocId === m.id || u.id === 'U' + m.id)) {
+    await removeRecord('users', u.id, { queue: true });
+  }
+  await removeRecord('notifications', `ntf_due_${m.memberId}`, { queue: true }).catch(() => {});
+  await logActivity('MEMBER_DELETE', `Rejected registration deleted: ${m.memberId} — ${m.nameBn || m.nameEn}`, actor);
+  invalidate();
+  return true;
 }
 
 /* ---------------- deposits ---------------- */
@@ -403,9 +436,9 @@ export async function submitDeposit(form, actor) {
   await saveRecord('deposits', rec, { queue: true, actorId: actor && actor.id });
   await logActivity('DEPOSIT_SUBMISSION', `Deposit ${amount} for ${member.memberId} (${rec.status})`, actor);
   if (rec.status === 'pending') {
-    await notify({ title: 'নতুন জমা / New Deposit', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'deposit' });
+    await notify({ title: 'New Deposit', body: `${member.nameBn || member.nameEn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'deposit' });
   } else {
-    await notify({ title: 'জমা যুক্ত হয়েছে / Deposit Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'approve' });
+    await notify({ title: 'Deposit Recorded', body: `${member.nameBn || member.nameEn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'approve' });
   }
   invalidate('deposits');
   try { await syncDueNotifications(); } catch {}
@@ -422,7 +455,7 @@ export async function setDepositStatus(depositId, status, actor, reason = '') {
   await logActivity(status === 'approved' ? 'DEPOSIT_APPROVAL' : 'DEPOSIT_REJECTION', `Deposit ${d.id} (${d.memberId}, ৳${d.amount}) → ${status}`, actor);
   try { await syncDueNotifications(); } catch {}
   await notify({
-    title: status === 'approved' ? 'জমা অনুমোদিত / Deposit Approved' : 'জমা বাতিল / Deposit Rejected',
+    title: status === 'approved' ? 'Deposit Approved' : 'Deposit Rejected',
     body: `${d.memberName} (${d.memberId}) — ৳${d.amount}${reason ? ' — ' + reason : ''}`,
     audience: 'member', memberId: d.memberId, kind: status === 'approved' ? 'approve' : 'reject',
   });
@@ -537,9 +570,9 @@ export async function submitWithdrawal(form, actor) {
   await saveRecord('withdrawals', rec, { queue: true, actorId: actor && actor.id });
   await logActivity('WITHDRAWAL_SUBMISSION', `Withdrawal ৳${amount} for ${member.memberId} (${rec.status})`, actor);
   if (rec.status === 'pending') {
-    await notify({ title: 'নতুন উত্তোলন / New Withdrawal', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'withdraw' });
+    await notify({ title: 'New Withdrawal', body: `${member.nameBn || member.nameEn} (${member.memberId}) — ৳${amount}`, audience: 'staff', kind: 'withdraw' });
   } else {
-    await notify({ title: 'উত্তোলন সম্পন্ন / Withdrawal Recorded', body: `${member.nameBn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'withdraw' });
+    await notify({ title: 'Withdrawal Recorded', body: `${member.nameBn || member.nameEn} (${member.memberId}) — ৳${amount}`, audience: 'member', memberId: member.memberId, kind: 'withdraw' });
   }
   invalidate('withdrawals');
   return rec;
@@ -554,7 +587,7 @@ export async function setWithdrawalStatus(withdrawalId, status, actor, reason = 
   await saveRecord('withdrawals', next, { queue: true, actorId: actor && actor.id });
   await logActivity(status === 'approved' ? 'WITHDRAWAL_APPROVAL' : 'WITHDRAWAL_REJECTION', `Withdrawal ${w.id} (${w.memberId}, ৳${w.amount}) → ${status}`, actor);
   await notify({
-    title: status === 'approved' ? 'উত্তোলন অনুমোদিত / Withdrawal Approved' : 'উত্তোলন বাতিল / Withdrawal Rejected',
+    title: status === 'approved' ? 'Withdrawal Approved' : 'Withdrawal Rejected',
     body: `${w.memberName} (${w.memberId}) — ৳${w.amount}${reason ? ' — ' + reason : ''}`,
     audience: 'member', memberId: w.memberId, kind: status === 'approved' ? 'approve' : 'reject',
   });
@@ -567,11 +600,11 @@ export function canModifyWithdrawal(w, session) {
   if (session.role === 'admin') return { ok: true };
   if (session.role === 'maker') {
     if (String(w.date).slice(0, 10) !== todayISO()) {
-      return { ok: false, msg: 'Maker শুধুমাত্র আজকের তারিখের উত্তোলন Edit/Delete করতে পারবেন।' };
+      return { ok: false, msg: 'Maker can edit or delete only today\'s withdrawals.' };
     }
     return { ok: true };
   }
-  return { ok: false, msg: 'উত্তোলন পরিবর্তনের অনুমতি নেই।' };
+  return { ok: false, msg: 'You are not allowed to modify this withdrawal.' };
 }
 
 /* ---------------- calculations (APPROVED data only) ---------------- */
@@ -646,8 +679,8 @@ export async function syncDueNotifications() {
     const nid = `ntf_due_${m.memberId}`;
     const existing = byId.get(nid);
     if (s.due > 0) {
-      const title = 'মাসিক জমা বকেয়া';
-      const body = `প্রিয় ${m.nameBn || m.nameEn}, আপনার মাসিক জমা বকেয়া রয়েছে (৳${Math.round(s.due)})। ${dueDay} তারিখের মধ্যে জমা না দিলে বকেয়া দেখায়। যেকোনো দিন জমা দিতে এখানে ট্যাপ করুন।`;
+      const title = 'Monthly deposit due';
+      const body = `Dear ${m.nameBn || m.nameEn}, your monthly deposit is due (৳${Math.round(s.due)}). Deposits made after the ${dueDay}th show as due. Tap here to submit a deposit any day.`;
       if (!existing || existing.body !== body) {
         // Keep the read state and original timestamp when refreshing the amount.
         toPut.push({

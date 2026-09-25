@@ -142,8 +142,9 @@ export async function pageReports(session, params = {}) {
 }
 
 /* ---------------- helpers ---------------- */
-function mkField(label, node, w = '140px') {
-  const f = el('div', { class: 'field', style: `flex:0 1 ${w}` });
+/* Every filter control is FULL WIDTH (mobile-friendly, easy to tap). */
+function mkField(label, node) {
+  const f = el('div', { class: 'field' });
   f.appendChild(el('label', { text: label }));
   f.appendChild(node);
   return f;

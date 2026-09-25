@@ -114,10 +114,10 @@ async function findUser(identifier) {
 export async function login(identifier, password, { remember = false } = {}) {
   await ensureBootstrapAdmin();
   const u = await findUser(identifier);
-  if (!u) throw new Error('ইউজার আইডি বা পাসওয়ার্ড ভুল');
-  if (u.active === false) throw new Error('আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে।');
+  if (!u) throw new Error('Incorrect user ID or password');
+  if (u.active === false) throw new Error('Your account has been deactivated.');
   const ok = await verifyPassword(password, u.password);
-  if (!ok) throw new Error('ইউজার আইডি বা পাসওয়ার্ড ভুল');
+  if (!ok) throw new Error('Incorrect user ID or password');
   // The default admin/admin only works while no real admin exists in the cloud.
   if (u.isBootstrap) await assertBootstrapAllowed();
 
@@ -125,7 +125,7 @@ export async function login(identifier, password, { remember = false } = {}) {
   if (u.role === ROLES.MEMBER && u.memberDocId) {
     member = await dbGet('members', u.memberDocId);
     if (member && member.status === 'rejected') {
-      throw new Error('আপনার Registration বাতিল হয়েছে। অনুগ্রহ করে কর্তৃপক্ষের সাথে যোগাযোগ করুন।');
+      throw new Error('Your registration has been rejected. Please contact the authority.');
     }
   }
   const session = publicUser(u);
@@ -137,7 +137,7 @@ export async function login(identifier, password, { remember = false } = {}) {
 
   if (u.role === ROLES.ADMIN && !u.isBootstrap) firebase.markAdminReady().catch(() => {});
 
-  await logActivity('LOGIN', `${u.username} লগইন করেছেন`, session);
+  await logActivity('LOGIN', `${u.username} signed in`, session);
   return session;
 }
 
@@ -148,7 +148,7 @@ export async function logout() {
   clearSession();
   firebase.signOut().catch(() => {});
   if (s) {
-    logActivity('LOGOUT', `${s.username} লগআউট করেছেন`, s).catch(() => {});
+    logActivity('LOGOUT', `${s.username} signed out`, s).catch(() => {});
   }
 }
 
@@ -169,7 +169,7 @@ export async function changeOwnPassword(currentPassword, newPassword) {
   invalidate('users');
   const ns = { ...s, mustChangePassword: false, isBootstrap: false };
   setSession(ns, !!localStorage.getItem(SESSION_KEY));
-  await logActivity('PASSWORD_CHANGE', `${u.username} পাসওয়ার্ড পরিবর্তন করেছেন`, ns);
+  await logActivity('PASSWORD_CHANGE', `${u.username} changed password`, ns);
   firebase.updatePassword(newPassword).catch(() => {});
   return ns;
 }
@@ -298,7 +298,7 @@ export async function recoverPassword({ identifier, dobDay, dobMonth, field1, va
   const pw = await hashPassword(newPassword);
   await saveRecord('users', { ...u, password: pw, mustChangePassword: false, passwordChangedAt: nowISO() }, { queue: true });
   invalidate('users');
-  await logActivity('PASSWORD_RECOVERY', `${u.username} — পাসওয়ার্ড পুনরুদ্ধার`, { id: u.id, role: u.role, displayName: u.displayName });
+  await logActivity('PASSWORD_RECOVERY', `${u.username} — password recovered`, { id: u.id, role: u.role, displayName: u.displayName });
   return true;
 }
 

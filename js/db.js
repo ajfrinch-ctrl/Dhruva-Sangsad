@@ -186,11 +186,11 @@ export async function setSetting(key, value, { queue = true } = {}) {
 export async function enqueue(store, recordId, op, payload) {
   const item = { id: uid('q'), store, recordId, op, payload, createdAt: nowISO(), tries: 0, deviceId: deviceId() };
   await dbPutRaw('syncQueue', item);
-  window.dispatchEvent(new CustomEvent('ds:queue-changed'));
+  window.dispatchEvent(new CustomEvent('ds:queue-changed', { detail: { reason: 'add' } }));
   return item;
 }
 export const queueAll = () => dbAll('syncQueue');
-export const queueRemove = id => dbDeleteRaw('syncQueue', id).then(r => { window.dispatchEvent(new CustomEvent('ds:queue-changed')); return r; });
+export const queueRemove = id => dbDeleteRaw('syncQueue', id).then(r => { window.dispatchEvent(new CustomEvent('ds:queue-changed', { detail: { reason: 'remove' } })); return r; });
 
 /* --------- record write with sync metadata --------- */
 export async function saveRecord(store, record, { queue = true, actorId = null, touch = true } = {}) {

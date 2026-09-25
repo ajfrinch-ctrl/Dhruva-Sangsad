@@ -1505,3 +1505,66 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
   font-size:12.5px;font-weight:600;line-height:1.5}
 .dupe-warn[hidden]{display:none}
 .dupe-warn .icon{width:16px;height:16px;flex:none;margin-top:1px}
+/* =====================================================================
+   v7.1 — mobile shell fixes
+   · fixed app viewport (no page-level scroll / rubber-band; only .main scrolls)
+   · bottom bar is ALWAYS visible: it sits above every sheet/backdrop, and the
+     More / notification / filter sheets open above it, never over it
+   · offline = red top bar only (no banner, no text)
+   · report controls (Period / Status / Member) are full width
+   · compact, collapsible transaction rows
+   ===================================================================== */
+body.shell-on{position:fixed;inset:0;width:100%;height:100dvh;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+body.shell-on #app.on{height:100dvh;max-height:100dvh}
+.main{overscroll-behavior:contain}
+.topbar{transform:none !important}   /* the header never slides away on scroll */
+
+/* offline: the whole top bar frame turns red, whatever the role tint */
+html[data-role] .topbar.sync-offline,html[data-role] .topbar.sync-error,
+.topbar.sync-offline,.topbar.sync-error{border-color:#e11d48 !important;border-bottom-color:#e11d48 !important}
+.topbar.sync-offline .brand-logo,.topbar.sync-error .brand-logo{border-color:#e11d48;box-shadow:0 0 0 2px rgba(225,29,72,.25)}
+
+/* bottom bar above sheets; sheets above the bar */
+.bottom-nav{z-index:230}
+@media (max-width:1023px){
+  .sheet-backdrop{bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px))}
+  .sheet{bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px));padding-bottom:12px;
+    max-height:calc(92dvh - var(--bottom-nav-h))}
+}
+
+/* reports — full-width, thumb-friendly controls */
+.rep-filters{flex-direction:column;gap:12px}
+.rep-filters > .field{flex:1 1 100% !important;width:100%;min-width:0}
+.rep-filters .period-pick,.rep-filters .period-status,.rep-filters .seg{width:100%}
+.rep-filters .seg{display:flex;flex-wrap:nowrap;gap:8px}
+.rep-filters .seg .seg-chip{flex:1 1 0;min-width:0;min-height:44px;padding:8px 6px;text-align:center;justify-content:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.rep-filters .period-dates{grid-template-columns:1fr 1fr;width:100%}
+.rep-filters .period-dates input,.rep-filters select,.rep-filters input{width:100%;min-height:44px;font-size:15px}
+@media (max-width:359px){.rep-filters .seg{flex-wrap:wrap}
+.rep-filters .seg .seg-chip{flex:1 1 45%}
+}
+
+/* compact collapsible transaction rows (deposits · withdrawals · transactions) */
+.txn-list{display:flex;flex-direction:column;gap:8px;width:100%;max-width:100%;overflow:hidden}
+.txr{position:relative;display:block;width:100%;max-width:100%;background:var(--card,#fff);border:1px solid var(--line);
+  border-radius:var(--r);padding:0;overflow:hidden}
+.txr-head{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:10px 12px;border:0;
+  background:transparent;font:inherit;color:var(--text);cursor:pointer;text-align:left}
+.txr-head .rw-ic{width:34px;height:34px;flex:none}
+.txr-name{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.txr-name b{font-size:14px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%}
+.txr-name small{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%}
+.txr-amt{flex:none;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14.5px;max-width:42%;overflow:hidden;text-overflow:ellipsis}
+.txr-amt.in{color:var(--green-dark)}
+.txr-amt.out{color:var(--red-dark)}
+.txr-chev{flex:none;display:grid;place-items:center;color:var(--faint);transition:transform .18s ease}
+.txr-chev .icon{width:16px;height:16px}
+.txr.open .txr-chev{transform:rotate(90deg)}
+.txr-body{display:none;padding:0 12px 12px;border-top:1px solid var(--line-2,var(--line))}
+.txr.open .txr-body{display:block}
+.txr-body .kv{margin-top:10px;font-size:13px}
+.txr-body .kv > div{min-width:0;overflow-wrap:anywhere}
+.txr-body .txn-id-static{font-size:12px}
+.txr-body .row-actions{margin-top:10px;justify-content:flex-end}
+html[data-theme="dark"] .txr,html[data-theme="amoled"] .txr{background:#000;border-color:#222}
