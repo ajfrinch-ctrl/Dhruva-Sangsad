@@ -7,7 +7,7 @@ import {
 import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, embedPage, segChips, emptyState } from '../ui.js';
 import { attachSwipe } from '../gestures.js';
-import { pageActivity } from './misc.js';
+import { pageActivity, memberLogCard } from './misc.js';
 import {
   allMembers, allDeposits, allWithdrawals, allUsers, allLogs, settings, saveSettings, setMemberStatus,
   setDepositStatus, setWithdrawalStatus, memberSummary, summariesFor, orgTotals, createStaffUser, setUserActive,
@@ -617,7 +617,7 @@ async function accountManager(session, host) {
 }
 
 /* ==================== Member Panel ==================== */
-export async function pageMemberPanel(session) {
+export async function pageMemberPanel(session, params = {}) {
   const wrap = page('সদস্য প্যানেল', 'Member Panel', 'member');
   if (session.role !== 'member') { wrap.appendChild(banner('err', 'এই পেজটি শুধুমাত্র সদস্যদের জন্য। / Members only.')); return wrap; }
   const [deposits, cfg] = await Promise.all([allDeposits(), settings()]);
@@ -631,7 +631,7 @@ export async function pageMemberPanel(session) {
   const stats = el('div', { class: 'stats' });
   stats.append(
     statCard({ label: 'মাসিক কিস্তি / Installment', value: taka(m.installment), sub: `${s.months} মাস হিসাবযোগ্য`, ic: 'money' }),
-    statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count} approved`, ic: 'deposit' }),
+    statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count}টি অনুমোদিত`, ic: 'deposit' }),
     statCard({ label: 'বকেয়া / Total Due', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
     statCard({ label: 'অগ্রিম / Total Advance', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance', tone: 'blue' }),
   );
@@ -640,12 +640,12 @@ export async function pageMemberPanel(session) {
   /* profile (read-only for approved fields) */
   const prof = el('div');
   prof.appendChild(kv([
-    ['Member ID', `<b style="color:var(--green-dark)">${esc(m.memberId)}</b>`],
-    ['নাম (বাংলা)', esc(m.nameBn)], ['Name (English)', esc(m.nameEn)],
-    ['পিতার নাম', esc(m.fatherBn || m.fatherEn || '')], ['মাতার নাম', esc(m.motherBn || m.motherEn || '')],
-    ['Mobile', esc(m.mobile)], ['WhatsApp', esc(m.whatsapp)],
-    ['Email', esc(m.email || '')], ['NID', esc(m.nid || '')],
-    ['Date of Birth', esc(fmtDate(m.dob))], ['পেশা / Profession', esc(m.profession || '')],
+    ['সদস্য আইডি / Member ID', `<b style="color:var(--green-dark)">${esc(m.memberId)}</b>`],
+    ['নাম (বাংলা) / Name (Bangla)', esc(m.nameBn)], ['নাম (ইংরেজি) / Name (English)', esc(m.nameEn)],
+    ['পিতার নাম / Father', esc(m.fatherBn || m.fatherEn || '')], ['মাতার নাম / Mother', esc(m.motherBn || m.motherEn || '')],
+    ['মোবাইল / Mobile', esc(m.mobile)], ['হোয়াটসঅ্যাপ / WhatsApp', esc(m.whatsapp)],
+    ['ইমেইল / Email', esc(m.email || '')], ['এনআইডি / NID', esc(m.nid || '')],
+    ['জন্ম তারিখ / Date of Birth', esc(fmtDate(m.dob))], ['পেশা / Profession', esc(m.profession || '')],
     ['ঠিকানা / Address', esc(m.address || '')],
     ['যোগদানের তারিখ / Join Date', esc(fmtDate(m.joinDate))],
     ['স্ট্যাটাস / Status', statusTag(m.status)],
@@ -659,13 +659,17 @@ export async function pageMemberPanel(session) {
   if (m.status === 'active') pRow.appendChild(btn('জমা দাখিল / Submit Deposit', 'deposit', 'primary', () => App.go('deposit')));
   const pc = card('আমার প্রোফাইল', 'My Profile', prof);
   pc.body.appendChild(pRow);
-  pc.body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-top:6px', text: 'প্রোফাইল সংশোধনের প্রয়োজন হলে Maker/Admin-এর সাথে যোগাযোগ করুন।' }));
+  pc.body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-top:6px', text: t('প্রোফাইল সংশোধনের প্রয়োজন হলে Maker/Admin-এর সাথে যোগাযোগ করুন। সদস্য নিজে প্রোফাইল এডিট করতে পারবেন না।', 'For profile corrections contact Maker/Admin. Members cannot edit their profile.') }));
   wrap.appendChild(pc);
+
+  /* কার্যক্রম লগ — collapsed row; tap expands the most recent 10 own entries.
+     The More sheet links to this same card (expandLog: true). */
+  wrap.appendChild(await memberLogCard(session, { open: !!params.expandLog }));
 
   /* my deposits */
   const rows = statementRows(s).reverse();
   wrap.appendChild(card('আমার জমা', 'My Approved Deposits', tableWrap(
-    [{ label: 'SL', cls: 'num' }, { label: 'Date' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'ক্রমপুঞ্জিত', cls: 'num' }],
+    [{ label: 'ক্রম / SL', cls: 'num' }, { label: 'তারিখ / Date' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'ক্রমপুঞ্জিত', cls: 'num' }],
     rows.map(r => [
       { text: String(r.sl), cls: 'num' }, esc(fmtDate(r.deposit.date)),
       esc(typeLabel(r.deposit.type).bn), esc(methodLabel(r.deposit.method).bn),
@@ -681,7 +685,7 @@ export async function pageMemberPanel(session) {
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   if (pend.length) {
     wrap.appendChild(card('অপেক্ষমাণ ও বাতিল জমা', 'Pending & Rejected Deposits', tableWrap(
-      [{ label: 'Date' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'Status' }, { label: 'মন্তব্য / Note' }],
+      [{ label: 'তারিখ / Date' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'স্ট্যাটাস / Status' }, { label: 'মন্তব্য / Note' }],
       pend.map(d => [esc(fmtDate(d.date)), esc(typeLabel(d.type).bn), esc(methodLabel(d.method).bn),
         { text: money(d.amount), cls: 'num' }, { html: statusTag(d.status) }, esc(d.rejectReason || d.description || '—')]),
     )));
@@ -765,10 +769,14 @@ export async function pageSettings(session, params = {}) {
       descBn: 'সংরক্ষণ ও পুনরুদ্ধার', descEn: 'Save and restore',
     });
   }
-  SECTIONS.push({
-    id: 'activity', group: 'system', ic: 'log', bn: 'কার্যকলাপ লগ', en: 'Activity Log',
-    descBn: 'কে, কখন, কী করেছে', descEn: 'Who did what, and when',
-  });
+  /* Members get the activity log from the profile page (collapsed row) +
+     the More sheet — not a third full-list entry in this hub. */
+  if (staff) {
+    SECTIONS.push({
+      id: 'activity', group: 'system', ic: 'log', bn: 'কার্যকলাপ লগ', en: 'Activity Log',
+      descBn: 'কে, কখন, কী করেছে', descEn: 'Who did what, and when',
+    });
+  }
 
   const host = el('div');
   wrap.appendChild(host);
@@ -795,7 +803,7 @@ export async function pageSettings(session, params = {}) {
     if (!sec) return renderHome();
 
     const bar = el('div', { class: 'hub-bar' });
-    bar.appendChild(btn(t('অ্যাডমিন হোম', 'Admin home'), 'back', 'ghost', home, { size: 'xs' }));
+    bar.appendChild(btn(staff ? t('অ্যাডমিন হোম', 'Admin home') : t('সেটিংস হোম', 'Settings home'), 'back', 'ghost', home, { size: 'xs' }));
     const head = el('div', { class: 'hub-sec' });
     head.innerHTML = `<div class="ic">${icon(sec.ic)}</div><div><h2>${esc(t(sec.bn, sec.en))}</h2><div class="s">${esc(t(sec.descBn, sec.descEn))}</div></div>`;
     const pane = el('div');
@@ -864,11 +872,11 @@ function accountSection(session, host) {
   const acc = el('div');
   acc.appendChild(kv([
     ['ব্যবহারকারী / User', esc(session.displayName || session.username)],
-    ['Username', esc(session.username)],
+    ['ইউজারনেম / Username', esc(session.username)],
     ['রোল / Role', `<span class="tag ${session.role === 'admin' ? 'info' : session.role === 'maker' ? 'approved' : 'gray'}">${esc(session.role === 'admin' ? t('অ্যাডমিন', 'Admin') : session.role === 'maker' ? 'Maker' : t('সদস্য', 'Member'))}</span>`],
-    ...(session.memberId ? [['Member ID', esc(session.memberId)]] : []),
+    ...(session.memberId ? [['সদস্য আইডি / Member ID', esc(session.memberId)]] : []),
     ['লগইন সময় / Login at', esc(fmtDateTime(session.loginAt))],
-    ['Device ID', esc(deviceId())],
+    ['ডিভাইস আইডি / Device ID', esc(deviceId())],
   ]));
   const accRow = el('div', { class: 'btn-row', style: 'margin-top:9px' });
   accRow.appendChild(btn('পাসওয়ার্ড পরিবর্তন / Change Password', 'lock', 'primary', () => changePasswordDialog()));
@@ -886,9 +894,9 @@ function aboutSection(host) {
     ['অ্যাপ / Application', `${esc(APP_NAME_BN)} — ${esc(APP_NAME_EN)}`],
     ['সংস্করণ / Version', APP_VERSION],
     ['ধরন / Type', 'Offline-first PWA · IndexedDB + Firebase Realtime Database'],
-    ['সংযোগ / Connection', navigator.onLine ? '<span class="tag approved">ONLINE</span>' : '<span class="tag gray">OFFLINE</span>'],
-    ['ডিভাইস / Device ID', esc(deviceId())],
-    ['ব্যাকআপ / Data safety', t('অ্যাডমিন হোম → ব্যাকআপ', 'Admin home → Backup')],
+    ['সংযোগ / Connection', navigator.onLine ? `<span class="tag approved">${esc(t('অনলাইন', 'Online'))}</span>` : `<span class="tag gray">${esc(t('অফলাইন', 'Offline'))}</span>`],
+    ['ডিভাইস আইডি / Device ID', esc(deviceId())],
+    ['ব্যাকআপ / Data safety', t('অ্যাডমিন (Maker) → ব্যাকআপ', 'Admin (Maker) → Backup')],
   ])));
 }
 

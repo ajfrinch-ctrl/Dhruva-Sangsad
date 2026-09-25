@@ -17,9 +17,9 @@ export async function openNotifications(session) {
 
   const body = el('div');
   const head = el('div', { class: 'btn-row', style: 'margin-bottom:10px' });
-  head.appendChild(btn('সব পঠিত চিহ্নিত করুন / Mark all read', 'check', 'soft', async () => {
+  head.appendChild(btn('সব পঠিত করুন', 'check', 'soft', async () => {
     const unread = items.filter(n => !isRead(n));
-    if (!unread.length) { toast('কোনো অপঠিত বিজ্ঞপ্তি নেই / Nothing unread', 'info'); return; }
+    if (!unread.length) { toast('কোনো অপঠিত বিজ্ঞপ্তি নেই', 'info'); return; }
     for (const n of unread) await markNotificationRead(n.id, session.id);
     toast(`${unread.length}টি বিজ্ঞপ্তি পঠিত চিহ্নিত হয়েছে`, 'success');
     App.refreshNotifBadge();
@@ -30,7 +30,7 @@ export async function openNotifications(session) {
 
   function buildList() {
     if (!items.length) {
-      body.appendChild(el('div', { class: 'empty', html: `${icon('bell')}কোনো বিজ্ঞপ্তি নেই / No notifications` }));
+      body.appendChild(el('div', { class: 'empty', html: `${icon('bell')}এখনো কোনো বিজ্ঞপ্তি নেই` }));
       return;
     }
     const list = el('div', { class: 'list' });
@@ -40,11 +40,12 @@ export async function openNotifications(session) {
       const li = el('div', { class: 'li' + (read ? '' : ' unread') + (n.kind === 'due' ? ' wa-msg' : '') });
       li.innerHTML = `
         <div class="ic ${n.kind === 'due' ? 'r' : n.kind === 'reject' ? 'b' : 'a'}">${icon(NOTIF_ICON[n.kind] || 'bell')}</div>
-        <div class="bd"><div class="t">${esc(n.title)}${read || sticky ? (sticky ? ' <span class="tag due">বকেয়া</span>' : '') : ' <span class="tag pending">NEW</span>'}</div>
+        <div class="bd"><div class="t">${esc(n.title)}${read || sticky ? (sticky ? ' <span class="tag due">বকেয়া</span>' : '') : ' <span class="tag pending">নতুন</span>'}</div>
           <div class="s">${esc(n.body || '')}</div>
-          ${n.action === 'deposit' ? '<div class="s" style="margin-top:6px"><span class="tag info">জমা দিন →</span></div>' : ''}</div>
+          ${n.action === 'deposit' ? '<div class="s" style="margin-top:6px"><span class="tag info">এখনই জমা দিন →</span></div>' : ''}</div>
         <div class="w">${esc(fmtDate(n.createdAt))}<br>${esc(fmtTime(n.createdAt))}</div>`;
       li.style.cursor = 'pointer';
+      li.title = t('ট্যাপ করে পঠিত চিহ্নিত করুন', 'Tap to mark read');
       li.addEventListener('click', async () => {
         if (!sticky && !read) {
           await markNotificationRead(n.id, session.id);
@@ -63,7 +64,7 @@ export async function openNotifications(session) {
   }
   buildList();
 
-  return modal({ title: 'বিজ্ঞপ্তি / Notifications', body, width: 540, actions: [{ label: t('বন্ধ', 'Close'), value: true, kind: 'primary' }] });
+  return modal({ title: t('বিজ্ঞপ্তি', 'Notifications'), body, width: 540, actions: [{ label: t('বন্ধ করুন', 'Close'), value: true, kind: 'primary' }] });
 }
 
 /* ==================== Activity Log ==================== */
@@ -96,19 +97,90 @@ const ACTION_META = {
 };
 export const actionMeta = a => ACTION_META[a] || { ic: 'log', bn: a };
 
-/* One compact timeline row (shared with the dashboard recent-activity card). */
-export function actRow(l) {
+/* One compact timeline row (shared with the dashboard recent-activity card).
+   opts.member = true renders the member's own view: Bengali action + a short
+   Bengali description (no raw English details, no user name — it's always them). */
+const bnD = n => String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]);
+
+/** Short Bengali description per action for the member's own log. */
+const MEMBER_LOG_DETAIL = {
+  LOGIN: () => 'লগইন করেছেন',
+  LOGOUT: () => 'লগআউট করেছেন',
+  PASSWORD_CHANGE: () => 'পাসওয়ার্ড পরিবর্তন করেছেন',
+  PASSWORD_RECOVERY: () => 'পাসওয়ার্ড পুনরুদ্ধার করেছেন',
+  REGISTRATION: () => 'নিবন্ধন সম্পন্ন',
+  DEPOSIT_SUBMISSION: () => 'জমা দাখিল করেছেন',
+  WITHDRAWAL_SUBMISSION: () => 'উত্তোলনের আবেদন দাখিল করেছেন',
+  MEMBER_UPDATE: () => 'প্রোফাইল হালনাগাদ',
+  SESSION_TIMEOUT: () => 'সেশন মেয়াদ শেষ (৩০ মিনিট নিষ্ক্রিয়)',
+};
+const logDetailBn = l => {
+  const fn = MEMBER_LOG_DETAIL[l && l.action];
+  return fn ? fn(l) : (l && l.details) || t('আপনার কার্যক্রম', 'Your activity');
+};
+
+export function actRow(l, opts = {}) {
   const meta = actionMeta(l.action);
+  const sub = opts.member
+    ? esc(logDetailBn(l))
+    : esc(logUserName(l)) + (l.details ? ' · ' + esc(l.details) : '');
   const row = el('div', { class: 'act' });
   row.innerHTML = `<span class="ai">${icon(meta.ic)}</span>
     <span class="ab"><span class="at">${esc(meta.bn)}</span>
-      <span class="as">${esc(logUserName(l))}${l.details ? ' · ' + esc(l.details) : ''}</span></span>
+      <span class="as">${sub}</span></span>
     <span class="aw">${esc(fmtDate(l.createdAt))}<br>${esc(fmtTime(l.createdAt))}</span>`;
   return row;
 }
 
+/** Collapsed “কার্যক্রম লগ” card for the member profile (and anywhere else):
+    one tappable row by default; tap expands the most recent 10 own entries,
+    tap again (or “বন্ধ করুন”) collapses. No export, no filters, member-only. */
+export async function memberLogCard(session, { open = false } = {}) {
+  const all = await allLogs();
+  const mine = all.filter(l => l.userId === session.id)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const top = mine.slice(0, 10);
+
+  const box = el('div', { class: 'card log-card' });
+  const headBtn = el('button', { type: 'button', class: 'log-toggle', 'aria-expanded': String(open) });
+  const sub = top.length
+    ? t(`সর্বশেষ ${bnD(top.length)}টি · ট্যাপ করে দেখুন`, `Last ${top.length} entries · tap to view`)
+    : t('এখনো কোনো কার্যক্রম নেই', 'No activity yet');
+  headBtn.innerHTML = `<span class="lt-ic">${icon('log')}</span>
+    <span class="lt-tx"><span class="lt-t">${esc(t('কার্যক্রম লগ', 'Activity Log'))}</span><span class="lt-s">${esc(sub)}</span></span>
+    <span class="go">${icon('chevron')}</span>`;
+
+  const body = el('div', { class: 'log-body' });
+  let painted = false;
+  const paint = () => {
+    body.replaceChildren();
+    if (!top.length) {
+      body.appendChild(el('div', { class: 'empty', html: `${icon('log')}${esc(t('এখনো কোনো কার্যক্রম নেই', 'No activity yet'))}` }));
+    } else {
+      const list = el('div', { class: 'act-list' });
+      top.forEach(l => list.appendChild(actRow(l, { member: true })));
+      body.appendChild(list);
+      const foot = el('div', { class: 'log-foot' });
+      foot.appendChild(btn(t('বন্ধ করুন', 'Close'), 'clear', 'ghost', () => toggle(false), { size: 'xs' }));
+      body.appendChild(foot);
+    }
+    painted = true;
+  };
+  const toggle = force => {
+    const next = force !== undefined ? force : !body.classList.contains('open');
+    body.classList.toggle('open', next);
+    headBtn.setAttribute('aria-expanded', String(next));
+    if (next && !painted) paint();
+  };
+  headBtn.addEventListener('click', () => toggle());
+  box.append(headBtn, body);
+  if (open) { body.classList.add('open'); headBtn.setAttribute('aria-expanded', 'true'); paint(); }
+  return box;
+}
+
 export async function pageActivity(session) {
   const logs = await allLogs();
+  const isMember = session.role === 'member';
   const wrap = page('কার্যক্রম লগ', 'Activity Log', 'log');
 
   const mine = session.role === 'admin' || session.role === 'maker'
@@ -119,45 +191,7 @@ export async function pageActivity(session) {
 
   // Default window: the most recent 7 days (same as before the sheet).
   const sevenDaysAgo = () => { const d = new Date(); d.setDate(d.getDate() - 6); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
-  let act = '', role = '', from = sevenDaysAgo(), to = todayISO();
-
-  const head = el('div', { class: 'txn-head' });
-  const searchBox = el('div', { class: 'search-box', html: icon('search') });
-  const q = el('input', {
-    placeholder: t('ব্যবহারকারী / কার্যক্রম / বিবরণ…', 'User / action / details…'),
-    autocomplete: 'off', 'aria-label': t('লগ খুঁজুন', 'Search log'),
-  });
-  searchBox.appendChild(q);
-  const filterBtn = el('button', { type: 'button', class: 'btn btn-ghost filter-btn', 'aria-label': t('ফিল্টার', 'Filter') });
-  const paintBadge = () => {
-    const n = [act, role, from, to].filter(Boolean).length;
-    filterBtn.innerHTML = `${icon('filter')}<span>${esc(t('ফিল্টার', 'Filter'))}</span>${n ? `<span class="fbadge">${n}</span>` : ''}`;
-  };
-  paintBadge();
-  const actOpts = [{ value: '', bn: 'সব', en: 'All' },
-    ...Array.from(new Set(mine.map(l => l.action))).sort().map(a => ({ value: a, bn: actionMeta(a).bn, en: a }))];
-  const roleOpts = [
-    { value: '', bn: 'সব', en: 'All' }, { value: 'admin', bn: 'অ্যাডমিন', en: 'Admin' },
-    { value: 'maker', bn: 'Maker', en: 'Maker' }, { value: 'member', bn: 'সদস্য', en: 'Member' },
-  ];
-  filterBtn.addEventListener('click', () => filterSheet({
-    state: { act, role, from, to },
-    sections: [
-      { key: 'act', label: t('কার্যক্রম', 'Action'), options: actOpts },
-      { key: 'role', label: t('রোল', 'Role'), options: roleOpts },
-    ],
-    dates: { fromLabel: t('শুরু', 'From'), toLabel: t('শেষ', 'To') },
-    onApply: s => { ({ act, role, from, to } = s); paintBadge(); resetShown(); render(); },
-    onClear: () => { act = role = from = to = ''; paintBadge(); resetShown(); render(); },
-  }));
-  head.append(searchBox, filterBtn);
-  wrap.appendChild(head);
-
-  const listCard = card('কার্যক্রম তালিকা', 'Activity Records', el('div'), [
-    btn('Excel', 'excel', 'soft', () => doExport('xlsx'), { size: 'xs' }),
-    btn('CSV', 'csv', 'ghost', () => doExport('csv'), { size: 'xs' }),
-  ]);
-  wrap.appendChild(listCard);
+  let act = '', role = '', from = isMember ? '' : sevenDaysAgo(), to = isMember ? '' : todayISO();
 
   let current = [];
   let shown = PAGE_SIZE;
@@ -172,8 +206,50 @@ export async function pageActivity(session) {
     toast('রপ্তানি সম্পন্ন', 'success');
   };
 
+  /* Member view: clean list only — no search, no filter, no Excel/CSV export. */
+  const listCard = card('কার্যক্রম তালিকা', 'Activity Records', el('div'), isMember ? [] : [
+    btn('Excel', 'excel', 'soft', () => doExport('xlsx'), { size: 'xs' }),
+    btn('CSV', 'csv', 'ghost', () => doExport('csv'), { size: 'xs' }),
+  ]);
+
+  let qEl = null;
+  if (!isMember) {
+    const head = el('div', { class: 'txn-head' });
+    const searchBox = el('div', { class: 'search-box', html: icon('search') });
+    qEl = el('input', {
+      placeholder: t('ব্যবহারকারী / কার্যক্রম / বিবরণ…', 'User / action / details…'),
+      autocomplete: 'off', 'aria-label': t('লগ খুঁজুন', 'Search log'),
+    });
+    searchBox.appendChild(qEl);
+    const filterBtn = el('button', { type: 'button', class: 'btn btn-ghost filter-btn', 'aria-label': t('ফিল্টার', 'Filter') });
+    const paintBadge = () => {
+      const n = [act, role, from, to].filter(Boolean).length;
+      filterBtn.innerHTML = `${icon('filter')}<span>${esc(t('ফিল্টার', 'Filter'))}</span>${n ? `<span class="fbadge">${n}</span>` : ''}`;
+    };
+    paintBadge();
+    const actOpts = [{ value: '', bn: 'সব', en: 'All' },
+      ...Array.from(new Set(mine.map(l => l.action))).sort().map(a => ({ value: a, bn: actionMeta(a).bn, en: a }))];
+    const roleOpts = [
+      { value: '', bn: 'সব', en: 'All' }, { value: 'admin', bn: 'অ্যাডমিন', en: 'Admin' },
+      { value: 'maker', bn: 'Maker', en: 'Maker' }, { value: 'member', bn: 'সদস্য', en: 'Member' },
+    ];
+    filterBtn.addEventListener('click', () => filterSheet({
+      state: { act, role, from, to },
+      sections: [
+        { key: 'act', label: t('কার্যক্রম', 'Action'), options: actOpts },
+        { key: 'role', label: t('রোল', 'Role'), options: roleOpts },
+      ],
+      dates: { fromLabel: t('শুরু', 'From'), toLabel: t('শেষ', 'To') },
+      onApply: s => { ({ act, role, from, to } = s); paintBadge(); resetShown(); render(); },
+      onClear: () => { act = role = from = to = ''; paintBadge(); resetShown(); render(); },
+    }));
+    head.append(searchBox, filterBtn);
+    wrap.appendChild(head);
+  }
+  wrap.appendChild(listCard);
+
   const render = () => {
-    const term = q.value.trim().toLowerCase();
+    const term = qEl ? qEl.value.trim().toLowerCase() : '';
     current = mine.filter(l => {
       if (act && l.action !== act) return false;
       if (role && l.role !== role) return false;
@@ -193,7 +269,7 @@ export async function pageActivity(session) {
     const vis = current.slice(0, shown);
     body.appendChild(el('div', { class: 'count-line', text: `${vis.length} / ${current.length}টি` }));
     const tl = el('div', { class: 'act-list' });
-    vis.forEach(l => tl.appendChild(actRow(l)));
+    vis.forEach(l => tl.appendChild(actRow(l, { member: isMember })));
     body.appendChild(tl);
     if (current.length > shown) {
       const more = el('button', {
@@ -207,7 +283,7 @@ export async function pageActivity(session) {
     }
   };
 
-  q.addEventListener('input', debounce(() => { resetShown(); render(); }, 180));
+  if (qEl) qEl.addEventListener('input', debounce(() => { resetShown(); render(); }, 180));
   render();
   return wrap;
 }

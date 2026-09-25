@@ -2,7 +2,7 @@
    Same numbers as before, arranged for a phone screen first. */
 import { el, esc, taka, num, money, fmtDate, fmtTime, todayISO, t } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, statCard, banner, btn } from '../ui.js';
+import { page, card, statCard, banner, btn, statusTag } from '../ui.js';
 import {
   allMembers, allDeposits, allWithdrawals, allLogs, settings, memberSummary, summariesFor,
   orgTotals, getMember, withdrawalBalance, summaryOpts, logUserName,
@@ -141,7 +141,7 @@ async function staffHome(session) {
 
 /* ================= MEMBER DASHBOARD ================= */
 async function memberHome(session) {
-  const [deposits, withdrawals, cfg, logs] = await Promise.all([allDeposits(), allWithdrawals(), settings(), allLogs()]);
+  const [deposits, withdrawals, cfg] = await Promise.all([allDeposits(), allWithdrawals(), settings()]);
   const m = await getMember(session.memberDocId);
   const wrap = page('আমার ড্যাশবোর্ড', 'My Dashboard', 'dashboard');
   if (!m) { wrap.appendChild(banner('err', 'সদস্য তথ্য পাওয়া যায়নি / Member record not found')); return wrap; }
@@ -150,12 +150,27 @@ async function memberHome(session) {
   const bal = withdrawalBalance(m, deposits, withdrawals);
 
   if (m.status === 'pending') {
-    wrap.appendChild(banner('warn', 'আপনার Registration <b>Pending Approval</b> অবস্থায় আছে। Maker/Admin অনুমোদনের পর আপনি নতুন জমা দিতে পারবেন।'));
+    wrap.appendChild(banner('warn', 'আপনার সদস্যপদ এখনো <b>অনুমোদনের অপেক্ষায়</b>। Maker/Admin অনুমোদনের পর নতুন জমা দাখিল করা যাবে।'));
   } else if (m.status === 'active') {
-    wrap.appendChild(banner('ok', `আপনার Member ID <b>${esc(m.memberId)}</b> সক্রিয় (ACTIVE) আছে। আপনি জমা জমা দিতে পারবেন।`));
+    wrap.appendChild(banner('ok', `আপনার সদস্য আইডি <b>${esc(m.memberId)}</b> <b>সক্রিয়</b> — আপনি এখনই জমা দাখিল করতে পারবেন।`));
   } else if (m.status === 'rejected') {
     wrap.appendChild(banner('err', `আপনার সদস্যপদ বাতিল করা হয়েছে।${m.rejectReason ? ' কারণ: ' + esc(m.rejectReason) : ''}`));
   }
+
+  /* 0 — time-of-day greeting (Active-Plus style) */
+  const hNow = new Date().getHours();
+  const greet = hNow < 5 ? t('শুভ রাত্রি', 'Good night')
+    : hNow < 12 ? t('শুভ সকাল', 'Good morning')
+    : hNow < 17 ? t('শুভ দুপুর', 'Good afternoon')
+    : hNow < 20 ? t('শুভ সন্ধ্যা', 'Good evening')
+    : t('শুভ রাত্রি', 'Good night');
+  const dueLine = s.due > 0
+    ? `${t('বকেয়া', 'Due')} ${taka(s.due)}`
+    : t('বকেয়া নেই — সব ঠিক আছে', 'No due — all clear');
+  const greetBox = el('div', { class: 'greet' });
+  greetBox.innerHTML = `<div class="greet-hi">${esc(greet)}${m.nameBn ? ', ' + esc(m.nameBn) : ''}!</div>
+    <div class="greet-sub">${fmtDate(todayISO())} · ${esc(dueLine)}</div>`;
+  wrap.appendChild(greetBox);
 
   /* 1 — hero */
   wrap.appendChild(heroCard({
@@ -183,7 +198,7 @@ async function memberHome(session) {
     statCard({ label: 'উপলব্ধ ব্যালান্স / Available Balance', value: taka(bal.available), sub: 'উত্তোলনযোগ্য / withdrawable', ic: 'money', tone: 'blue' }),
     statCard({ label: 'মোট বকেয়া / Total Due', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
     statCard({ label: 'মোট অগ্রিম / Total Advance', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance' }),
-    statCard({ label: 'স্ট্যাটাস / Status', value: `<span class="tag ${m.status === 'active' ? 'approved' : m.status}">${esc(m.status.toUpperCase())}</span>`, sub: `ID ${m.memberId}`, ic: 'member', tone: 'gray' }),
+    statCard({ label: 'স্ট্যাটাস / Status', value: statusTag(m.status), sub: `সদস্য আইডি ${m.memberId}`, ic: 'member', tone: 'gray' }),
   );
   wrap.appendChild(stats);
 
@@ -204,15 +219,8 @@ async function memberHome(session) {
     }))));
   }
 
-  /* 5 — my activity */
-  const mineLogs = logs.filter(l => l.userId === session.id)
-    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  if (mineLogs.length) {
-    const head = el('div', { class: 'sec-head' });
-    head.innerHTML = `<h2>${esc(t('আমার কার্যক্রম', 'My activity'))}</h2><span class="sp"></span>`;
-    wrap.appendChild(head);
-    wrap.appendChild(activityCard(mineLogs));
-  }
+  /* The full activity log now lives on the profile page (collapsed row,
+     tap to expand) + the More sheet — it no longer takes space on the home. */
 
   return wrap;
 }

@@ -137,7 +137,7 @@ export async function login(identifier, password, { remember = false } = {}) {
 
   if (u.role === ROLES.ADMIN && !u.isBootstrap) firebase.markAdminReady().catch(() => {});
 
-  await logActivity('LOGIN', `${u.role} ${u.username} signed in`, session);
+  await logActivity('LOGIN', `${u.username} লগইন করেছেন`, session);
   return session;
 }
 
@@ -148,7 +148,7 @@ export async function logout() {
   clearSession();
   firebase.signOut().catch(() => {});
   if (s) {
-    logActivity('LOGOUT', `${s.role} ${s.username} signed out`, s).catch(() => {});
+    logActivity('LOGOUT', `${s.username} লগআউট করেছেন`, s).catch(() => {});
   }
 }
 
@@ -169,7 +169,7 @@ export async function changeOwnPassword(currentPassword, newPassword) {
   invalidate('users');
   const ns = { ...s, mustChangePassword: false, isBootstrap: false };
   setSession(ns, !!localStorage.getItem(SESSION_KEY));
-  await logActivity('PASSWORD_CHANGE', `${u.username} changed password`, ns);
+  await logActivity('PASSWORD_CHANGE', `${u.username} পাসওয়ার্ড পরিবর্তন করেছেন`, ns);
   firebase.updatePassword(newPassword).catch(() => {});
   return ns;
 }
@@ -298,7 +298,7 @@ export async function recoverPassword({ identifier, dobDay, dobMonth, field1, va
   const pw = await hashPassword(newPassword);
   await saveRecord('users', { ...u, password: pw, mustChangePassword: false, passwordChangedAt: nowISO() }, { queue: true });
   invalidate('users');
-  await logActivity('PASSWORD_RECOVERY', `Password recovered for ${u.username}`, { id: u.id, role: u.role, displayName: u.displayName });
+  await logActivity('PASSWORD_RECOVERY', `${u.username} — পাসওয়ার্ড পুনরুদ্ধার`, { id: u.id, role: u.role, displayName: u.displayName });
   return true;
 }
 

@@ -10,6 +10,7 @@ import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
 import { bottomSheet, switchEl, skeleton, errorState } from './ui.js';
 import { initShellGestures } from './gestures.js';
+import { initInstallPrompt } from './install-prompt.js';
 import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, allMembers, allDeposits, allWithdrawals } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
@@ -34,10 +35,11 @@ const NAV = [
   { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings', bnStaff: 'অ্যাডমিন', enStaff: 'Admin', slots: [] },
 ];
 
-/* Contextual primary action (FAB). Only the screens where one action dominates. */
+/* Contextual primary action (FAB). Only the screens where one action dominates.
+   `member` = label override for the member role (their own deposit). */
 const FAB = {
   members: { ic: 'plus', bn: 'সদস্য যোগ', en: 'Add member', perm: 'member:edit', run: () => App.go('members', { tab: 'register' }) },
-  deposit: { ic: 'plus', bn: 'জমা যোগ', en: 'Add deposit', perm: 'deposit:create-any', run: () => App.go('deposit', { tab: 'entry' }) },
+  deposit: { ic: 'plus', bn: 'জমা যোগ', en: 'Add deposit', member: { bn: 'জমা দাখিল', en: 'Submit deposit' }, perm: 'deposit:create-any', run: () => App.go('deposit', { tab: 'entry' }) },
 };
 
 const PAGES = {
@@ -178,11 +180,13 @@ export const App = {
     const setBtn = $('#btnSettings');
     if (setBtn) setBtn.hidden = true;   // “Settings” now lives in the More sheet
     const userName = s.displayName || s.username || s.memberId || '';
+    const roleBn = { admin: t('অ্যাডমিন', 'Admin'), maker: 'Maker', member: t('সদস্য', 'Member') }[s.role];
     const brand = $('#brandRole');
-    brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc((s.role || '').toUpperCase())}</span>`;
+    brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc(roleBn || (s.role || '').toUpperCase())}</span>`;
   },
 
-  /** Contextual FAB — one dominant action per screen, hidden elsewhere. */
+  /** Contextual FAB — one dominant action per screen, hidden elsewhere.
+      Home has no FAB for members (the quick actions already cover it). */
   paintFab() {
     const s = this.session;
     const fab = $('#fab');
@@ -191,25 +195,51 @@ export const App = {
     const allowed = f && (!f.perm || can(s, f.perm) || (f.perm === 'deposit:create-any' && can(s, 'deposit:create-own')));
     if (!allowed) { fab.hidden = true; return; }
     fab.hidden = false;
-    fab.innerHTML = `${icon(f.ic)}<span>${esc(t(f.bn, f.en))}</span>`;
+    const lbl = (!s || s.role !== 'member') || !f.member ? { bn: f.bn, en: f.en } : f.member;
+    fab.innerHTML = `${icon(f.ic)}<span>${esc(t(lbl.bn, lbl.en))}</span>`;
     fab.onclick = f.run;
   },
 
-  /** “More” sheet, grouped: Mine · Admin tools · Preferences · Logout. */
+  /** “More” sheet.
+      Member: আমার → অ্যাকাউন্ট (সেটিংস, কার্যক্রম লগ) → পছন্দ → লগআউট.
+      Staff:  Mine → Admin tools → Preferences → Logout. */
   openMore() {
     const s = this.session; if (!s) return;
     const isStaff = s.role !== 'member';
     const group = isStaff ? 'staff' : 'member';
     const leftovers = NAV.filter(i => can(s, i.id) && !(i.slots || []).includes(group));
     const items = [];
+    const themeRow = {
+      ic: getTheme() === 'amoled' ? 'moon' : 'sun', label: t('ডার্ক মোড', 'Dark mode'),
+      keepOpen: true, right: switchEl(getTheme() === 'amoled', () => toggleTheme()),
+    };
+    const langRow = {
+      ic: 'globe', label: t('ভাষা / Language', 'Language'),
+      keepOpen: true, right: switchEl(getLang() === 'en', () => setLang(getLang() === 'en' ? 'bn' : 'en')),
+    };
 
-    /* — আমার: reports (+ settings hub for members) — */
-    items.push({ header: t('আমার', 'Mine') });
-    leftovers.filter(i => i.id !== 'settings' || !isStaff)
-      .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
     if (!isStaff) {
-      items.push({ ic: 'log', label: t('অ্যাকটিভিটি লগ', 'Activity Log'), run: () => this.go('settings', { tab: 'activity' }) });
+      /* — সদস্য: আমার → রিপোর্ট/স্টেটমেন্ট — */
+      items.push({ header: t('আমার', 'Mine') });
+      leftovers.filter(i => i.id === 'reports')
+        .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
+      /* — অ্যাকাউন্ট: সেটিংস + কার্যক্রম লগ (প্রোফাইলের কোলাপ্সড ভিউতে নিয়ে যায়) — */
+      items.push({ header: t('অ্যাকাউন্ট', 'Account') });
+      leftovers.filter(i => i.id === 'settings')
+        .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
+      items.push({ ic: 'log', label: t('কার্যক্রম লগ', 'Activity Log'), run: () => this.go('member-panel', { expandLog: true }) });
+      /* — পছন্দ (মোবাইলে কীবোর্ড শর্টকাট লুকানো) — */
+      items.push({ header: t('পছন্দ', 'Preferences') });
+      items.push(themeRow, langRow);
+      items.push('sep');
+      items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => this.doLogout() });
+      return bottomSheet({ title: t('আরও', 'More'), items });
     }
+
+    /* — আমার (staff): reports — */
+    items.push({ header: t('আমার', 'Mine') });
+    leftovers.filter(i => i.id !== 'settings')
+      .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
 
     /* — অ্যাডমিন টুলস (staff) — */
     const tools = [];
@@ -232,14 +262,7 @@ export const App = {
     /* — পছন্দ — */
     items.push({ header: t('পছন্দ', 'Preferences') });
     items.push({ ic: 'key', label: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'), run: () => shortcutSheet() });
-    items.push({
-      ic: getTheme() === 'amoled' ? 'moon' : 'sun', label: t('ডার্ক মোড', 'Dark mode'),
-      keepOpen: true, right: switchEl(getTheme() === 'amoled', () => toggleTheme()),
-    });
-    items.push({
-      ic: 'globe', label: t('ভাষা / Language', 'Language'),
-      keepOpen: true, right: switchEl(getLang() === 'en', () => setLang(getLang() === 'en' ? 'bn' : 'en')),
-    });
+    items.push(themeRow, langRow);
     items.push('sep');
     items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => this.doLogout() });
     return bottomSheet({ title: t('আরও', 'More'), items });
@@ -509,6 +532,9 @@ async function boot() {
     const h = (location.hash || '').replace('#', '');
     if (App.session && h && h !== App.route && PAGES[h]) App.go(h);
   });
+  /* PWA install banner (bottom, Active-Plus style) — driven by beforeinstallprompt. */
+  initInstallPrompt();
+
   window.addEventListener('online', () => toast(t('ইন্টারনেট সংযোগ ফিরে এসেছে — সিঙ্ক হচ্ছে', 'Back online — syncing'), 'success'));
   window.addEventListener('offline', () => toast(t('অফলাইন মোড — ডেটা লোকালি সংরক্ষিত হবে', 'Offline mode — data is saved locally'), 'warn'));
   window.addEventListener('ds:lang', () => {
