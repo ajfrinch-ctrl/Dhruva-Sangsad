@@ -63,7 +63,6 @@ const PRECACHE = [
   'js/pages/deposits.js',
   'js/pages/members.js',
   'js/pages/misc.js',
-  'js/pages/member-panel.js',
   'js/pages/notifications.js',
   'js/pages/profile.js',
   'js/pages/reports.js',

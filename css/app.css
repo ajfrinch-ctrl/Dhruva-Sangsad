@@ -1529,3 +1529,34 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
   .skgrid{grid-template-columns:1fr}
   .fsheet-dates{grid-template-columns:1fr}
 }
+
+/* =====================================================================
+   v7 LOGIN — fits the viewport exactly, no overlap, no horizontal scroll
+   (320 → 430 px tested against the shared scale below).
+   ===================================================================== */
+.auth-wrap{
+  min-height:100dvh;min-height:100svh;align-items:flex-start;justify-content:center;
+  padding:calc(env(safe-area-inset-top,0px) + 20px) 14px calc(env(safe-area-inset-bottom,0px) + 20px);
+  overflow-x:hidden;overflow-y:auto;
+}
+.auth-card{margin:auto 0;padding:24px 20px 22px;border-radius:16px}
+.auth-logo{width:96px;height:96px;margin-bottom:12px}
+.auth-brand{margin-bottom:16px}
+.auth-brand h1{font-size:21px}
+.auth-welcome{font-size:13px;font-weight:700;color:var(--green-dark);letter-spacing:.3px;margin-top:2px}
+.auth-theme-btn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;z-index:5}
+.auth-h{text-align:left;margin-bottom:12px}
+.auth-foot-link{display:none}
+.login-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
+.login-row .link-btn{font-size:12.5px;padding:2px}
+@media (max-width:359px){
+  .auth-wrap{padding-left:10px;padding-right:10px}
+  .auth-card{padding:20px 14px 18px}
+  .auth-logo{width:80px;height:80px}
+  .auth-tabs button{font-size:12.5px;padding:8px 4px}
+}
+@media (max-height:620px){
+  .auth-logo{width:72px;height:72px;margin-bottom:8px}
+  .auth-brand{margin-bottom:10px}
+  .auth-card{padding:18px 16px 16px}
+}
