@@ -355,6 +355,16 @@ const monthlyAmountOf = (member, form) => {
   return (form && form.type === 'monthly' && inst > 0) ? inst : num(form && form.amount);
 };
 
+/** Non-rejected MONTHLY deposits already recorded for a member in the month of
+ *  `date` (used to warn about a duplicate monthly installment before saving). */
+export async function monthlyDepositsInMonth(memberDocId, date, { excludeId = '' } = {}) {
+  const mk = monthKey(date);
+  if (!memberDocId || !mk) return [];
+  const rows = await allDeposits();
+  return rows.filter(d => d.memberDocId === memberDocId && d.type === 'monthly'
+    && d.status !== 'rejected' && d.id !== excludeId && monthKey(d.date) === mk);
+}
+
 export async function submitDeposit(form, actor) {
   const member = await dbGet('members', form.memberDocId);
   if (!member) throw new Error('Member not found');

@@ -1498,3 +1498,10 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 
 /* approval card: member ID chip next to the applicant's name */
 .ac-mid{font-weight:700;color:var(--muted);letter-spacing:.2px}
+
+/* duplicate monthly-installment warning inside the deposit form */
+.dupe-warn{display:flex;gap:8px;align-items:flex-start;margin:2px 0 10px;padding:10px 12px;
+  border-radius:var(--r-sm);background:var(--amber-soft);border:1px solid #fcd34d;color:var(--amber-dark);
+  font-size:12.5px;font-weight:600;line-height:1.5}
+.dupe-warn[hidden]{display:none}
+.dupe-warn .icon{width:16px;height:16px;flex:none;margin-top:1px}

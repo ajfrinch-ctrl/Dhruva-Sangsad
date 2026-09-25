@@ -148,8 +148,16 @@ export const App = {
     const { route, section } = parseHash(location.hash);
     if (!this.session) { this.goAuth(route && AUTH_ROUTES.has(route) ? route : 'login'); return; }
     if (route && AUTH_ROUTES.has(route)) { this.go('home'); return; }
-    const next = (route && PAGES[route] && canRoute(this.session, route)) ? route : 'home';
-    await this.render(next, section, fromHash);
+    const allowed = route && PAGES[route] && canRoute(this.session, route);
+    /* A route this role may not open: render Home AND fix the URL, so the hash,
+       the highlighted nav item and the screen never disagree (replace() keeps a
+       bogus entry out of the history, so Back still behaves). */
+    if (route && PAGES[route] && !allowed) {
+      await this.render('home', '', fromHash);
+      if (location.hash !== '#home') location.replace('#home');
+      return;
+    }
+    await this.render(allowed ? route : 'home', section, fromHash);
   },
 
   async render(route, section = '', fromHash = false) {

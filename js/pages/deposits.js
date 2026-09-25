@@ -13,7 +13,7 @@
  */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, modal, confirmBox,
-  DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, t, tx, auto,
+  monthKey, monthLabel, DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, t, tx, auto,
 } from '../util.js';
 import { icon } from '../icons.js';
 import {
@@ -24,7 +24,7 @@ import { memberPicker } from '../picker.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, submitDeposit, memberSummary, setDepositStatus,
   canModifyDeposit, updateDeposit, deleteDeposit, getMember, submitWithdrawal, setWithdrawalStatus,
-  summaryOpts, withdrawalBalance, WITHDRAWAL_TYPES, withdrawalTypeLabel,
+  summaryOpts, withdrawalBalance, WITHDRAWAL_TYPES, withdrawalTypeLabel, monthlyDepositsInMonth,
 } from '../store.js';
 import { can } from '../auth.js';
 import { App } from '../app.js';
@@ -288,11 +288,13 @@ export async function depositEntry(session, params = {}) {
       <div class="err" data-err="description"></div></div>
     <div class="field"><label>${esc(t('মন্তব্য (ঐচ্ছিক)', 'Comment (optional)'))}</label>
       <textarea name="comment" rows="2" placeholder="${esc(t('ঐচ্ছিক', 'Optional'))}"></textarea></div>
+    <div class="dupe-warn" hidden></div>
     <div class="form-sticky">
       <button class="btn btn-ghost" type="reset">${icon('clear')}<span>${esc(t('মুছুন', 'Clear'))}</span></button>
       <button class="btn btn-primary" type="submit">${icon('save')}<span>${esc(staff ? t('জমা যোগ করুন', 'Add deposit') : t('জমা দাখিল করুন', 'Submit deposit'))}</span></button>
     </div>`;
 
+  let paintDupe = () => {};          // assigned below, before any async paint
   const typeSeg = optionGrid('type', TYPE_OPTS, 'monthly', { onChange: syncForm });
   const methodSeg = optionGrid('method', METHOD_OPTS, 'cash');
   form.querySelector('.js-type').appendChild(typeSeg.root);
@@ -323,7 +325,32 @@ export async function depositEntry(session, params = {}) {
     const need = form.elements.type.value === 'special' || form.elements.type.value === 'other';
     descField.hidden = !need;
     if (!need) form.elements.description.value = '';
+    paintDupe();
   }
+
+  /* ---- duplicate monthly installment guard -------------------------------
+     Entering the same monthly installment twice for one member in the same
+     month is almost always a mistake, so we warn first (and still allow it —
+     catch-up payments are legitimate). Non-monthly deposits are unaffected. */
+  const dupeWarn = form.querySelector('.dupe-warn');
+  paintDupe = async () => {
+    dupeWarn.hidden = true;
+    dupeWarn.replaceChildren();
+    if (form.elements.type.value !== 'monthly') return;
+    const id = staff ? (picker ? picker.value : '') : member.id;
+    /* read the date from the form (not the `dateInp` const) — this runs during the
+       first paint, before that const is initialised */
+    const dv = form.elements.date ? form.elements.date.value : '';
+    if (!id || !dv) return;
+    const rows = await monthlyDepositsInMonth(id, dv);
+    if (!rows.length) return;
+    dupeWarn.hidden = false;
+    dupeWarn.innerHTML = `${icon('warn')}<span>${esc(rows.every(r => r.status === 'approved')
+      ? t(`এই মাসে ইতিমধ্যে ${rows.length}টি কিস্তি জমা হয়েছে (${monthLabel(monthKey(dv))}) — আবার যোগ করলে দ্বিগুণ হিসাব হবে।`,
+          `A monthly installment for ${monthLabel(monthKey(dv))} already exists (${rows.length}) — adding another will double-count.`)
+      : t(`এই মাসে ইতিমধ্যে ${rows.length}টি কিস্তি অপেক্ষমাণ/জমা আছে।`,
+          `A monthly installment for this month already exists (${rows.length}).`))}</span>`;
+  };
 
   const paintInfo = async () => {
     infoHost.replaceChildren();
@@ -359,7 +386,7 @@ export async function depositEntry(session, params = {}) {
 
   const dateInp = form.elements.date;
   const dateFmt = form.querySelector('.dfmt');
-  const paintDate = () => { dateFmt.textContent = dateInp.value ? fmtDate(dateInp.value) : ''; };
+  const paintDate = () => { dateFmt.textContent = dateInp.value ? fmtDate(dateInp.value) : ''; paintDupe(); };
   dateInp.addEventListener('input', paintDate);
   paintDate();
 
@@ -396,6 +423,17 @@ export async function depositEntry(session, params = {}) {
     if ((v.type === 'special' || v.type === 'other') && !String(v.description || '').trim()) { setErr('description', t('বিবরণ আবশ্যক', 'Description is required')); bad = true; }
     if (session.role === 'maker' && v.date !== todayISO()) { setErr('date', t('মেকার শুধুমাত্র আজকের তারিখ ব্যবহার করতে পারেন', 'Makers can only use today’s date')); bad = true; }
     if (bad) { toast(t('ফর্মে ত্রুটি রয়েছে', 'Please fix the highlighted fields'), 'error'); return; }
+
+    if (monthly) {
+      const dupes = await monthlyDepositsInMonth(v.memberDocId, v.date);
+      if (dupes.length) {
+        const ok = await confirmBox(
+          t(`এই মাসে এই সদস্যের জন্য ইতিমধ্যে ${dupes.length}টি কিস্তি জমা আছে। আরও একটি যোগ করবেন?`,
+            `A monthly installment for this member already exists in this month (${dupes.length}). Add another one?`),
+          { okLabel: t('যোগ করুন', 'Add anyway') });
+        if (!ok) return;
+      }
+    }
 
     const b = form.querySelector('button[type=submit]');
     b.disabled = true;
@@ -546,6 +584,7 @@ export async function withdrawalScreen(session) {
       <div class="err" data-err="amount"></div></div>
     <div class="field"><label>${esc(t('বিবরণ (ঐচ্ছিক)', 'Description (optional)'))}</label><input name="description"></div>
     <div class="field"><label>${esc(t('মন্তব্য (ঐচ্ছিক)', 'Comment (optional)'))}</label><textarea name="comment" rows="2"></textarea></div>
+    <div class="dupe-warn" hidden></div>
     <div class="form-sticky">
       <button class="btn btn-ghost" type="reset">${icon('clear')}<span>${esc(t('মুছুন', 'Clear'))}</span></button>
       <button class="btn btn-danger" type="submit">${icon('upload')}<span>${esc(staff ? t('উত্তোলন সংরক্ষণ', 'Save withdrawal') : t('উত্তোলনের আবেদন', 'Request withdrawal'))}</span></button>

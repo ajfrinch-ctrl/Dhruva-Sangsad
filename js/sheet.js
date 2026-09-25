@@ -15,7 +15,8 @@ export function sheetHead(cfg, titleEn, subEn) {
   h.innerHTML = `
     <img class="ps-logo" src="${esc(src)}" alt="" width="192" height="192">
     <div class="ps-title">${esc(String(orgEn).toUpperCase())}</div>
-    ${cfg && cfg.orgNameBn ? `<div class="ps-org">${esc(cfg.orgNameBn)}</div>` : ''}
+    ${/* printed sheets (statement / report PDF) are ALWAYS English: the Bengali
+         organisation name is intentionally NOT emitted here (requirement 11). */''}
     <div class="ps-org">${[
       cfg && cfg.orgAddress ? esc(cfg.orgAddress) : '',
       cfg && cfg.orgPhone ? esc(cfg.orgPhone) : '',
