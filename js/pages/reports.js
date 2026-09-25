@@ -5,7 +5,7 @@
    on its own Statements page (not duplicated here). */
 import {
   el, toast, taka, money, num, fmtDate, todayISO, monthKey, monthLabel,
-  typeLabel, methodLabel, PAY_METHODS, waNumber, t, tx,
+  typeLabel, methodLabel, PAY_METHODS, t, tx,
 } from '../util.js';
 import { page, card, btn, statCard, segChips, sectionHead } from '../ui.js';
 import { memberPicker } from '../picker.js';
@@ -15,22 +15,10 @@ import {
 } from '../store.js';
 import { buildSheet, psTable, sechead } from '../sheet.js';
 import { previewReport, reportFileName } from '../preview.js';
-import { DEFAULT_SETTINGS } from '../store.js';
 
-/* ---------------- WhatsApp due reminder ---------------- */
-let WA_TPL = DEFAULT_SETTINGS.waTemplate;
-settings().then(s => { if (s.waTemplate) WA_TPL = s.waTemplate; }).catch(() => {});
-
-/** Exact Bangla due-reminder text with [Member Name] substituted. */
-export function dueMessage(name, tpl) {
-  return String(tpl || WA_TPL).replace(/\[Member Name\]/g, String(name || '').trim());
-}
-export async function sendWaReminder(member) {
-  const cfg = await settings();
-  WA_TPL = cfg.waTemplate || WA_TPL;
-  const msg = dueMessage(member.nameBn || member.nameEn, WA_TPL);
-  window.open(`https://wa.me/${waNumber(member.whatsapp || member.mobile)}?text=${encodeURIComponent(msg)}`, '_blank');
-}
+/* WhatsApp messages no longer live here: every share goes through js/wa.js,
+   which keeps one message per reason (due · account opening · payment receipt)
+   so a report screen can never send the wrong text. */
 
 /* ---------------- report registry (dropdown entries) ---------------- */
 const REPORTS = [
@@ -50,7 +38,6 @@ export async function pageReports(session, params = {}) {
   const [members, deposits, withdrawals, cfg] = await Promise.all([
     allMembers(), allDeposits(), allWithdrawals(), settings(),
   ]);
-  WA_TPL = cfg.waTemplate || WA_TPL;
   const wrap = page('প্রতিবেদন', 'Reports', 'report');
 
   /* ============ 1 — SUMMARY (always before filters) ============ */
@@ -123,7 +110,7 @@ export async function pageReports(session, params = {}) {
   const gen = btn(t('রিপোর্ট তৈরি করুন', 'Generate Report'), 'report', 'primary', async () => {
     /* fresh data at click time — the same values feed preview AND pdf */
     const [m2, d2, w2, c2] = await Promise.all([allMembers(), allDeposits(), allWithdrawals(), settings()]);
-    ctx.members = m2; ctx.deposits = d2; ctx.withdrawals = w2; ctx.cfg = c2; WA_TPL = c2.waTemplate || WA_TPL;
+    ctx.members = m2; ctx.deposits = d2; ctx.withdrawals = w2; ctx.cfg = c2;
     const meta = REPORTS.find(x => x.id === typeSel.value) || list[0];
     try {
       const out = buildFn ? buildFn() : null;

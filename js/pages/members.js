@@ -11,22 +11,51 @@
  */
 import {
   el, esc, toast, taka, money, num, fmtDate, todayISO, memberIdFromMobile, isValidMobile,
-  isValidEmail, normalizeMobile, debounce, confirmBox, waNumber, modal, alertBox, t, auto,
+  isValidEmail, normalizeMobile, debounce, confirmBox, modal, alertBox, t, auto,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, banner, btn, kv, statCard, sectionHead, listRow, emptyState, statusTag, segChips } from '../ui.js';
 import { memberPicker } from '../picker.js';
 import {
-  allMembers, allDeposits, allWithdrawals, settings, registerMember, updateMember, setMemberStatus,
-  memberSummary, summaryOpts, getMember, DEFAULT_MEMBER_PASSWORD, withdrawalBalance, deleteRejectedMember,
+  allMembers, allDeposits, allWithdrawals, allUsers, allNotifications, settings, registerMember, updateMember,
+  setMemberStatus, markNotificationRead, memberSummary, summaryOpts, getMember, DEFAULT_MEMBER_PASSWORD,
+  withdrawalBalance, deleteRejectedMember,
 } from '../store.js';
 import { can } from '../auth.js';
 import { App } from '../app.js';
 import { rejectReason } from './deposits.js';
-/* WhatsApp due-reminder text — ONE implementation, kept by the report module. */
-import { dueMessage } from './reports.js';
+/* WhatsApp sharing — ONE module, one message per reason (due · account · receipt). */
+import { shareChooser, offerAccountShare, lastApprovedDepositOf, openWhatsApp, dueMessage, accountMessage } from '../wa.js';
 
 const isStaff = session => session.role === 'admin' || session.role === 'maker';
+
+/**
+ * Ask once, then send the account-opening message (member ID + login details).
+ * The default password is only included while it is still valid — a member who
+ * already signed in and changed it never gets a password in the message.
+ */
+export async function shareAccountInfo(session, member, cfg) {
+  if (!can(session, 'whatsapp')) return false;
+  const users = await allUsers();
+  const u = users.find(x => x.memberDocId === member.id);
+  return offerAccountShare(member, cfg, {
+    login: (u && u.username) || member.mobile || '',
+    defaultPassword: u && u.mustChangePassword ? DEFAULT_MEMBER_PASSWORD : '',
+  });
+}
+
+/** The registration notice said “awaiting approval”; a member entered by staff
+ *  is approved at once, so that notice is marked read — the admin's bell never
+ *  claims something of theirs is pending. */
+async function clearPendingNotice(session, memberId) {
+  try {
+    const hit = (await allNotifications()).find(n => n.kind === 'register' && String(n.body || '').includes(memberId));
+    if (hit) {
+      await markNotificationRead(hit.id, session.id);
+      if (App.refreshNotifBadge) App.refreshNotifBadge();
+    }
+  } catch { /* the bell simply keeps the notice if anything goes wrong */ }
+}
 
 /* ============================ module entry ============================ */
 
@@ -173,13 +202,15 @@ async function deleteRejected(session, m, after) {
 export async function viewMember(session, member, ctx = {}) {
   const m = typeof member === 'string' ? await getMember(member) : member;
   if (!m) { toast(t('সদস্য পাওয়া যায়নি', 'Member not found'), 'error'); return; }
-  const [deposits, withdrawals, cfg] = [
+  const [deposits, withdrawals, cfg, users] = [
     ctx.deposits || await allDeposits(),
     ctx.withdrawals || await allWithdrawals(),
     ctx.cfg || await settings(),
+    await allUsers(),
   ];
   const s = memberSummary(m, deposits, summaryOpts(cfg, { withdrawals }));
   const bal = withdrawalBalance(m, deposits, withdrawals);
+  const login = (users.find(x => x.memberDocId === m.id) || {});
   const body = el('div', { class: 'mdetail' });
   body.innerHTML = `
     <div class="md-head">
@@ -219,12 +250,19 @@ export async function viewMember(session, member, ctx = {}) {
     onClick: () => { App.go('statements', { memberDocId: m.id }); return false; },
   });
   if (can(session, 'whatsapp')) {
+    /* ONE button, three reasons — the message matches the reason (due / account
+       opening / payment receipt) instead of always sending the due text.
+       Everything the sheet needs is already loaded, so the link opens inside
+       the tap (never blocked by the browser). */
+    const waData = {
+      member: m, cfg, summary: s,
+      lastDeposit: lastApprovedDepositOf(deposits, m),
+      login: login.username || m.mobile || '',
+      defaultPassword: login.mustChangePassword ? DEFAULT_MEMBER_PASSWORD : '',
+    };
     acts.push({
       label: t('WhatsApp', 'WhatsApp'), value: 'wa', kind: 'ghost',
-      onClick: async () => {
-        const c = await settings();
-        window.open(`https://wa.me/${waNumber(m.whatsapp || m.mobile)}?text=${encodeURIComponent(dueMessage(m.nameBn || m.nameEn, c.waTemplate))}`, '_blank');
-      },
+      onClick: () => { shareChooser(waData); return false; },
     });
   }
   acts.push({ label: t('বন্ধ', 'Close'), value: null, kind: 'ghost' });
@@ -250,8 +288,8 @@ export async function newMemberScreen(session) {
   const wrap = page(t('নতুন সদস্য', 'New member'), 'Add member', 'plus');
 
   wrap.appendChild(banner('info', t(
-    'সদস্য নিজেও লগইন পেজ থেকে নিবন্ধন করতে পারেন। এখানে আপনি সদস্যের পক্ষে নিবন্ধন করছেন — নিবন্ধনের পর স্ট্যাটাস <b>অনুমোদনের অপেক্ষায়</b> থাকবে।',
-    'Members can also register from the login page. Here you register on their behalf — the status stays <b>pending approval</b> afterwards.',
+    'সদস্য নিজেও লগইন পেজ থেকে নিবন্ধন করতে পারেন। এখানে আপনি সদস্যের পক্ষে নিবন্ধন করছেন — আপনার যোগ করা সদস্য <b>সাথে সাথে সক্রিয়</b> হবে, কোনো অনুমোদনের অপেক্ষায় থাকবে না।',
+    'Members can also register from the login page. Here you register on their behalf — a member you add is <b>active immediately</b>, nothing stays pending.',
   )));
 
   let step = 0;
@@ -367,15 +405,29 @@ export async function newMemberScreen(session) {
     const b = submitBtn; b.disabled = true;
     try {
       const m = await registerMember({ ...v, password: '' }, { defaultPassword: true });
+      /* Staff enter the member personally, so the membership is approved right
+         away — exactly like a staff-entered deposit. Nothing an Admin/Maker
+         creates waits in the approval queue. (A member who registers from the
+         login page still applies for approval.) */
+      const saved = await setMemberStatus(m.id, 'active', session);
+      await clearPendingNotice(session, m.memberId);
       await modal({
         title: t('নিবন্ধন সফল', 'Registration successful'), width: 400,
         body: `<div class="success-pop"><div class="tick">${icon('check')}</div></div>
-          <div class="kv"><div>${t('সদস্য আইডি', 'Member ID')}</div><div><b>${esc(m.memberId)}</b></div>
-          <div>${t('নাম', 'Name')}</div><div>${esc(m.nameBn)}</div>
-          <div>${t('মোবাইল', 'Mobile')}</div><div>${esc(m.mobile)}</div>
-          <div>${t('স্ট্যাটাস', 'Status')}</div><div>${statusTag(m.status)}</div></div>
-          <div class="banner info">${icon('key')}<span>${t('লগইন', 'Login')}: <b>${esc(m.mobile)}</b> · ${t('ডিফল্ট পাসওয়ার্ড', 'default password')} <b>${esc(DEFAULT_MEMBER_PASSWORD)}</b></div>`,
-        actions: [{ label: t('তালিকায় ফিরুন', 'Back to list'), value: true, kind: 'primary' }],
+          <div class="kv"><div>${t('সদস্য আইডি', 'Member ID')}</div><div><b>${esc(saved.memberId)}</b></div>
+          <div>${t('নাম', 'Name')}</div><div>${esc(saved.nameBn)}</div>
+          <div>${t('মোবাইল', 'Mobile')}</div><div>${esc(saved.mobile)}</div>
+          <div>${t('স্ট্যাটাস', 'Status')}</div><div>${statusTag(saved.status)}</div></div>
+          <div class="banner info">${icon('key')}<span>${t('লগইন', 'Login')}: <b>${esc(saved.mobile)}</b> · ${t('ডিফল্ট পাসওয়ার্ড', 'default password')} <b>${esc(DEFAULT_MEMBER_PASSWORD)}</b></div>`,
+        actions: [
+          {
+            label: t('WhatsApp-এ লগইন তথ্য', 'Send login details'),
+            kind: 'wa', value: 'wa',
+            onClick: () => openWhatsApp(saved.whatsapp || saved.mobile,
+              accountMessage(saved, cfg, { login: saved.mobile, defaultPassword: DEFAULT_MEMBER_PASSWORD })),
+          },
+          { label: t('তালিকায় ফিরুন', 'Back to list'), value: true, kind: 'primary' },
+        ],
       });
       App.refresh();
       App.go('members');
@@ -485,7 +537,10 @@ export function memberEditor(session, m, deposits, withdrawals, cfg, onSaved) {
       acts.appendChild(btn(t('অনুমোদন', 'Approve'), 'approve', 'soft', async () => {
         if (!(await confirmBox(t(`${m.nameBn} (${m.memberId}) — সদস্যপদ অনুমোদন করবেন?`, `Approve ${m.nameBn} (${m.memberId})?`), { okLabel: t('অনুমোদন', 'Approve') }))) return;
         await setMemberStatus(m.id, 'active', session);
-        toast(t('সদস্য অনুমোদিত', 'Member approved'), 'success'); onSaved && onSaved();
+        toast(t('সদস্য অনুমোদিত', 'Member approved'), 'success');
+        /* account opened → offer the account-opening message (not a due notice) */
+        await shareAccountInfo(session, { ...m, status: 'active' }, cfg);
+        onSaved && onSaved();
       }));
       acts.appendChild(btn(t('প্রত্যাখ্যান', 'Reject'), 'reject', 'softred', async () => {
         const r = await rejectReason(t('সদস্য প্রত্যাখ্যানের কারণ', 'Member rejection reason'));
@@ -515,8 +570,10 @@ export function memberEditor(session, m, deposits, withdrawals, cfg, onSaved) {
       }));
     }
     if (s.due > 0 && can(session, 'whatsapp')) {
+      /* shown only when there IS a due — and it sends exactly the due text
+         (the organisation's own template from Settings) */
       acts.appendChild(btn(t('WhatsApp স্মরণ', 'WhatsApp reminder'), 'whatsapp', 'wa', () => {
-        window.open(`https://wa.me/${waNumber(m.whatsapp || m.mobile)}?text=${encodeURIComponent(dueMessage(m.nameBn || m.nameEn, cfg.waTemplate))}`, '_blank');
+        openWhatsApp(m.whatsapp || m.mobile, dueMessage(m, cfg, s));
       }));
     }
     f.appendChild(acts);

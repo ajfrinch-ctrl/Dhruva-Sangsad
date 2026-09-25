@@ -476,9 +476,9 @@ export function closeAllSheets() {
   [...openSheets].forEach(h => { try { h.close(); } catch { /* already gone */ } });
 }
 
-export function bottomSheet({ title, items = [], body = null, onClose = null } = {}) {
-  const back = el('div', { class: 'sheet-backdrop' });
-  const sheet = el('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' });
+export function bottomSheet({ title, items = [], body = null, onClose = null, zIndex = 0 } = {}) {
+  const back = el('div', { class: 'sheet-backdrop', ...(zIndex ? { style: `z-index:${zIndex}` } : {}) });
+  const sheet = el('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', ...(zIndex ? { style: `z-index:${zIndex + 1}` } : {}) });
   sheet.appendChild(el('div', { class: 'sheet-grab' }));
   if (title) sheet.appendChild(el('div', { class: 'sheet-title', text: tx(title) }));
   if (body) sheet.appendChild(body);

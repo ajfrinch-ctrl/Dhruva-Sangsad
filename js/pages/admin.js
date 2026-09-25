@@ -21,8 +21,10 @@ import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
 import { formModal } from './account.js';
-import { rejectReason, viewMember } from './members.js';
+import { rejectReason, viewMember, shareAccountInfo } from './members.js';
 import { downloadExcel } from '../pdf.js';
+/* WhatsApp sharing — the receipt that belongs to an approved payment. */
+import { shareDepositReceipt } from '../wa.js';
 
 /* ==================== Backup & Restore (Admin) ==================== */
 export async function pageBackup(session) {
@@ -143,7 +145,11 @@ async function pendingMemberItems(session, deposits, cfg) {
         {
           label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
             if (!(await confirmBox(t(`${m.nameBn} (${m.memberId}) — সদস্যপদ অনুমোদন করবেন?`, `Approve membership for ${m.nameBn} (${m.memberId})?`), { okLabel: t('অনুমোদন', 'Approve') }))) return;
-            await setMemberStatus(m.id, 'active', session); toast(t('সদস্য অনুমোদিত', 'Member approved'), 'success'); App.refresh();
+            await setMemberStatus(m.id, 'active', session);
+            toast(t('সদস্য অনুমোদিত', 'Member approved'), 'success');
+            /* account opened → offer the account-opening message (never a due notice) */
+            await shareAccountInfo(session, { ...m, status: 'active' }, cfg);
+            App.refresh();
           },
         },
         {
@@ -180,7 +186,11 @@ async function pendingDepositItems(session) {
         {
           label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
             if (!(await confirmBox(t(`${d.memberName} — ${taka(d.amount)} (${fmtDate(d.date)}) অনুমোদন করবেন?`, `Approve ${taka(d.amount)} from ${d.memberName} (${fmtDate(d.date)})?`), { okLabel: t('অনুমোদন', 'Approve') }))) return;
-            await setDepositStatus(d.id, 'approved', session); toast(t('জমা অনুমোদিত', 'Deposit approved'), 'success'); App.refresh();
+            await setDepositStatus(d.id, 'approved', session);
+            toast(t('জমা অনুমোদিত', 'Deposit approved'), 'success');
+            /* the payment is now received → offer its receipt, never the due text */
+            await shareDepositReceipt({ ...d, status: 'approved' });
+            App.refresh();
           },
         },
         {

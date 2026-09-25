@@ -20,20 +20,24 @@ import { App } from '../app.js';
 
 /* ---------------- shared building blocks ---------------- */
 
-/** Time-based greeting: সুপ্রভাত 05–11:59 · শুভ অপরাহ্ণ 12–16:59 · শুভ সন্ধ্যা 17–19:59 · শুভ রাত্রি 20–04:59 */
+/** Time-based greeting: Good morning 05–11:59 · Good afternoon 12–16:59 ·
+ *  Good evening 17–23:59 · Good night 00–04:59. (English keeps “Good night”
+ *  for the small hours only — at 8 PM it is a greeting, not a farewell.) */
 export function greetingLine() {
   const h = new Date().getHours();
   return h >= 5 && h < 12 ? t('সুপ্রভাত', 'Good morning')
     : h >= 12 && h < 17 ? t('শুভ অপরাহ্ণ', 'Good afternoon')
-    : h >= 17 && h < 20 ? t('শুভ সন্ধ্যা', 'Good evening')
+    : h >= 17 ? t('শুভ সন্ধ্যা', 'Good evening')
     : t('শুভ রাত্রি', 'Good night');
 }
 
-/** Welcome message — always the FIRST thing on the dashboard. */
+/** Welcome message — always the FIRST thing on the dashboard.
+ *  Line 1: greeting + name · Line 2: member ID + organisation · then date/time.
+ *  “Welcome” is never repeated twice (it used to sit in both lines). */
 function greetBox(name, sub) {
   const box = el('div', { class: 'greet' });
-  box.innerHTML = `<div class="greet-hi">${esc(t('স্বাগতম', 'Welcome'))}${name ? `, ${esc(name)}` : ''}</div>
-    <div class="greet-sub">${esc(greetingLine())}${sub ? ` · ${esc(sub)}` : ''}</div>
+  box.innerHTML = `<div class="greet-hi">${esc(greetingLine())}${name ? `, ${esc(name)}` : ''}</div>
+    ${sub ? `<div class="greet-sub">${esc(sub)}</div>` : ''}
     <div class="greet-date">${icon('calendar')}${esc(fmtDate(todayISO()))} · ${esc(fmtTime(new Date().toISOString()))}</div>`;
   return box;
 }
@@ -69,7 +73,7 @@ async function memberHome(session, params) {
     .reduce((a, d) => a + num(d.amount), 0);
 
   /* 1 — greeting */
-  wrap.appendChild(greetBox(m.nameBn || m.nameEn, t(`ধ্রুব সংসদে স্বাগত — সদস্য আইডি ${m.memberId}`, `Welcome to ${cfg.orgNameEn || 'Dhruva Sangsad'} — Member ID ${m.memberId}`)));
+  wrap.appendChild(greetBox(m.nameBn || m.nameEn, `Member ID ${m.memberId} · ${cfg.orgNameEn || 'Dhruvo Sangsad'}`));
 
   /* 2 — ONE full-width primary action */
   wrap.appendChild(submitDeposit());
@@ -119,7 +123,7 @@ async function staffHome(session, params) {
   const target = num(cfg.monthlyTarget) || active.reduce((a, m) => a + num(m.installment), 0);
 
   /* 1 — greeting */
-  wrap.appendChild(greetBox(session.displayName || session.username, t(`আজ ${fmtDate(todayISO())} — সংগঠনের সারসংক্ষেপ`, `Overview for ${fmtDate(todayISO())}`)));
+  wrap.appendChild(greetBox(session.displayName || session.username, `${session.role === 'admin' ? t('অ্যাডমিন', 'Admin') : 'Maker'} · ${cfg.orgNameEn || 'Dhruvo Sangsad'}`));
 
   /* 2 — the same single primary action as the member dashboard */
   wrap.appendChild(submitDeposit());

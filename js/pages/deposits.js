@@ -29,6 +29,8 @@ import {
 } from '../store.js';
 import { can } from '../auth.js';
 import { App } from '../app.js';
+/* WhatsApp sharing — ONE module, one message per reason (due · account · receipt). */
+import { openWhatsApp, paymentMessage, shareDepositReceipt } from '../wa.js';
 
 /* ---- icon vocabulary for the option grids ---- */
 const TYPE_ICON = { monthly: 'wallet', advance: 'advance', special: 'star', other: 'plus' };
@@ -167,6 +169,12 @@ function depositActions(session, d, staff) {
   const perm = canModifyDeposit(d, session);
   if (staff && perm.ok) {
     acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => editDeposit(session, d), { size: 'xs' }));
+  }
+  /* a recorded payment can be re-sent to the member as a receipt */
+  if (staff && d.status !== 'rejected' && can(session, 'whatsapp')) {
+    acts.appendChild(btn(t('রিসিট পাঠান', 'Send receipt'), 'whatsapp', 'wa', async () => {
+      await shareDepositReceipt(d);
+    }, { size: 'xs' }));
   }
   if (acts.children.length) return acts;
   return null;
@@ -376,7 +384,13 @@ export async function depositEntry(session, params = {}) {
     b.disabled = true;
     try {
       const rec = await submitDeposit({ ...v, amount: monthly ? currentInstallment : v.amount }, session);
-      await depositSuccess(rec);
+      /* the receipt needs the member and the fresh totals (read-only lookups) */
+      const [savedMember, freshDeposits] = await Promise.all([getMember(rec.memberDocId), allDeposits()]);
+      await depositSuccess(rec, {
+        member: savedMember,
+        summary: savedMember ? memberSummary(savedMember, freshDeposits, summaryOpts(cfg)) : null,
+        cfg, share: staff,
+      });
       form.reset();
     } catch (err) { toast(err.message, 'error'); }
     finally { b.disabled = false; }
@@ -384,7 +398,15 @@ export async function depositEntry(session, params = {}) {
   return wrap;
 }
 
-function depositSuccess(rec) {
+function depositSuccess(rec, { member = null, summary = null, cfg = null, share = false } = {}) {
+  /* “payment received” → the receipt message for THIS payment (amount, txn id,
+     date, method and the remaining due) — never the due reminder. */
+  const receipt = share && cfg && member
+    ? [{
+        label: t('WhatsApp-এ রিসিট', 'Send receipt'), kind: 'wa', value: 'wa',
+        onClick: () => openWhatsApp(member.whatsapp || member.mobile, paymentMessage(rec, member, cfg, { summary })),
+      }]
+    : [];
   return modal({
     title: t('জমা সফল হয়েছে', 'Deposit submitted'), width: 400,
     body: `<div class="success-pop"><div class="tick">${icon('check')}</div></div>
@@ -401,7 +423,7 @@ function depositSuccess(rec) {
         rec.status === 'approved'
           ? esc(t('জমা সংরক্ষিত ও অনুমোদিত হয়েছে।', 'The deposit was saved and approved.'))
           : esc(t('জমা দাখিল হয়েছে। অনুমোদনের পর হিসাবে যুক্ত হবে।', 'Submitted. It will be added to the account once approved.'))}</span></div>`,
-    actions: [{ label: t('ঠিক আছে', 'OK'), value: true, kind: 'primary' }],
+    actions: [...receipt, { label: t('ঠিক আছে', 'OK'), value: true, kind: 'primary' }],
   });
 }
 
