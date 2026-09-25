@@ -1,14 +1,28 @@
-/* Shared page building blocks */
-import { el, esc, money, taka, fmtDate, STATUS_BN, STATUS_EN, t, tx } from './util.js';
+/* Shared UI kit — every screen is built from these blocks, so spacing, colour
+   and behaviour stay identical across the app (and a fix here fixes every
+   screen). All labels go through t()/auto() so a label can never mix
+   languages. */
+import { el, esc, money, taka, fmtDate, STATUS_BN, STATUS_EN, t, tx, auto } from './util.js';
 import { icon } from './icons.js';
+
+/* ================= page scaffolding ================= */
 
 export function page(titleBn, titleEn, iconName, actions = []) {
   const wrap = el('div');
   const head = el('div', { class: 'page-head' });
-  head.innerHTML = `<h1>${icon(iconName)} ${esc(t(titleBn, titleEn))}</h1><span class="spacer"></span>`;
+  head.innerHTML = `<h1>${icon(iconName)} <span>${esc(t(titleBn, titleEn))}</span></h1><span class="spacer"></span>`;
   actions.forEach(a => head.appendChild(a));
   wrap.appendChild(head);
   return wrap;
+}
+
+export function sectionHead(titleBn, titleEn, actionLabel = '', onAction = null) {
+  const head = el('div', { class: 'sec-head' });
+  head.innerHTML = `<h2>${esc(t(titleBn, titleEn))}</h2><span class="spacer"></span>`;
+  if (actionLabel && onAction) {
+    head.appendChild(el('button', { type: 'button', class: 'link-btn', text: tx(actionLabel), onclick: onAction }));
+  }
+  return head;
 }
 
 export function card(titleBn, titleEn, bodyNode, headExtras = []) {
@@ -26,12 +40,183 @@ export function card(titleBn, titleEn, bodyNode, headExtras = []) {
   return c;
 }
 
+/* ================= stats ================= */
+
 export function statCard({ label, value, sub, tone = '', ic = 'money' }) {
-  return el('div', { class: `stat ${tone}`, html: `
-    <div class="lbl">${icon(ic)} ${esc(tx(label))}</div>
-    <div class="val">${value}</div>
-    ${sub ? `<div class="sub">${esc(tx(sub))}</div>` : ''}` });
+  return el('div', {
+    class: `stat ${tone}`,
+    html: `<div class="lbl">${icon(ic)} <span>${esc(tx(label))}</span></div>
+      <div class="val">${value}</div>
+      ${sub ? `<div class="sub">${esc(tx(sub))}</div>` : ''}`,
+  });
 }
+
+/** Big single-figure hero (dashboard balance / total). */
+export function heroCard({ label, value, sub = '', target = 0, achieved = 0, foot = '' }) {
+  const pct = target > 0 ? Math.min(100, Math.round((achieved / target) * 100)) : 0;
+  const box = el('div', { class: 'hero-card' });
+  box.innerHTML = `<div class="hc-lbl"><span>${esc(tx(label))}</span>${target > 0 ? `<span>${esc(tx(t('লক্ষ্য', 'Target')))} ${esc(money(target))}</span>` : ''}</div>
+    <div class="hc-val num">${value}</div>
+    ${sub ? `<div class="hc-sub">${esc(tx(sub))}</div>` : ''}
+    ${target > 0 ? `<div class="hc-bar"><i style="width:${pct}%"></i></div>
+      <div class="hc-foot"><span>${esc(money(achieved))}</span><span>${pct}%</span></div>` : ''}
+    ${foot ? `<div class="hc-foot"><span>${esc(foot)}</span></div>` : ''}`;
+  return box;
+}
+
+/* ================= full-width primary actions =================
+   The deposit module (and the dashboard's Submit Deposit) intentionally use
+   full-width rows: they are the main action of their screen, so they are never
+   squeezed into a two-column grid or reduced to a floating button. */
+
+export function actionCard({ label, sub = '', ic = 'plus', tone = 'primary', badge = 0, onClick = null, href = '' }) {
+  const tag = href ? 'a' : 'button';
+  const node = el(tag, {
+    class: `action-card ${tone}`,
+    ...(href ? { href } : { type: 'button' }),
+  });
+  node.innerHTML = `<span class="ac-ic">${icon(ic)}</span>
+    <span class="ac-tx"><span class="ac-t">${esc(tx(label))}</span>${sub ? `<span class="ac-s">${esc(tx(sub))}</span>` : ''}</span>
+    ${badge > 0 ? `<span class="pill">${badge > 99 ? '99+' : badge}</span>` : ''}
+    ${href ? '' : `<span class="ac-go">${icon('chevron')}</span>`}`;
+  if (onClick) node.addEventListener('click', ev => { if (href) ev.preventDefault(); onClick(ev); });
+  return node;
+}
+
+/* ================= generic list rows ================= */
+
+export function listRow({ ic = 'info', tone = '', title = '', sub = '', meta = '', right = null, onClick = null, tag = 'div' }) {
+  const row = el(tag, { class: `row ${tone}` });
+  row.innerHTML = `<span class="rw-ic ${tone}">${icon(ic)}</span>
+    <span class="rw-bd"><span class="rw-t">${title}</span>${sub ? `<span class="rw-s">${sub}</span>` : ''}${meta ? `<span class="rw-m">${meta}</span>` : ''}</span>`;
+  if (right) row.appendChild(right);
+  if (onClick) {
+    const btn = el('button', { type: 'button', class: 'row-hit', 'aria-label': tx(title).replace(/<[^>]*>/g, '') });
+    row.appendChild(btn);
+    btn.addEventListener('click', onClick);
+    row.classList.add('tappable');
+  }
+  return row;
+}
+
+/** Two numbers side by side inside a row (deposit / payment / balance). */
+export function amountCell(v, kind = '') {
+  const cls = kind === 'in' ? 'adv-amt' : kind === 'out' ? 'due-amt' : '';
+  const txt = (v === '' || v === null || v === undefined || Number(v) === 0) ? '—' : money(v);
+  return `<b class="${cls} num">${esc(txt === '—' ? '—' : txt)}</b>`;
+}
+
+/* ================= tables ================= */
+
+export function tableWrap(headers, rows, { footer = null, empty = '', emptyIcon = 'info' } = {}) {
+  const wrap = el('div', { class: 'tbl-wrap' });
+  const labels = headers.map(h => tx(h.label !== undefined ? h.label : h));
+  if (!rows.length) {
+    wrap.appendChild(emptyState({ ic: emptyIcon, title: empty || t('কোনো তথ্য পাওয়া যায়নি', 'No records found'), compact: true }));
+    return wrap;
+  }
+  const tbl = el('table', { class: 'tbl' });
+  const thead = el('thead');
+  const tr = el('tr');
+  headers.forEach((h, i) => tr.appendChild(el('th', { class: h.cls || '', text: labels[i] })));
+  thead.appendChild(tr); tbl.appendChild(thead);
+  const tb = el('tbody');
+  rows.forEach(r => {
+    const row = el('tr');
+    r.forEach((c, i) => {
+      const label = labels[i] || '';
+      if (c && c.nodeType) { const td = el('td', { dataset: { label } }); td.appendChild(c); row.appendChild(td); }
+      else if (c && typeof c === 'object') {
+        const td = el('td', { class: c.cls || '', dataset: { label }, colspan: c.span || 1 });
+        if (c.node) td.appendChild(c.node); else td.innerHTML = c.html !== undefined ? c.html : esc(c.text ?? '');
+        row.appendChild(td);
+      } else row.appendChild(el('td', { dataset: { label }, html: c === null || c === undefined ? '' : String(c) }));
+    });
+    tb.appendChild(row);
+  });
+  tbl.appendChild(tb);
+  if (footer && footer.length) {
+    const tf = el('tfoot'); const fr = el('tr');
+    footer.forEach(c => {
+      if (c && typeof c === 'object' && !c.nodeType) fr.appendChild(el('td', { class: c.cls || '', html: c.html !== undefined ? c.html : esc(c.text ?? ''), colspan: c.span || 1 }));
+      else fr.appendChild(el('td', { html: String(c ?? '') }));
+    });
+    tf.appendChild(fr); tbl.appendChild(tf);
+  }
+  wrap.appendChild(tbl);
+  return wrap;
+}
+
+/* ================= statements =================
+   The statement is a chronological account activity table: the DATE comes
+   first, there is no serial number and no transaction-id column. Deposit and
+   Payment are separate columns and Balance is the running account balance, so
+   the sheet is readable exactly as a passbook. */
+
+export function statementTable(rows, { openingBalance = 0, footer = true } = {}) {
+  const head = [
+    { label: t('তারিখ', 'Date'), cls: 'nowrap' },
+    { label: t('বিবরণ', 'Description') },
+    { label: t('জমা', 'Deposit'), cls: 'num' },
+    { label: t('পরিশোধ', 'Payment'), cls: 'num' },
+    { label: t('ব্যালেন্স', 'Balance'), cls: 'num' },
+  ];
+  const body = rows.map(r => [
+    esc(fmtDate(r.date)),
+    esc(r.description || '—'),
+    amountCell(r.deposit, 'in'),
+    amountCell(r.payment, 'out'),
+    { html: `<b class="num">${esc(money(r.balance))}</b>`, cls: 'num' },
+  ]);
+  const totals = rows.reduce((a, r) => ({
+    deposit: a.deposit + (Number(r.deposit) || 0),
+    payment: a.payment + (Number(r.payment) || 0),
+  }), { deposit: 0, payment: 0 });
+  const foot = footer && rows.length ? [
+    { html: `<b>${esc(t('সর্বমোট', 'Total'))}</b>` }, { html: '' },
+    { html: `<b class="num">${esc(money(totals.deposit))}</b>`, cls: 'num' },
+    { html: `<b class="num">${esc(money(totals.payment))}</b>`, cls: 'num' },
+    { html: `<b class="num">${esc(money(rows.length ? rows[rows.length - 1].balance : openingBalance))}</b>`, cls: 'num' },
+  ] : null;
+  return tableWrap(head, body, {
+    footer: foot,
+    empty: t('এই সময়ে কোনো লেনদেন নেই', 'No transactions in this period'),
+    emptyIcon: 'receipt',
+  });
+}
+
+/* ================= tags / banners / kv ================= */
+
+export function statusTag(status) {
+  const cls = (status === 'active' || status === 'approved') ? 'approved'
+    : status === 'pending' ? 'pending'
+    : status === 'rejected' ? 'rejected' : 'gray';
+  return `<span class="tag ${cls}">${esc(t(STATUS_BN[status], STATUS_EN[status]) || status || '')}</span>`;
+}
+
+export function banner(kind, html) {
+  const ic = kind === 'err' ? 'warn' : kind === 'warn' ? 'warn' : kind === 'ok' ? 'check' : 'info';
+  return el('div', { class: `banner ${kind}`, html: `${icon(ic)}<span>${html}</span>` });
+}
+
+export function kv(pairs) {
+  const k = el('div', { class: 'kv' });
+  pairs.forEach(([a, b]) => {
+    k.appendChild(el('div', { text: tx(a) }));
+    k.appendChild(el('div', { html: (b === null || b === undefined || b === '') ? '<span class="faint">—</span>' : String(b) }));
+  });
+  return k;
+}
+
+export function tabs(items, active, onPick) {
+  const box = el('div', { class: 'tabs' });
+  items.forEach(i => box.appendChild(el('button', {
+    type: 'button', class: i.id === active ? 'on' : '', text: tx(i.label), onclick: () => onPick(i.id),
+  })));
+  return box;
+}
+
+/* ================= fields ================= */
 
 export function field(label, inputNode, { required = false, hint = '', name = '' } = {}) {
   const f = el('div', { class: 'field' });
@@ -41,175 +226,70 @@ export function field(label, inputNode, { required = false, hint = '', name = ''
   f.appendChild(el('div', { class: 'err', dataset: { err: name || '' } }));
   return f;
 }
-
 export function input(attrs = {}) { return el('input', attrs); }
 export function select(options, attrs = {}) {
   const s = el('select', attrs);
   options.forEach(o => s.appendChild(el('option', { value: o.value, ...(o.selected ? { selected: true } : {}) }, [o.label])));
   return s;
 }
-
 export function btn(label, iconName, kind = 'ghost', onclick, extra = {}) {
   return el('button', {
-    type: 'button', class: `btn btn-${kind}${extra.size === 'xs' ? ' btn-xs' : ''}${extra.block ? ' btn-block' : ''}`,
+    type: 'button',
+    class: `btn btn-${kind}${extra.size === 'xs' ? ' btn-xs' : ''}${extra.block ? ' btn-block' : ''}`,
     html: `${iconName ? icon(iconName) : ''}<span>${esc(tx(label))}</span>`, onclick, ...(extra.attrs || {}),
   });
 }
 
-export function tableWrap(headers, rows, { footer = null, empty, emptyIcon = 'info' } = {}) {
-  empty = empty || t('কোনো তথ্য পাওয়া যায়নি', 'No records found');
-  const wrap = el('div', { class: 'tbl-wrap' });
-  if (!rows.length) {
-    wrap.appendChild(emptyState({ ic: emptyIcon, title: empty, compact: true }));
-    return wrap;
-  }
-  const tbl = el('table', { class: 'tbl' });
-  const thead = el('thead');
-  const tr = el('tr');
-  headers.forEach(h => tr.appendChild(el('th', { class: h.cls || '', text: tx(h.label !== undefined ? h.label : h) })));
-  thead.appendChild(tr); tbl.appendChild(thead);
-  /* Column labels are kept on every cell so narrow screens can turn each row
-     into a card (see the "responsive card table" block in app.css). */
-  const labels = headers.map(h => tx(h.label !== undefined ? h.label : h));
-  const tb = el('tbody');
-  rows.forEach(r => {
-    const row = el('tr');
-    r.forEach((c, i) => {
-      const label = labels[i] || '';
-      if (c && c.nodeType) { const td = el('td', { dataset: { label } }); td.appendChild(c); row.appendChild(td); }
-      else if (c && typeof c === 'object') {
-        const td = el('td', { class: c.cls || '', dataset: { label } });
-        if (c.node) td.appendChild(c.node); else td.innerHTML = c.html !== undefined ? c.html : esc(c.text ?? '');
-        row.appendChild(td);
-      } else row.appendChild(el('td', { dataset: { label }, html: c === null || c === undefined ? '' : String(c) }));
-    });
-    tb.appendChild(row);
-  });
-  tbl.appendChild(tb);
-  if (footer) {
-    const tf = el('tfoot'); const fr = el('tr');
-    footer.forEach(c => {
-      if (c && typeof c === 'object' && !c.nodeType) fr.appendChild(el('td', { class: c.cls || '', html: c.html !== undefined ? c.html : esc(c.text ?? '') }));
-      else fr.appendChild(el('td', { html: String(c ?? '') }));
-    });
-    tf.appendChild(fr); tbl.appendChild(tf);
-  }
-  wrap.appendChild(tbl);
-  return wrap;
-}
+/* ================= states ================= */
 
-export function statusTag(status) {
-  const cls = status === 'active' || status === 'approved' ? 'approved' : status === 'pending' ? 'pending' : status === 'rejected' ? 'rejected' : 'gray';
-  return `<span class="tag ${cls}">${esc(t(STATUS_BN[status], STATUS_EN[status]) || status)}</span>`;
-}
-export function statusTagBn(status) { return statusTag(status); }
-
-export function banner(kind, html) { return el('div', { class: `banner ${kind}`, html: `${icon(kind === 'err' ? 'warn' : kind === 'warn' ? 'warn' : kind === 'ok' ? 'check' : 'info')}<span>${html}</span>` }); }
-
-export function kv(pairs) {
-  const k = el('div', { class: 'kv' });
-  pairs.forEach(([a, b]) => { k.appendChild(el('div', { text: tx(a) })); k.appendChild(el('div', { html: b === null || b === undefined || b === '' ? '<span class="faint">—</span>' : String(b) })); });
-  return k;
-}
-
-export function tabs(items, active, onPick) {
-  const t = el('div', { class: 'tabs' });
-  items.forEach(i => t.appendChild(el('button', {
-    type: 'button', class: i.id === active ? 'on' : '', text: tx(i.label), onclick: () => onPick(i.id),
-  })));
-  return t;
-}
-
-export function money2(v) { return money(v); }
-export { taka, fmtDate };
-
-/* ------------------------------------------------------------------ *
- * States — skeleton · empty · error · offline  (mobile-first)
- * ------------------------------------------------------------------ */
-
-/**
- * Loading placeholder. `rows` = list rows, `cards` = stat cards.
- * Shows a shimmering skeleton instead of a blank screen.
- */
-export function skeleton({ rows = 4, cards = 0, title = '' } = {}) {
-  const wrap = el('div', { class: 'sk-wrap' });
-  if (title) wrap.appendChild(el('div', { class: 'sk-line sk-title', style: 'width:120px;margin-bottom:12px' }));
+export function skeleton({ rows = 3, cards = 0, title = '' } = {}) {
+  const wrap = el('div', { class: 'page-skeleton' });
+  if (title) wrap.appendChild(el('div', { class: 'sk', style: 'height:26px;width:120px;margin-bottom:14px' }));
   if (cards) {
-    const g = el('div', { class: 'stat-grid' });
-    for (let i = 0; i < cards; i++) {
-      g.appendChild(el('div', { class: 'sk-card', html: '<i class="sk-line" style="width:52%"></i><i class="sk-line sk-big"></i><i class="sk-line" style="width:38%"></i>' }));
-    }
+    const g = el('div', { class: 'skgrid' });
+    for (let i = 0; i < cards; i++) g.appendChild(el('div', { class: 'sk', style: 'height:76px' }));
     wrap.appendChild(g);
   }
   for (let i = 0; i < rows; i++) {
-    wrap.appendChild(el('div', { class: 'sk-row', html: `
-      <i class="sk-dot"></i>
-      <span class="sk-lines"><i class="sk-line" style="width:${58 + (i % 3) * 12}%"></i><i class="sk-line sk-sm" style="width:${30 + (i % 4) * 10}%"></i></span>` }));
+    wrap.appendChild(el('div', { class: 'sk', style: `height:${i === 0 ? 104 : 60}px;margin-top:12px` }));
   }
   return wrap;
 }
 
-/** Empty state with an icon, a message, an optional hint and one action. */
 export function emptyState({ ic = 'info', title, hint = '', actionLabel = '', onAction = null, compact = false } = {}) {
   const box = el('div', { class: `empty-state${compact ? ' compact' : ''}` });
-  box.innerHTML = `
-    <div class="es-ic">${icon(ic)}</div>
+  box.innerHTML = `<div class="es-ic">${icon(ic)}</div>
     <div class="es-t">${esc(tx(title || t('কোনো তথ্য পাওয়া যায়নি', 'Nothing here yet')))}</div>
     ${hint ? `<div class="es-h">${esc(tx(hint))}</div>` : ''}`;
-  if (actionLabel && onAction) {
-    const b = el('button', { type: 'button', class: 'btn-primary sm', text: tx(actionLabel), onclick: onAction });
-    box.appendChild(b);
-  }
+  if (actionLabel && onAction) box.appendChild(el('button', { type: 'button', class: 'btn btn-primary', text: tx(actionLabel), onclick: onAction }));
   return box;
 }
 
-/** Error state with a retry button. */
 export function errorState({ title, hint = '', onRetry = null } = {}) {
   const box = el('div', { class: 'empty-state err' });
-  box.innerHTML = `
-    <div class="es-ic">${icon('warn')}</div>
+  box.innerHTML = `<div class="es-ic">${icon('warn')}</div>
     <div class="es-t">${esc(tx(title || t('কিছু একটা সমস্যা হয়েছে', 'Something went wrong')))}</div>
     ${hint ? `<div class="es-h">${esc(tx(hint))}</div>` : ''}`;
-  if (onRetry) box.appendChild(el('button', { type: 'button', class: 'btn-ghost sm', text: t('আবার চেষ্টা করুন', 'Try again'), onclick: onRetry }));
+  if (onRetry) box.appendChild(el('button', { type: 'button', class: 'btn btn-ghost', text: t('আবার চেষ্টা করুন', 'Try again'), onclick: onRetry }));
   return box;
 }
 
-/**
- * Wrap an async render: paint a skeleton, then the real content; on failure
- * show an error state with a retry button.
- *   body.appendChild(await withSkeleton(host, () => renderThing()));
- */
 export async function withSkeleton(host, render, opts = {}) {
-  host.innerHTML = '';
-  host.appendChild(skeleton(opts));
+  host.replaceChildren(skeleton(opts));
   try {
     const node = await render();
-    host.innerHTML = '';
+    host.replaceChildren();
     if (node) host.appendChild(node);
     return node;
   } catch (e) {
     console.error('[ui] render failed', e);
-    host.innerHTML = '';
-    host.appendChild(errorState({ hint: String(e && e.message || e), onRetry: () => withSkeleton(host, render, opts) }));
+    host.replaceChildren(errorState({ hint: String((e && e.message) || e), onRetry: () => withSkeleton(host, render, opts) }));
     return null;
   }
 }
 
-/** Sticky icon-only export bar: PDF / Excel / CSV / Print (≥44px touch targets). Omit any handler to hide that button. */
-export function exportBar({ pdf, excel, csv, print } = {}) {
-  const bar = el('div', { class: 'export-bar no-print', role: 'toolbar', 'aria-label': t('রিপোর্ট এক্সপোর্ট', 'Export report') });
-  const add = (ic, label, fn) => {
-    if (!fn) return;
-    bar.appendChild(el('button', { type: 'button', class: 'icon-btn', html: icon(ic), title: label, 'aria-label': label, onclick: fn }));
-  };
-  add('pdf', t('PDF ডাউনলোড', 'Download PDF'), pdf);
-  add('excel', t('Excel ডাউনলোড', 'Download Excel'), excel);
-  add('csv', t('CSV ডাউনলোড', 'Download CSV'), csv);
-  add('print', t('প্রিন্ট', 'Print'), print);
-  return bar;
-}
+/* ================= segmented controls ================= */
 
-/** Single-select segmented chips (deposit type/method, restore mode, sheet filters). */
 export function segChips(name, options, value, { onChange = null } = {}) {
   const wrap = el('div', { class: 'seg', role: 'radiogroup' });
   const hidden = el('input', { type: 'hidden', name, value: options.some(o => o.value === value) ? value : options[0].value });
@@ -221,7 +301,7 @@ export function segChips(name, options, value, { onChange = null } = {}) {
     });
   };
   options.forEach(o => {
-    const b = el('button', { type: 'button', class: 'seg-chip', role: 'radio', 'aria-checked': 'false', text: t(o.bn, o.en) });
+    const b = el('button', { type: 'button', class: 'seg-chip', role: 'radio', 'aria-checked': 'false', text: tx(t(o.bn, o.en)) });
     b.dataset.value = o.value;
     b.addEventListener('click', () => {
       if (hidden.value === o.value) return;
@@ -236,21 +316,13 @@ export function segChips(name, options, value, { onChange = null } = {}) {
   const root = el('div');
   root.append(wrap, hidden);
   return {
-    root, hidden,
+    root, hidden, wrap,
     get value() { return hidden.value; },
     set(v) { if (options.some(o => o.value === v) && hidden.value !== v) { hidden.value = v; paint(); } },
     reset() { this.set(options[0].value); },
   };
 }
 
-/* ================= modern app-like selectors (v6.6) ================= */
-
-/**
- * optionGrid — icon-card single-select in a strict 2-column grid.
- * Odd number of options: the last card keeps its normal size (never stretched).
- * Emits the same contract as segChips: { root, hidden, value, set(), reset() }.
- * `options` = [{ value, bn, en, ic }] (ic = icon name).
- */
 export function optionGrid(name, options, value, { onChange = null, cols = 2 } = {}) {
   const wrap = el('div', { class: `opt-grid${cols === 1 ? ' one-col' : ''}`, role: 'radiogroup' });
   const hidden = el('input', { type: 'hidden', name, value: options.some(o => o.value === value) ? value : options[0].value });
@@ -264,7 +336,7 @@ export function optionGrid(name, options, value, { onChange = null, cols = 2 } =
   options.forEach(o => {
     const b = el('button', {
       type: 'button', class: 'opt-card', role: 'radio', 'aria-checked': 'false',
-      html: `<span class="oc-ic">${icon(o.ic || 'plus')}</span><span class="oc-tx">${esc(t(o.bn, o.en))}</span>`,
+      html: `<span class="oc-ic">${icon(o.ic || 'plus')}</span><span class="oc-tx">${esc(tx(t(o.bn, o.en)))}</span>`,
     });
     b.dataset.value = o.value;
     b.addEventListener('click', () => {
@@ -280,38 +352,32 @@ export function optionGrid(name, options, value, { onChange = null, cols = 2 } =
   const root = el('div');
   root.append(wrap, hidden);
   return {
-    root, hidden,
+    root, hidden, wrap,
     get value() { return hidden.value; },
     set(v) { if (options.some(o => o.value === v) && hidden.value !== v) { hidden.value = v; paint(); } },
     reset() { this.set(options[0].value); },
   };
 }
 
-/**
- * tileMenu — the icon-based section grid used by the Deposits / Transactions /
- * Reports / Settings hubs. items = [{ id, ic, bn, en, sub?, tone?, badge? }].
- */
+/** Icon-tile menu — used only where a hub genuinely has several destinations. */
 export function tileMenu(items, onPick, { ariaLabel = '' } = {}) {
   const grid = el('div', { class: 'sec-menu', role: 'list', ...(ariaLabel ? { 'aria-label': ariaLabel } : {}) });
   items.filter(Boolean).forEach(it => {
-    const b = el('button', {
-      type: 'button', class: `sec-tile${it.tone ? ' ' + it.tone : ''}`, role: 'listitem',
-      onclick: () => onPick(it.id),
-    });
+    const b = el('button', { type: 'button', class: `sec-tile${it.tone ? ' ' + it.tone : ''}`, role: 'listitem', onclick: () => onPick(it.id) });
     b.innerHTML = `<span class="st-ic">${icon(it.ic)}</span>
       <span class="st-tx"><span class="st-t">${esc(t(it.bn, it.en))}</span>${it.sub ? `<span class="st-s">${esc(tx(it.sub))}</span>` : ''}</span>`
-      + (it.badge ? `<span class="pill${it.badge > 99 ? ' big' : ''}">${it.badge > 99 ? '99+' : it.badge}</span>` : '');
+      + (it.badge ? `<span class="pill">${it.badge > 99 ? '99+' : it.badge}</span>` : '');
     grid.appendChild(b);
   });
   return grid;
 }
 
-/** Unique transaction id chip (20260920001) — clickable on desktop, copy on tap. */
+/* ================= ids ================= */
+
 export function txnIdChip(id) {
   if (!id) return '';
   return `<button type="button" class="txn-id" data-copy="${esc(id)}" title="${t('কপি করুন', 'Copy')}">${esc(id)}</button>`;
 }
-/** Wire [data-copy] chips inside a container (event delegation, one listener). */
 export function bindCopyIds(container) {
   container.addEventListener('click', e => {
     const b = e.target.closest ? e.target.closest('[data-copy]') : null;
@@ -320,46 +386,38 @@ export function bindCopyIds(container) {
     const v = b.dataset.copy;
     const ok = () => { b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 1200); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(ok).catch(() => {});
-    else { const ta = el('textarea', { value: v }); document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); ok(); } catch {} ta.remove(); }
+    else {
+      const ta = el('textarea', { value: v });
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); ok(); } catch { /* ignore */ }
+      ta.remove();
+    }
   });
 }
 
-/** Back-to-menu bar shown inside a hub section (works with browser/in-app back too). */
-export function sectionBar(titleBn, titleEn, ic, onBack, backLabel) {
-  const bar = el('div', { class: 'sec-bar' });
-  const back = el('button', { type: 'button', class: 'sec-back', html: `${icon('back')}<span>${esc(t(backLabel || 'ফিরে যান', backLabel || 'Back'))}</span>`, onclick: onBack });
-  const ttl = el('div', { class: 'sec-bar-t', html: `${icon(ic)}<b>${esc(t(titleBn, titleEn))}</b>` });
-  bar.append(back, ttl);
-  return bar;
-}
+/* ================= filter sheet ================= */
 
-/**
- * Generic filter sheet: chip sections + optional date range + apply/clear.
- * `sections` = [{ key, label, options:[{value,bn,en}] }]; `dates` = { fromLabel, toLabel } or null.
- * The sheet edits a copy of `state` until Apply; the caller owns the badge count.
- */
 export function filterSheet({ title, sections = [], dates = null, state = {}, onApply, onClear }) {
   const tmp = { ...state };
   const body = el('div', { class: 'fsheet' });
   sections.forEach(({ key, label, options }) => {
     const sec = el('div', { class: 'fsheet-sec' });
-    sec.appendChild(el('div', { class: 'fsheet-lbl', text: label }));
+    sec.appendChild(el('div', { class: 'fsheet-lbl', text: tx(label) }));
     sec.appendChild(segChips('f_' + key, options, tmp[key], { onChange: v => { tmp[key] = v; } }).root);
     body.appendChild(sec);
   });
   let fromI = null, toI = null;
   if (dates) {
     const box = el('div', { class: 'fsheet-dates' });
-    const mkD = (lbl, val) => {
+    const mk = (lbl, val) => {
       const f = el('div', { class: 'field' });
-      f.appendChild(el('label', { text: lbl }));
+      f.appendChild(el('label', { text: tx(lbl) }));
       const i = el('input', { type: 'date', value: val || '' });
-      f.appendChild(i);
-      box.appendChild(f);
+      f.appendChild(i); box.appendChild(f);
       return i;
     };
-    fromI = mkD(dates.fromLabel, tmp.from);
-    toI = mkD(dates.toLabel, tmp.to);
+    fromI = mk(dates.fromLabel, tmp.from);
+    toI = mk(dates.toLabel, tmp.to);
     body.appendChild(box);
   }
   const bar = el('div', { class: 'fsheet-actions' });
@@ -372,14 +430,13 @@ export function filterSheet({ title, sections = [], dates = null, state = {}, on
   clearB.addEventListener('click', () => { close(); onClear(); });
 }
 
-/** Mobile bottom sheet (used by the “More” menu). Returns { close }. */
+/* ================= sheet + switch ================= */
+
 export function bottomSheet({ title, items = [], body = null } = {}) {
   const back = el('div', { class: 'sheet-backdrop' });
-  const sheet = el('div', { class: 'sheet' });
+  const sheet = el('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' });
   sheet.appendChild(el('div', { class: 'sheet-grab' }));
   if (title) sheet.appendChild(el('div', { class: 'sheet-title', text: tx(title) }));
-  /* Custom bodies (e.g. filter forms) render above the item list; a body-only
-     sheet leaves the list empty, which renders nothing. */
   if (body) sheet.appendChild(body);
   const list = el('div', { class: 'sheet-list' });
   items.forEach(it => {
@@ -405,9 +462,8 @@ export function bottomSheet({ title, items = [], body = null } = {}) {
   return { close };
 }
 
-/** Small on/off switch used inside sheets and settings rows. */
 export function switchEl(on, onChange) {
-  const b = el('button', { type: 'button', class: `switch${on ? ' on' : ''}`, 'aria-pressed': on ? 'true' : 'false' });
+  const b = el('button', { type: 'button', class: `switch${on ? ' on' : ''}`, 'aria-pressed': on ? 'true' : 'false', 'aria-label': on ? 'On' : 'Off' });
   b.onclick = e => {
     e.stopPropagation();
     const next = !b.classList.contains('on');
@@ -418,7 +474,7 @@ export function switchEl(on, onChange) {
   return b;
 }
 
-/** Render a page function into a host, stripping its own page header (used by hub pages). */
+/** Render a page function into a host and drop its own page header. */
 export async function embedPage(host, pageFn, session, params = {}) {
   const node = await pageFn(session, params);
   const head = node && node.querySelector && node.querySelector('.page-head');
@@ -426,3 +482,9 @@ export async function embedPage(host, pageFn, session, params = {}) {
   host.replaceChildren(node);
   return node;
 }
+
+/* ================= back-compat shims ================= */
+export function sectionBar() { return null; }
+export function exportBar() { return null; }
+export const money2 = money;
+export { taka, fmtDate, money, auto };

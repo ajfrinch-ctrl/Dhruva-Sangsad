@@ -668,10 +668,37 @@ export async function syncDueNotifications() {
   return changed;
 }
 
-export function statementRows(summary) {
-  const rows = summary.deposits.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.submittedAt).localeCompare(String(b.submittedAt)));
-  let cum = 0;
-  return rows.map((d, i) => { cum += num(d.amount); return { sl: i + 1, deposit: d, cumulative: cum }; });
+/**
+ * Statement rows — the chronological account activity of one member.
+ * Only APPROVED records are included, deposits and withdrawals are merged into
+ * a single timeline, and every row carries its own running BALANCE so the
+ * statement reads like a passbook:
+ *
+ *   date · description · deposit · payment · balance
+ *
+ * (No serial number and no transaction id: neither belongs on a statement.)
+ */
+export function statementRows(summary, { from = '', to = '' } = {}) {
+  const inRange = d => {
+    const dt = String(d.date || '').slice(0, 10);
+    if (from && dt < from) return false;
+    if (to && dt > to) return false;
+    return true;
+  };
+  const rows = [];
+  for (const d of (summary.deposits || [])) {
+    if (!inRange(d)) continue;
+    rows.push({ kind: 'deposit', date: d.date, type: d.type, method: d.method, ref: d, deposit: num(d.amount), payment: 0, description: d.description || '' });
+  }
+  for (const w of (summary.withdrawals || [])) {
+    if (!inRange(w)) continue;
+    rows.push({ kind: 'withdrawal', date: w.date, type: w.type, method: w.method, ref: w, deposit: 0, payment: num(w.amount), description: w.description || '' });
+  }
+  rows.sort((a, b) => String(a.date).localeCompare(String(b.date))
+    || String((a.ref && a.ref.submittedAt) || '').localeCompare(String((b.ref && b.ref.submittedAt) || '')));
+  let balance = 0;
+  rows.forEach(r => { balance += r.deposit - r.payment; r.balance = balance; });
+  return rows;
 }
 
 export function orgTotals(summaries) {

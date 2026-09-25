@@ -6,6 +6,7 @@
    document. Everything used here is bundled locally — no network required. */
 
 import { downloadBlob, toast } from './util.js';
+import { ensurePdfLibs, ensureXlsx } from './vendor.js';
 
 const A4 = { w: 210, h: 297 };
 
@@ -31,6 +32,9 @@ async function fontsReady() {
 /** Render a .print-sheet node into a multi-page A4 PDF and download it. */
 export async function sheetToPdf(node, filename, { orientation = 'p' } = {}) {
   if (!node) throw new Error('Nothing to export');
+  /* The layout engines are loaded on demand (they are ~640 KB) — the first
+     statement/report download pays for them, everything else never does. */
+  await ensurePdfLibs();
   await fontsReady();
   const pw = orientation === 'l' ? A4.h : A4.w;
   const ph = orientation === 'l' ? A4.w : A4.h;
@@ -96,7 +100,8 @@ export function downloadCSV(rows, filename) {
   downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename.endsWith('.csv') ? filename : filename + '.csv');
 }
 
-export function downloadExcel(sheets, filename) {
+export async function downloadExcel(sheets, filename) {
+  await ensureXlsx();
   if (!window.XLSX) { toast('Excel engine unavailable', 'error'); return false; }
   const wb = window.XLSX.utils.book_new();
   const list = Array.isArray(sheets) ? sheets : [sheets];

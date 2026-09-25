@@ -1375,3 +1375,10 @@ html[data-theme="dark"] .sec-tile .pill,html[data-theme="amoled"] .sec-tile .pil
 
 /* ---- remove legacy FAB visual entirely (rule 5) ---- */
 .fab{display:none !important}
+
+/* ================= v7: notification centre (top-bar bell) ================= */
+.notif-body{max-height:62vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 14px 4px}
+.notif-body .list{padding-bottom:6px}
+.notif-body .li{cursor:pointer;transition:background .15s}
+.notif-body .li:active{background:#eef1f4}
+@media (max-width:430px){ .notif-body{max-height:58vh} }

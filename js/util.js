@@ -1,6 +1,6 @@
 /* ধ্রুব সংসদ — utilities */
-import { t, getLang, loc, tx } from './i18n.js';
-export { t, getLang, loc, tx };
+import { t, getLang, loc, tx, auto, setLang, applyLang } from './i18n.js';
+export { t, getLang, loc, tx, auto, setLang, applyLang };
 
 export const APP_NAME_BN = 'ধ্রুব সংসদ';
 export const APP_NAME_EN = 'Dhruvo Sangsad';
@@ -81,6 +81,19 @@ export function toISO(ddmmyyyy) {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : String(ddmmyyyy);
 }
 export function monthKey(iso) { return String(iso || '').slice(0, 7); }
+
+/** ISO / timestamp → "20 Sep 2026" (English month names — used by every
+ *  statement and report sheet, which are always produced in English). */
+export function fmtDateEn(v) {
+  if (!v) return '';
+  const s = String(v);
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  const dt = iso ? new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])) : new Date(v);
+  if (isNaN(dt)) return s;
+  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.getMonth()];
+  return `${String(dt.getDate()).padStart(2, '0')} ${m} ${dt.getFullYear()}`;
+}
+
 /** Compact numeric date key YYYYMMDD — used for transaction ids. */
 export function dateKey8(iso) { return String(iso || '').slice(0, 10).replace(/-/g, ''); }
 /** File-name stamp: 2026-09-25_15-40 */
@@ -150,6 +163,8 @@ export const STATUS_EN = { pending: 'Pending', approved: 'Approved', rejected: '
 
 /* ---------------- toast / modal ---------------- */
 export function toast(msg, kind = 'info', ms = 3200) {
+  /* Legacy "বাংলা / English" strings must never appear mixed in a toast. */
+  msg = auto(msg);
   /* Success and failure moments get a tactile echo on phones that support it. */
   if (kind === 'success') haptic('success');
   else if (kind === 'error') haptic('error');
@@ -165,7 +180,7 @@ export function modal({ title, body, actions = [], width = 420, dismissible = tr
   return new Promise(resolve => {
     const back = el('div', { class: 'modal-back' });
     const box = el('div', { class: 'modal', style: `max-width:${width}px` });
-    const head = el('div', { class: 'modal-head' }, [el('h3', { text: title || '' })]);
+    const head = el('div', { class: 'modal-head' }, [el('h3', { text: auto(title || '') })]);
     if (dismissible) {
       head.appendChild(el('button', { class: 'icon-btn', title: t('বন্ধ', 'Close'), html: '&times;', onclick: () => done(null) }));
     }
