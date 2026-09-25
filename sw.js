@@ -1,5 +1,15 @@
-/* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache) */
-const VERSION = 'ds-v6.6.0';
+/* ধ্রুব সংসদ — Service Worker (offline-first shell + runtime cache)
+ *
+ * v7 notes
+ *  · the old single 764 KB logo is no longer precached — the UI, the manifest
+ *    and the PDF sheets all use the optimised `icons/icon-192.png`;
+ *  · the app is one module graph (js/app.js) — every module it can reach is
+ *    precached so the app still boots with no connectivity;
+ *  · heavy layout engines (jspdf / html2canvas) are precached because reports
+ *    and statements must work offline; the Excel engine is NOT precached — it
+ *    is only fetched if an export is actually used (and then cached).
+ */
+const VERSION = 'ds-v7.0.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -9,53 +19,57 @@ const PRECACHE = [
   'index.html',
   'manifest.webmanifest',
   'css/app.css',
-  'icons/logo.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
   'icons/apple-touch.png',
-  /* vendor (classic scripts) */
+  /* fonts */
+  'vendor/fonts/noto-sans-bengali-bengali-400-normal.woff2',
+  'vendor/fonts/noto-sans-bengali-bengali-700-normal.woff2',
+  'vendor/fonts/noto-sans-bengali-latin-400-normal.woff2',
+  'vendor/fonts/noto-sans-bengali-latin-700-normal.woff2',
+  /* vendor: sync + print engines (loaded on demand by js/vendor.js) */
   'vendor/firebase-app-compat.js',
   'vendor/firebase-auth-compat.js',
   'vendor/firebase-database-compat.js',
   'vendor/jspdf.umd.min.js',
   'vendor/jspdf.plugin.autotable.min.js',
   'vendor/html2canvas.min.js',
-  'vendor/xlsx.full.min.js',
-  /* fonts */
-  'vendor/fonts/noto-sans-bengali-bengali-400-normal.woff2',
-  'vendor/fonts/noto-sans-bengali-bengali-700-normal.woff2',
-  'vendor/fonts/noto-sans-bengali-latin-400-normal.woff2',
-  'vendor/fonts/noto-sans-bengali-latin-700-normal.woff2',
   /* application modules */
   'js/app.js',
-  'js/auth.js',
-  'js/crypto.js',
-  'js/db.js',
-  'js/firebase.js',
+  'js/brand.js',
+  'js/vendor.js',
   'js/i18n.js',
   'js/theme.js',
+  'js/crypto.js',
+  'js/db.js',
+  'js/auth.js',
+  'js/store.js',
+  'js/firebase.js',
+  'js/ui.js',
+  'js/util.js',
   'js/icons.js',
   'js/pdf.js',
-  'js/store.js',
-  'js/ui.js',
-  'js/ui-auth.js',
+  'js/sheet.js',
+  'js/preview.js',
+  'js/picker.js',
+  'js/gestures.js',
   'js/install-prompt.js',
-  'js/util.js',
+  'js/ui-auth.js',
+  /* pages */
   'js/pages/account.js',
   'js/pages/admin.js',
   'js/pages/dashboard.js',
   'js/pages/deposits.js',
   'js/pages/members.js',
   'js/pages/misc.js',
-  'js/pages/reports.js',
-  'js/pages/transactions.js',
-  'js/pages/statements.js',
-  'js/pages/settings.js',
   'js/pages/member-panel.js',
-  'js/sheet.js',
-  'js/preview.js',
-  'js/picker.js',
+  'js/pages/notifications.js',
+  'js/pages/profile.js',
+  'js/pages/reports.js',
+  'js/pages/settings.js',
+  'js/pages/statements.js',
+  'js/pages/transactions.js',
 ];
 
 self.addEventListener('install', event => {
@@ -80,7 +94,6 @@ self.addEventListener('activate', event => {
       try { await self.registration.navigationPreload.enable(); } catch (_) {}
     }
     await self.clients.claim();
-    /* Tell open pages a new version was installed so they can refresh once. */
     const wins = await self.clients.matchAll({ type: 'window' });
     wins.forEach(c => c.postMessage({ type: 'VERSION_CHANGED', version: VERSION }));
   })());
@@ -126,7 +139,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  /* JS/CSS: network-first so new exports (e.g. logoSrc) are not stuck in cache. */
+  /* JS/CSS: network-first so a deployed fix is never stuck behind the cache. */
   if (/\.(js|mjs|css)$/i.test(url.pathname)) {
     event.respondWith((async () => {
       try {
@@ -145,7 +158,7 @@ self.addEventListener('fetch', event => {
 
   /* Other static assets: cache-first with background refresh. */
   event.respondWith((async () => {
-    const cached = await caches.match(req, { ignoreSearch: false });
+    const cached = await caches.match(req, { ignoreSearch: true });
     const network = fetch(req).then(async res => {
       if (res && res.ok && res.type === 'basic') {
         const cache = await caches.open(cached ? SHELL : RUNTIME);

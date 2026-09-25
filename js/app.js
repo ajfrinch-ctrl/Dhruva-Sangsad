@@ -516,7 +516,7 @@ function wireChrome() {
     moreBtn.addEventListener('click', () => App.openMore());
   }
 
-  document.querySelectorAll('#bottomnav .nav-item[data-ic]').forEach(a => {
+  document.querySelectorAll('#bottomnav .nav-item[data-ic][data-route]').forEach(a => {
     const ic = a.dataset.ic;
     const label = a.querySelector('.ni-lbl') || (() => {
       const s = el('span', { class: 'ni-lbl' });

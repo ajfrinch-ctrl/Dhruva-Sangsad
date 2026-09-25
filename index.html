@@ -86,12 +86,13 @@ body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(-
 
   <nav class="bottom-nav" id="bottomnav" aria-label="Primary navigation">
     <!-- Native anchors: navigation works even before the module loads, and the
-         browser history (back button / Android back) stays authoritative. -->
-    <a class="nav-item" data-roles="staff member" data-route="home" href="#home" data-ic="home">হোম<span class="ni-en">Home</span></a>
-    <a class="nav-item" data-roles="staff" data-route="members" href="#members" data-ic="members">সদস্য<span class="ni-en">Members</span></a>
-    <a class="nav-item" data-roles="staff member" data-route="deposits" href="#deposits" data-ic="deposit">জমা<span class="ni-en">Deposits</span></a>
-    <a class="nav-item" data-roles="member" data-route="transactions" href="#transactions" data-ic="receipt">লেনদেন<span class="ni-en">Transactions</span></a>
-    <button class="nav-item" id="navMore" type="button" data-ic="menu">আরও<span class="ni-en">More</span></button>
+         browser history (back button / Android back) stays authoritative.
+         Labels carry both languages; CSS shows the active one (html[data-lang]). -->
+    <a class="nav-item" data-roles="staff member" data-route="home" href="#home" data-ic="home"><span class="ni-lbl"><span class="i-bn">হোম</span><span class="i-en">Home</span></span></a>
+    <a class="nav-item" data-roles="staff" data-route="members" href="#members" data-ic="members"><span class="ni-lbl"><span class="i-bn">সদস্য</span><span class="i-en">Members</span></span></a>
+    <a class="nav-item" data-roles="staff member" data-route="deposits" href="#deposits" data-ic="deposit"><span class="ni-lbl"><span class="i-bn">জমা</span><span class="i-en">Deposits</span></span></a>
+    <a class="nav-item" data-roles="member" data-route="transactions" href="#transactions" data-ic="receipt"><span class="ni-lbl"><span class="i-bn">লেনদেন</span><span class="i-en">Transactions</span></span></a>
+    <button class="nav-item" id="navMore" type="button" data-ic="menu"><span class="ni-lbl"><span class="i-bn">আরও</span><span class="i-en">More</span></span></button>
   </nav>
 </div>
 
