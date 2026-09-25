@@ -49,11 +49,11 @@ p{margin:0 0 8px}
 .auth-card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:16px;
   box-shadow:0 6px 28px rgba(16,24,40,.08);padding:26px 24px 22px}
 .auth-brand{text-align:center;margin-bottom:18px}
-.auth-logo{width:min(72vw,220px);height:auto;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
+.auth-logo{width:68px;height:68px;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
   background:transparent;border:0;overflow:hidden}
-.auth-logo img{width:100%;height:auto;max-height:min(28vh,180px);object-fit:contain;display:block}
+.auth-logo img{width:100%;height:100%;object-fit:contain;display:block}
 .auth-brand h1{font-size:22px;letter-spacing:.2px}
-.auth-brand .sub{font-size:12px;color:var(--muted);letter-spacing:1.4px;text-transform:uppercase;margin-top:3px}
+.auth-brand .sub{font-size:12px;color:var(--muted);letter-spacing:.3px;margin-top:3px}
 .auth-tabs{display:flex;gap:5px;background:#f3f4f6;border-radius:10px;padding:4px;margin-bottom:16px}
 .auth-tabs button{flex:1;border:0;background:transparent;padding:9px 6px;border-radius:8px;font:inherit;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s}
 .auth-tabs button.on{background:#fff;color:var(--green-dark);box-shadow:var(--shadow)}
@@ -1028,3 +1028,44 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
 .user-card .ul-3{margin-top:5px}
 .user-card .ul-act{margin-top:8px}
 .act-list{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+/* ============ Auth refinement — login / register wizard / forgot ============ */
+/* fixed green primary inside auth (never role-tinted) */
+.auth-card .btn-primary{background:var(--green);border-color:var(--green);color:#fff}
+.auth-card .btn-primary:hover:not(:disabled){background:var(--green-dark);border-color:var(--green-dark)}
+.auth-card .btn-primary:disabled{background:var(--green);border-color:var(--green)}
+/* BN-first: no ALL-CAPS labels/tags inside auth */
+.auth-card .field > label{text-transform:none;letter-spacing:0;font-size:12.5px}
+.auth-card .tag{text-transform:none;letter-spacing:0}
+/* password show/hide — 44px touch target, input text never underlaps */
+.auth-card .pw-wrap{position:relative}
+.auth-card .pw-wrap input{padding-right:52px}
+.auth-card .pw-eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  width:44px;height:44px;min-width:44px;min-height:44px;display:grid;place-items:center;
+  background:none;border:0;border-radius:10px;color:var(--muted);cursor:pointer;padding:0}
+.auth-card .pw-eye:hover{color:var(--green-dark);background:var(--green-soft)}
+.auth-card .pw-eye:focus-visible{outline:2px solid var(--green);outline-offset:1px}
+.auth-card .pw-eye .icon{width:20px;height:20px}
+/* compact banner for wizard steps */
+.banner.sm{padding:8px 10px;font-size:12.5px;margin-bottom:10px}
+/* optional-info accordion */
+details.acc{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card)}
+details.acc summary{list-style:none;cursor:pointer;padding:11px 12px;font-weight:700;font-size:13.5px;
+  color:var(--green-dark);display:flex;align-items:center;gap:8px;min-height:48px}
+details.acc summary::-webkit-details-marker{display:none}
+details.acc summary::after{content:'';margin-left:auto;width:9px;height:9px;flex:none;
+  border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;
+  transform:rotate(45deg) translate(-1px,-1px)}
+details.acc[open] summary::after{transform:rotate(-135deg)}
+details.acc .grid{padding:2px 12px 12px}
+/* wizard indicator wraps on narrow screens */
+.auth-card .wsteps{flex-wrap:wrap;row-gap:8px}
+.auth-card .wstep-lbl{font-size:11.5px}
+/* sticky wizard footer flush with the auth card (card pad: 24px / 22px) */
+@media (max-width:1023px){
+  .auth-card .form-sticky{margin:14px -24px -22px;padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px));
+    border-radius:0 0 15px 15px}
+  /* 16px inputs (no iOS auto-zoom), 48px targets */
+  .auth-card input:not([type=checkbox]),.auth-card select,.auth-card textarea{font-size:16px}
+  .auth-card input:not([type=checkbox]),.auth-card select{min-height:48px}
+  .auth-card .pw-wrap input{padding-right:54px}
+}

@@ -114,10 +114,10 @@ async function findUser(identifier) {
 export async function login(identifier, password, { remember = false } = {}) {
   await ensureBootstrapAdmin();
   const u = await findUser(identifier);
-  if (!u) throw new Error('ভুল User ID অথবা Password / Invalid user ID or password');
-  if (u.active === false) throw new Error('আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে। / Your account has been deactivated.');
+  if (!u) throw new Error('ইউজার আইডি বা পাসওয়ার্ড ভুল');
+  if (u.active === false) throw new Error('আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে।');
   const ok = await verifyPassword(password, u.password);
-  if (!ok) throw new Error('ভুল User ID অথবা Password / Invalid user ID or password');
+  if (!ok) throw new Error('ইউজার আইডি বা পাসওয়ার্ড ভুল');
   // The default admin/admin only works while no real admin exists in the cloud.
   if (u.isBootstrap) await assertBootstrapAllowed();
 
@@ -125,7 +125,7 @@ export async function login(identifier, password, { remember = false } = {}) {
   if (u.role === ROLES.MEMBER && u.memberDocId) {
     member = await dbGet('members', u.memberDocId);
     if (member && member.status === 'rejected') {
-      throw new Error('আপনার Registration বাতিল হয়েছে। অনুগ্রহ করে কর্তৃপক্ষের সাথে যোগাযোগ করুন। / Your registration was rejected.');
+      throw new Error('আপনার Registration বাতিল হয়েছে। অনুগ্রহ করে কর্তৃপক্ষের সাথে যোগাযোগ করুন।');
     }
   }
   const session = publicUser(u);
@@ -259,7 +259,7 @@ export async function verifyRecoveryDob(identifier, dobDay, dobMonth) {
   const u = await findUser(identifier);
   if (!u || u.role !== ROLES.MEMBER) throw new Error('এই মোবাইলে কোনো সদস্য পাওয়া যায়নি / No member found');
   const m = await dbGet('members', u.memberDocId);
-  if (!m) throw new Error('Member record not found');
+  if (!m) throw new Error('সদস্য রেকর্ড পাওয়া যায়নি / Member record not found');
   const stored = String(m.dob || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(stored)) {
     throw new Error('যাচাই ব্যর্থ হয়েছে। প্রদত্ত তথ্য মেলেনি। / Verification failed.');
@@ -279,7 +279,7 @@ export async function recoverPassword({ identifier, dobDay, dobMonth, field1, va
     throw new Error('Admin/Maker Password রিসেট করতে Admin-এর সাথে যোগাযোগ করুন। / Contact the Admin to reset a staff password.');
   }
   const m = await dbGet('members', u.memberDocId);
-  if (!m) throw new Error('Member record not found');
+  if (!m) throw new Error('সদস্য রেকর্ড পাওয়া যায়নি / Member record not found');
   if (dobDay != null && dobMonth != null && String(dobDay) !== '' && String(dobMonth) !== '') {
     await verifyRecoveryDob(identifier, dobDay, dobMonth);
   } else {
