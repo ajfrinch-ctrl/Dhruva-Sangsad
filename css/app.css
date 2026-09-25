@@ -1587,3 +1587,32 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
   .period-dates{grid-template-columns:1fr}
   .period-chips .seg-chip{font-size:12px;padding:7px 11px}
 }
+
+/* =====================================================================
+   v7 PENDING REQUESTS (admin approval inbox) — one modern card per request:
+   who, member ID, application/deposit date, amount, then the two decisions.
+   ===================================================================== */
+.acard.appr{
+  display:flex;flex-direction:column;gap:9px;align-items:stretch;
+  padding:13px 14px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card,#fff);box-shadow:var(--shadow);
+}
+.ac-head{display:flex;align-items:center;gap:10px;min-width:0}
+.ac-ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:none;
+  background:#f3f4f6;color:var(--muted);font-size:18px}
+.appr.member .ac-ic{background:var(--blue-soft);color:#1d4ed8}
+.appr.deposit .ac-ic{background:var(--green-soft);color:var(--green-dark)}
+.appr.withdrawal .ac-ic{background:var(--amber-soft);color:var(--amber-dark)}
+.ac-tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.ac-name{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-sub{font-size:12px;color:var(--muted);font-weight:700}
+.ac-kind{flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--muted);background:#f3f4f6;border-radius:20px;padding:3px 9px}
+.ac-meta{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--muted)}
+.ac-line{overflow-wrap:anywhere}
+.ac-cap{color:var(--faint);font-size:11.5px;font-weight:700}
+.ac-amt{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green-dark)}
+.acard .ac-acts{display:flex;gap:8px;flex-wrap:wrap}
+.acard .ac-acts .btn{flex:1 1 120px;justify-content:center}
+.acard .ac-acts.secondary .btn{flex:0 1 auto;font-weight:600}
+@media (max-width:359px){ .acard .ac-acts .btn{flex:1 1 100%} }

@@ -27,28 +27,28 @@ import { downloadExcel } from '../pdf.js';
 /* ==================== Backup & Restore (Admin) ==================== */
 export async function pageBackup(session) {
   const wrap = page('ব্যাকআপ ও পুনরুদ্ধার', 'Backup & Restore', 'backup');
-  if (!can(session, 'backup:manage')) { wrap.appendChild(banner('err', 'এই পেজটি শুধুমাত্র Admin ব্যবহার করতে পারবেন। / Admin only.')); return wrap; }
+  if (!can(session, 'backup:manage')) { wrap.appendChild(banner('err', esc(t('এই পেজটি শুধুমাত্র অ্যাডমিন ব্যবহার করতে পারবেন।', 'Admin only.')))); return wrap; }
 
   const [members, deposits, users, logs, queue] = await Promise.all([allMembers(), allDeposits(), allUsers(), allLogs(), queueAll()]);
   const stats = el('div', { class: 'stats' });
   stats.append(
-    statCard({ label: 'সদস্য / Members', value: String(members.length), sub: 'IndexedDB', ic: 'members', tone: 'blue' }),
-    statCard({ label: 'জমা / Deposits', value: String(deposits.length), sub: 'সব স্ট্যাটাস', ic: 'deposit' }),
-    statCard({ label: 'ব্যবহারকারী / Users', value: String(users.length), sub: 'admin + maker + member', ic: 'admin', tone: 'gray' }),
-    statCard({ label: 'লগ / Activity Logs', value: String(logs.length), sub: `${queue.length} sync pending`, ic: 'log', tone: queue.length ? 'amber' : 'gray' }),
+    statCard({ label: t('সদস্য', 'Members'), value: String(members.length), sub: 'IndexedDB', ic: 'members', tone: 'blue' }),
+    statCard({ label: t('জমা', 'Deposits'), value: String(deposits.length), sub: t('সব স্ট্যাটাস', 'all statuses'), ic: 'deposit' }),
+    statCard({ label: t('ব্যবহারকারী', 'Users'), value: String(users.length), sub: 'admin + maker + member', ic: 'admin', tone: 'gray' }),
+    statCard({ label: t('কার্যক্রম লগ', 'Activity Logs'), value: String(logs.length), sub: t(`${queue.length}টি সিঙ্ক বাকি`, `${queue.length} sync pending`), ic: 'log', tone: queue.length ? 'amber' : 'gray' }),
   );
   wrap.appendChild(stats);
 
   /* -------- local backup -------- */
   const bBody = el('div');
-  bBody.appendChild(banner('info', 'ব্যাকআপ ফাইলে সমস্ত সদস্য, জমা, ব্যবহারকারী (হ্যাশকৃত পাসওয়ার্ডসহ), বিজ্ঞপ্তি, লগ ও সেটিংস সংরক্ষিত থাকে। ফাইলটি নিরাপদ স্থানে রাখুন।'));
+  bBody.appendChild(banner('info', esc(t('ব্যাকআপ ফাইলে সমস্ত সদস্য, জমা, ব্যবহারকারী (হ্যাশকৃত পাসওয়ার্ডসহ), বিজ্ঞপ্তি, লগ ও সেটিংস সংরক্ষিত থাকে। ফাইলটি নিরাপদ স্থানে রাখুন।', 'The backup file contains every member, deposit, user (with hashed passwords), notification, log and setting. Keep the file somewhere safe.'))));
   const bRow = el('div', { class: 'btn-stack' });
-  bRow.appendChild(btn('ব্যাকআপ ডাউনলোড (JSON)', 'download', 'primary', async () => {
+  bRow.appendChild(btn(t('ব্যাকআপ ডাউনলোড (JSON)', 'Download backup (JSON)'), 'download', 'primary', async () => {
     const payload = await exportAll();
     const name = `Dhruvo_Sangsad_Backup_${todayISO()}_${String(Date.now()).slice(-6)}.json`;
     downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), name);
     await logActivity('BACKUP', `Backup downloaded (${name})`, session);
-    toast('ব্যাকআপ ডাউনলোড হয়েছে', 'success');
+    toast(t('ব্যাকআপ ডাউনলোড হয়েছে', 'Backup downloaded'), 'success');
   }, { block: true }));
   bRow.appendChild(btn('Excel Export', 'excel', 'soft', async () => {
     const cfg = await settings();
@@ -68,7 +68,7 @@ export async function pageBackup(session) {
       { name: 'Members', rows: mRows }, { name: 'Deposits', rows: dRows }, { name: 'Activity Log', rows: lRows },
     ], `Dhruvo_Sangsad_Data_${todayISO()}.xlsx`);
     await logActivity('BACKUP', 'Excel export downloaded', session);
-    toast('Excel ডাউনলোড হয়েছে', 'success');
+    toast(t('এক্সেল ডাউনলোড হয়েছে', 'Excel downloaded'), 'success');
   }, { block: true }));
   const bc = card('ব্যাকআপ', 'Backup', bBody);
   bc.body.appendChild(bRow);
@@ -76,10 +76,12 @@ export async function pageBackup(session) {
 
   /* -------- restore -------- */
   const rBody = el('div');
-  rBody.appendChild(banner('warn', '<b>সতর্কতা:</b> পুনরুদ্ধার করলে বর্তমান স্থানীয় ডাটা মুছে গিয়ে ব্যাকআপ ফাইলের ডাটা বসবে। কাজটি ফেরানো যাবে না।'));
+  rBody.appendChild(banner('warn',
+    t('<b>সতর্কতা:</b> পুনরুদ্ধার করলে বর্তমান স্থানীয় ডাটা মুছে গিয়ে ব্যাকআপ ফাইলের ডাটা বসবে। কাজটি ফেরানো যাবে না।',
+      '<b>Warning:</b> restoring erases the current local data and writes the backup file instead. This cannot be undone.')));
   const file = el('input', { type: 'file', accept: '.json,application/json' });
   const ff = el('div', { class: 'field', style: 'margin-top:8px' });
-  ff.appendChild(el('label', { text: 'ব্যাকআপ ফাইল (.json)' }));
+  ff.appendChild(el('label', { text: t('ব্যাকআপ ফাইল (.json)', 'Backup file (.json)') }));
   ff.appendChild(file);
   rBody.appendChild(ff);
   const rRow = el('div', { class: 'btn-stack' });
@@ -88,27 +90,28 @@ export async function pageBackup(session) {
     { value: 'merge', bn: 'আগের ডেটার সাথে মেশান', en: 'Merge into existing' },
   ], 'wipe');
   const mf = el('div', { class: 'field' });
-  mf.appendChild(el('label', { text: 'পুনরুদ্ধার পদ্ধতি' })); mf.appendChild(modeSeg.root);
+  mf.appendChild(el('label', { text: t('পুনরুদ্ধার পদ্ধতি', 'Restore method') })); mf.appendChild(modeSeg.root);
   rBody.appendChild(mf);
-  rRow.appendChild(btn('পুনরুদ্ধার করুন', 'restore', 'danger', async () => {
+  rRow.appendChild(btn(t('পুনরুদ্ধার করুন', 'Restore'), 'restore', 'danger', async () => {
     const f = file.files && file.files[0];
-    if (!f) { toast('প্রথমে একটি ব্যাকআপ ফাইল নির্বাচন করুন', 'warn'); return; }
+    if (!f) { toast(t('প্রথমে একটি ব্যাকআপ ফাইল নির্বাচন করুন', 'Choose a backup file first'), 'warn'); return; }
     let payload;
     try { payload = JSON.parse(await f.text()); }
-    catch { toast('ফাইলটি পড়া যায়নি', 'error'); return; }
-    if (!payload || !payload.data) { toast('এটি বৈধ ব্যাকআপ ফাইল নয়', 'error'); return; }
+    catch { toast(t('ফাইলটি পড়া যায়নি', 'The file could not be read'), 'error'); return; }
+    if (!payload || !payload.data) { toast(t('এটি বৈধ ব্যাকআপ ফাইল নয়', 'This is not a valid backup file'), 'error'); return; }
     const counts = Object.entries(payload.data).map(([k, v]) => `${k}: ${(v || []).length}`).join(' · ');
     const ok = await confirmBox(
-      `ব্যাকআপ তারিখ: ${fmtDateTime(payload.exportedAt)}\n${counts}\n\n${modeSeg.value === 'wipe' ? 'বর্তমান সব ডাটা মুছে যাবে।' : 'বিদ্যমান ডাটার সাথে একত্রিত হবে।'} আপনি কি নিশ্চিত?`,
-      { title: 'পুনরুদ্ধার নিশ্চিত করুন', okLabel: 'পুনরুদ্ধার করুন', danger: true });
+      t(`ব্যাকআপ তারিখ: ${fmtDateTime(payload.exportedAt)}\n${counts}\n\n${modeSeg.value === 'wipe' ? 'বর্তমান সব ডাটা মুছে যাবে।' : 'বিদ্যমান ডাটার সাথে একত্রিত হবে।'} আপনি কি নিশ্চিত?`,
+        `Backup date: ${fmtDateTime(payload.exportedAt)}\n${counts}\n\n${modeSeg.value === 'wipe' ? 'All current data will be erased.' : 'Data will be merged into the existing records.'} Are you sure?`),
+      { title: t('পুনরুদ্ধার নিশ্চিত করুন', 'Confirm restore'), okLabel: t('পুনরুদ্ধার করুন', 'Restore'), danger: true });
     if (!ok) return;
     try {
       const names = await importAll(payload, { wipe: modeSeg.value === 'wipe' });
       invalidate();
       await logActivity('RESTORE', `Restored from backup (${names.join(', ')})`, session);
-      await alertBox('পুনরুদ্ধার সফল হয়েছে। অ্যাপ পুনরায় লোড হবে।', 'সফল');
+      await alertBox(t('পুনরুদ্ধার সফল হয়েছে। অ্যাপ পুনরায় লোড হবে।', 'Restore complete. The app will reload now.'), t('সফল', 'Success'));
       location.reload();
-    } catch (err) { toast('পুনরুদ্ধার ব্যর্থ: ' + err.message, 'error'); }
+    } catch (err) { toast(t('পুনরুদ্ধার ব্যর্থ', 'Restore failed') + ': ' + err.message, 'error'); }
   }, { block: true }));
   const rc = card('পুনরুদ্ধার', 'Restore', rBody);
   rc.classList.add('danger-zone');
@@ -127,25 +130,29 @@ async function pendingMemberItems(session, deposits, cfg) {
       ic: 'members',
       title: m.nameBn,
       sub: `${m.memberId} · ${m.mobile}`,
-      meta: `নিবন্ধন ${fmtDate(m.createdAt || m.joinDate)} · মাসিক কিস্তি ${money(m.installment)}`,
+      name: m.nameBn || m.nameEn || '',
+      memberId: m.memberId,
+      dateLabel: fmtDate(m.createdAt || m.joinDate),
+      dateCaption: t('আবেদনের তারিখ', 'Applied on'),
+      meta: `${t('মাসিক কিস্তি', 'Monthly installment')} ${money(m.installment)} · ${m.mobile || ''}`,
       amount: null,
       sort: String(m.createdAt || m.joinDate || ''),
       actions: [
         { label: t('দেখুন', 'View'), ic: 'eye', kind: 'ghost', run: () => viewMember(session, m, memberSummary(m, deposits, summaryOpts(cfg))) },
         {
           label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
-            if (!(await confirmBox(`${m.nameBn} (${m.memberId}) — সদস্যপদ অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-            await setMemberStatus(m.id, 'active', session); toast('সদস্য অনুমোদিত / Member approved', 'success'); App.refresh();
+            if (!(await confirmBox(t(`${m.nameBn} (${m.memberId}) — সদস্যপদ অনুমোদন করবেন?`, `Approve membership for ${m.nameBn} (${m.memberId})?`), { okLabel: t('অনুমোদন', 'Approve') }))) return;
+            await setMemberStatus(m.id, 'active', session); toast(t('সদস্য অনুমোদিত', 'Member approved'), 'success'); App.refresh();
           },
         },
         {
           label: t('বাতিল', 'Reject'), ic: 'reject', kind: 'softred', run: async () => {
             const r = await rejectReason();
             if (r === null) return;
-            await setMemberStatus(m.id, 'rejected', session, r); toast('সদস্য বাতিল / Member rejected', 'warn'); App.refresh();
+            await setMemberStatus(m.id, 'rejected', session, r); toast(t('সদস্য প্রত্যাখ্যাত', 'Member rejected'), 'warn'); App.refresh();
           },
         },
-        { label: t('সম্পাদনা', 'Edit'), ic: 'edit', kind: 'ghost', run: () => App.go('members', { section: 'update', memberDocId: m.id }) },
+        { label: t('সম্পাদনা', 'Edit'), ic: 'edit', kind: 'ghost', run: () => App.go('members', { section: 'edit', docId: m.id }) },
       ],
     }));
 }
@@ -161,21 +168,25 @@ async function pendingDepositItems(session) {
       ic: 'deposit',
       title: d.memberName,
       sub: `${d.memberId} · ${fmtDate(d.date)}`,
-      meta: `${d.txnId ? d.txnId + ' · ' : ''}${typeLabel(d.type).bn} · ${methodLabel(d.method).bn}${descOf(d) ? ' · ' + descOf(d) : ''}`,
+      name: d.memberName || '',
+      memberId: d.memberId,
+      dateLabel: fmtDate(d.date),
+      dateCaption: t('জমার তারিখ', 'Deposit date'),
+      meta: `${typeLabel(d.type).bn} · ${methodLabel(d.method).bn}${descOf(d) ? ' · ' + descOf(d) : ''}`,
       amount: num(d.amount),
       sort: String(d.submittedAt || ''),
       actions: [
         {
           label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
-            if (!(await confirmBox(`${d.memberName} — ${taka(d.amount)} (${fmtDate(d.date)}) অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-            await setDepositStatus(d.id, 'approved', session); toast('জমা অনুমোদিত / Deposit approved', 'success'); App.refresh();
+            if (!(await confirmBox(t(`${d.memberName} — ${taka(d.amount)} (${fmtDate(d.date)}) অনুমোদন করবেন?`, `Approve ${taka(d.amount)} from ${d.memberName} (${fmtDate(d.date)})?`), { okLabel: t('অনুমোদন', 'Approve') }))) return;
+            await setDepositStatus(d.id, 'approved', session); toast(t('জমা অনুমোদিত', 'Deposit approved'), 'success'); App.refresh();
           },
         },
         {
           label: t('বাতিল', 'Reject'), ic: 'reject', kind: 'softred', run: async () => {
-            const r = await rejectReason('জমা বাতিলের কারণ / Deposit Rejection Reason');
+            const r = await rejectReason(t('জমা প্রত্যাখ্যানের কারণ', 'Deposit rejection reason'));
             if (r === null) return;
-            await setDepositStatus(d.id, 'rejected', session, r); toast('জমা বাতিল / Deposit rejected', 'warn'); App.refresh();
+            await setDepositStatus(d.id, 'rejected', session, r); toast(t('জমা প্রত্যাখ্যাত', 'Deposit rejected'), 'warn'); App.refresh();
           },
         },
       ],
@@ -191,42 +202,65 @@ async function pendingWithdrawalItems(session) {
       ic: 'withdraw',
       title: w.memberName,
       sub: `${w.memberId} · ${fmtDate(w.date)}`,
-      meta: `${w.txnId ? w.txnId + ' · ' : ''}${withdrawalTypeLabel(w.type).bn} · ${methodLabel(w.method).bn}${descOf(w) ? ' · ' + descOf(w) : ''}`,
+      name: w.memberName || '',
+      memberId: w.memberId,
+      dateLabel: fmtDate(w.date),
+      dateCaption: t('উত্তোলনের তারিখ', 'Withdrawal date'),
+      meta: `${withdrawalTypeLabel(w.type).bn} · ${methodLabel(w.method).bn}${descOf(w) ? ' · ' + descOf(w) : ''}`,
       amount: num(w.amount),
       sort: String(w.submittedAt || ''),
       actions: [
         {
           label: t('অনুমোদন', 'Approve'), ic: 'approve', kind: 'soft', run: async () => {
-            if (!(await confirmBox(`${w.memberName} — ${taka(w.amount)} (${fmtDate(w.date)}) উত্তোলন অনুমোদন করবেন?`, { okLabel: 'Approve' }))) return;
-            await setWithdrawalStatus(w.id, 'approved', session); toast('উত্তোলন অনুমোদিত / Withdrawal approved', 'success'); App.refresh();
+            if (!(await confirmBox(t(`${w.memberName} — ${taka(w.amount)} (${fmtDate(w.date)}) উত্তোলন অনুমোদন করবেন?`, `Approve withdrawal of ${taka(w.amount)} for ${w.memberName} (${fmtDate(w.date)})?`), { okLabel: t('অনুমোদন', 'Approve') }))) return;
+            await setWithdrawalStatus(w.id, 'approved', session); toast(t('উত্তোলন অনুমোদিত', 'Withdrawal approved'), 'success'); App.refresh();
           },
         },
         {
           label: t('বাতিল', 'Reject'), ic: 'reject', kind: 'softred', run: async () => {
-            const r = await rejectReason('উত্তোলন বাতিলের কারণ / Withdrawal Rejection Reason');
+            const r = await rejectReason(t('উত্তোলন প্রত্যাখ্যানের কারণ', 'Withdrawal rejection reason'));
             if (r === null) return;
-            await setWithdrawalStatus(w.id, 'rejected', session, r); toast('উত্তোলন বাতিল / Withdrawal rejected', 'warn'); App.refresh();
+            await setWithdrawalStatus(w.id, 'rejected', session, r); toast(t('উত্তোলন প্রত্যাখ্যাত', 'Withdrawal rejected'), 'warn'); App.refresh();
           },
         },
       ],
     }));
 }
 
+/* ONE pending-request card: who applied, which member ID, when, and the two
+   decisions (অনুমোদন / প্রত্যাখ্যান). Anything secondary (View, Edit) is a small
+   ghost button, so the card never looks dense. */
 function approvalRow(item) {
   const KIND = { member: t('সদস্য', 'Member'), deposit: t('জমা', 'Deposit'), withdrawal: t('উত্তোলন', 'Withdrawal') };
-  const row = el('div', { class: `appr ${item.kind}` });
-  row.innerHTML = `<div class="ic">${icon(item.ic)}</div>
-    <div class="bd">
-      <div class="t">${esc(item.title)}<span class="kind">${esc(KIND[item.kind] || item.kind)}</span></div>
-      <div class="s">${esc(item.sub)}</div>
-      <div class="m">${esc(item.meta)}</div>
-    </div>`;
+  const row = el('div', { class: `appr acard ${item.kind}` });
+
+  const head = el('div', { class: 'ac-head' });
+  head.innerHTML = `<span class="ac-ic">${icon(item.ic)}</span>
+    <span class="ac-tt">
+      <b class="ac-name">${esc(item.name || item.title || '')}</b>
+      <span class="ac-sub"><span class="ac-mid">${esc(item.memberId || '')}</span>${item.sub && item.sub.includes('·') ? '' : ''}</span>
+    </span>
+    <span class="ac-kind">${esc(KIND[item.kind] || item.kind)}</span>`;
+  row.appendChild(head);
+
+  const meta = el('div', { class: 'ac-meta' });
+  meta.innerHTML = `<span class="ac-line"><span class="ac-cap">${esc(item.dateCaption || t('তারিখ', 'Date'))}</span> ${esc(item.dateLabel || '')}</span>
+    ${item.meta ? `<span class="ac-line">${esc(item.meta)}</span>` : ''}`;
+  row.appendChild(meta);
+
   if (item.amount !== null && item.amount !== undefined) {
-    row.appendChild(el('div', { class: 'amt', text: money(item.amount) }));
+    row.appendChild(el('div', { class: 'ac-amt', text: money(item.amount) }));
   }
-  const acts = el('div', { class: 'acts' });
-  item.actions.forEach(a => acts.appendChild(btn(a.label, a.ic, a.kind, a.run, { size: 'xs' })));
-  row.appendChild(acts);
+
+  const decisions = item.actions.filter(a => a.ic === 'approve' || a.ic === 'reject');
+  const secondary = item.actions.filter(a => a.ic !== 'approve' && a.ic !== 'reject');
+  const primary = el('div', { class: 'ac-acts' });
+  decisions.forEach(a => primary.appendChild(btn(a.label, a.ic, a.kind, a.run, { size: 'xs' })));
+  const rest = el('div', { class: 'ac-acts secondary' });
+  secondary.forEach(a => rest.appendChild(btn(a.label, a.ic, a.kind, a.run, { size: 'xs' })));
+  row.append(primary);
+  if (rest.children.length) row.append(rest);
+
   const approve = item.actions.find(a => a.ic === 'approve');
   const reject = item.actions.find(a => a.ic === 'reject');
   attachSwipe(row, {
@@ -238,11 +272,11 @@ function approvalRow(item) {
 
 /* ==================== Authorization Pending ==================== */
 export async function pageAuthorization(session) {
-  const wrap = page('অনুমোদন', 'Approvals', 'approve');
+  const wrap = page(t('অপেক্ষমাণ অনুরোধ', 'Pending Requests'), 'Pending Requests', 'pending');
   const canApproveMember = can(session, 'member:approve');
   const canApproveDeposit = can(session, 'deposit:approve');
   if (!canApproveMember && !canApproveDeposit) {
-    wrap.appendChild(banner('err', 'এই পেজে প্রবেশাধিকার নেই / You are not authorized to view pending authorizations.'));
+    wrap.appendChild(banner('err', esc(t('এই পেজে আপনার প্রবেশাধিকার নেই।', 'You are not authorized to view pending requests.'))));
     return wrap;
   }
 
@@ -258,10 +292,10 @@ export async function pageAuthorization(session) {
 
   const stats = el('div', { class: 'stats' });
   stats.append(
-    statCard({ label: 'সদস্য / Members', value: String(count('member')), sub: 'সদস্যপদ অনুমোদের অপেক্ষায়', ic: 'members', tone: 'blue' }),
-    statCard({ label: 'জমা / Deposits', value: String(count('deposit')), sub: sum('deposit') ? `মোট ${taka(sum('deposit'))}` : 'কোনো জমা নেই', ic: 'deposit', tone: 'amber' }),
-    statCard({ label: 'উত্তোলন / Withdrawals', value: String(count('withdrawal')), sub: sum('withdrawal') ? `মোট ${taka(sum('withdrawal'))}` : 'কোনো উত্তোলন নেই', ic: 'withdraw', tone: 'amber' }),
-    statCard({ label: 'সর্বমোট / Total', value: String(items.length), sub: 'এক জায়গায় সব অনুমোদন', ic: 'pending' }),
+    statCard({ label: t('সদস্য', 'Members'), value: String(count('member')), sub: t('সদস্যপদ অনুমোদের অপেক্ষায়', 'awaiting membership approval'), ic: 'members', tone: 'blue' }),
+    statCard({ label: t('জমা', 'Deposits'), value: String(count('deposit')), sub: sum('deposit') ? t(`মোট ${taka(sum('deposit'))}`, `${taka(sum('deposit'))} total`) : t('কোনো জমা নেই', 'nothing pending'), ic: 'deposit', tone: 'amber' }),
+    statCard({ label: t('উত্তোলন', 'Withdrawals'), value: String(count('withdrawal')), sub: sum('withdrawal') ? t(`মোট ${taka(sum('withdrawal'))}`, `${taka(sum('withdrawal'))} total`) : t('কোনো উত্তোলন নেই', 'nothing pending'), ic: 'withdraw', tone: 'amber' }),
+    statCard({ label: t('সর্বমোট', 'Total'), value: String(items.length), sub: t('এক জায়গায় সব অনুমোদন', 'every approval in one place'), ic: 'pending' }),
   );
   wrap.appendChild(stats);
 
@@ -281,14 +315,15 @@ export async function pageAuthorization(session) {
     const shown = filter === 'all' ? items : items.filter(i => i.kind === filter);
     const total = shown.reduce((s, i) => s + (i.amount || 0), 0);
     countLine.textContent = shown.length
-      ? `${shown.length}টি অনুরোধ${total ? ` · মোট ${money(total)}` : ''}`
+      ? t(`${shown.length}টি অনুরোধ${total ? ` · মোট ${money(total)}` : ''}`,
+          `${shown.length} request(s)${total ? ` · ${money(total)} total` : ''}`)
       : '';
     listBox.replaceChildren();
     if (!shown.length) {
       const msg = items.length
         ? t('এই ধরনের কোনো অনুরোধ নেই', 'Nothing pending in this category')
         : t('অনুমোদনের অপেক্ষায় কিছু নেই — সব শেষ!', 'Nothing waiting for approval — all clear!');
-      listBox.appendChild(el('div', { class: 'empty', html: `${icon(items.length ? 'filter' : 'check')}${esc(msg)}` }));
+      listBox.appendChild(el('div', { class: 'empty', html: `${icon(items.length ? 'filter' : 'check')}<span>${esc(msg)}</span>` }));
       return;
     }
     shown.forEach(i => listBox.appendChild(approvalRow(i)));
@@ -355,8 +390,8 @@ export async function staffManager(session, host) {
   const staff = users.filter(u => u.role === 'maker' || u.role === 'admin')
     .sort((a, b) => (a.role === b.role ? (a.username || '').localeCompare(b.username || '') : a.role === 'admin' ? -1 : 1));
 
-  const c = card('স্টাফ অ্যাকাউন্ট', 'Staff Accounts', el('div'), [
-    btn('নতুন Maker', 'plus', 'primary', () => newStaff(session), { size: 'xs' }),
+  const c = card(t('স্টাফ অ্যাকাউন্ট', 'Staff Accounts'), 'Staff Accounts', el('div'), [
+    btn(t('নতুন মেকার', 'New Maker'), 'plus', 'primary', () => newStaff(session), { size: 'xs' }),
   ]);
 
   const bar = el('div', { class: 'toolbar' });
@@ -387,7 +422,7 @@ export async function staffManager(session, host) {
         App.refresh();
       }, { size: 'xs' }));
       acts.appendChild(btn(t('মুছুন', 'Delete'), 'trash', 'softred', async () => {
-        if (!(await confirmBox(`${u.username} অ্যাকাউন্টটি স্থায়ীভাবে মুছে ফেলবেন?`, { okLabel: 'মুছুন', danger: true }))) return;
+        if (!(await confirmBox(t(`${u.username} অ্যাকাউন্টটি স্থায়ীভাবে মুছে ফেলবেন?`, `Permanently delete the account ${u.username}?`), { okLabel: t('মুছুন', 'Delete'), danger: true }))) return;
         try { await deleteUser(u.id, session); toast(t('অ্যাকাউন্ট মুছে ফেলা হয়েছে', 'Account deleted'), 'warn'); App.refresh(); }
         catch (err) { toast(err.message, 'error'); }
       }, { size: 'xs' }));
@@ -416,7 +451,7 @@ export async function staffManager(session, host) {
       return;
     }
     c.body.appendChild(tableWrap(
-      [{ label: 'ইউজারনেম' }, { label: 'নাম' }, { label: 'রোল' }, { label: 'মোবাইল' }, { label: 'স্ট্যাটাস' }, { label: 'তৈরি' }, { label: 'অ্যাকশন', cls: 'nowrap' }],
+      [{ label: t('ইউজারনেম', 'Username') }, { label: t('নাম', 'Name') }, { label: t('রোল', 'Role') }, { label: t('মোবাইল', 'Mobile') }, { label: t('স্ট্যাটাস', 'Status') }, { label: t('তৈরি', 'Created') }, { label: t('অ্যাকশন', 'Action'), cls: 'nowrap' }],
       rows.map(u => [
         `<b>${esc(u.username)}</b>`, esc(u.displayName || ''),
         { html: staffRoleTag(u) },
@@ -433,32 +468,34 @@ export async function staffManager(session, host) {
   stat.sel.addEventListener('change', render);
   onBreakpoint(c, render);
   render();
-  host.appendChild(banner('info', 'Maker সদস্য অনুমোদন, জমা এন্ট্রি ও অনুমোদন, প্রতিবেদন ও WhatsApp রিমাইন্ডার ব্যবহার করতে পারেন। Maker কেবল <b>আজকের তারিখের</b> জমা সম্পাদনা বা মুছতে পারবেন এবং Member ID পরিবর্তন করতে পারবেন না।'));
+  host.appendChild(banner('info', t(
+    'Maker সদস্য অনুমোদন, জমা এন্ট্রি ও অনুমোদন, প্রতিবেদন ও WhatsApp রিমাইন্ডার ব্যবহার করতে পারেন। Maker কেবল <b>আজকের তারিখের</b> জমা সম্পাদনা বা মুছতে পারবেন এবং Member ID পরিবর্তন করতে পারবেন না।',
+    'A Maker can approve members, enter and approve deposits, and use reports and WhatsApp reminders. A Maker may only edit or delete deposits dated <b>today</b> and cannot change a Member ID.')));
 }
 
 function newStaff(session) {
   return formModal({
-    title: 'নতুন Maker অ্যাকাউন্ট',
-    width: 460, okLabel: 'তৈরি করুন', dismissible: true,
+    title: t('নতুন মেকার অ্যাকাউন্ট', 'New Maker account'),
+    width: 460, okLabel: t('তৈরি করুন', 'Create'), dismissible: true,
     html: `<div class="grid g2">
-        <div class="field"><label>ইউজারনেম <span class="req">*</span></label><input name="username" required autocomplete="off"></div>
-        <div class="field"><label>নাম <span class="req">*</span></label><input name="displayName" required></div>
-        <div class="field"><label>মোবাইল</label><input name="mobile" inputmode="numeric" maxlength="11"></div>
-        <div class="field"><label>ইমেইল</label><input name="email" type="email"></div>
-        <div class="field"><label>পাসওয়ার্ড <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
-        <div class="field"><label>পাসওয়ার্ড (আবার) <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>${t('ইউজারনেম', 'Username')} <span class="req">*</span></label><input name="username" required autocomplete="off"></div>
+        <div class="field"><label>${t('নাম', 'Name')} <span class="req">*</span></label><input name="displayName" required></div>
+        <div class="field"><label>${t('মোবাইল', 'Mobile')}</label><input name="mobile" inputmode="numeric" maxlength="11"></div>
+        <div class="field"><label>${t('ইমেইল', 'Email')}</label><input name="email" type="email"></div>
+        <div class="field"><label>${t('পাসওয়ার্ড', 'Password')} <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>${t('পাসওয়ার্ড (আবার)', 'Password (again)')} <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
       </div>
-      <div class="hint">প্রথম লগইনে Maker-কে পাসওয়ার্ড পরিবর্তন করতে হবে।</div>`,
+      <div class="hint">${t('প্রথম লগইনে মেকারকে পাসওয়ার্ড পরিবর্তন করতে হবে।', 'A Maker must change the password on first login.')}</div>`,
     onSubmit: async (v, fail) => {
-      if (!String(v.username || '').trim()) return fail('ইউজারনেম আবশ্যক');
-      if (!String(v.displayName || '').trim()) return fail('নাম আবশ্যক');
-      if (v.mobile && !isValidMobile(v.mobile)) return fail('সঠিক মোবাইল নম্বর দিন');
-      if (v.email && !isValidEmail(v.email)) return fail('সঠিক ইমেইল দিন');
+      if (!String(v.username || '').trim()) return fail(t('ইউজারনেম আবশ্যক', 'Username is required'));
+      if (!String(v.displayName || '').trim()) return fail(t('নাম আবশ্যক', 'Name is required'));
+      if (v.mobile && !isValidMobile(v.mobile)) return fail(t('সঠিক মোবাইল নম্বর দিন', 'Enter a valid mobile number'));
+      if (v.email && !isValidEmail(v.email)) return fail(t('সঠিক ইমেইল দিন', 'Enter a valid email'));
       const issues = passwordIssues(v.pw1);
       if (issues.length) return fail(issues[0]);
-      if (v.pw1 !== v.pw2) return fail('দুইটি পাসওয়ার্ড এক নয়');
+      if (v.pw1 !== v.pw2) return fail(t('দুইটি পাসওয়ার্ড এক নয়', 'The two passwords do not match'));
       await createStaffUser({ username: v.username, displayName: v.displayName, password: v.pw1, role: 'maker', mobile: v.mobile, email: v.email }, session);
-      toast('Maker অ্যাকাউন্ট তৈরি হয়েছে', 'success');
+      toast(t('মেকার অ্যাকাউন্ট তৈরি হয়েছে', 'Maker account created'), 'success');
       App.refresh();
       return true;
     },
@@ -467,20 +504,20 @@ function newStaff(session) {
 
 function resetPw(session, u) {
   return formModal({
-    title: `পাসওয়ার্ড রিসেট — ${u.username}`,
-    width: 420, okLabel: 'রিসেট করুন', dismissible: true,
-    html: `<div class="banner warn">${icon('warn')}<span>নতুন পাসওয়ার্ড ব্যবহারকারীকে নিরাপদে জানিয়ে দিন। পুরাতন পাসওয়ার্ড আর কাজ করবে না।</span></div>
+    title: t(`পাসওয়ার্ড রিসেট — ${u.username}`, `Reset password — ${u.username}`),
+    width: 420, okLabel: t('রিসেট করুন', 'Reset'), dismissible: true,
+    html: `<div class="banner warn">${icon('warn')}<span>${t('নতুন পাসওয়ার্ড ব্যবহারকারীকে নিরাপদে জানিয়ে দিন। পুরাতন পাসওয়ার্ড আর কাজ করবে না।', 'Share the new password with the user securely. The old password will no longer work.')}</span></div>
       <div class="grid g2">
-        <div class="field"><label>পাসওয়ার্ড <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
-        <div class="field"><label>পাসওয়ার্ড (আবার) <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>${t('পাসওয়ার্ড', 'Password')} <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>${t('পাসওয়ার্ড (আবার)', 'Password (again)')} <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
       </div>
-      <label class="check"><input type="checkbox" name="mustChange" checked> পরবর্তী লগইনে পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক</label>`,
+      <label class="check"><input type="checkbox" name="mustChange" checked> ${t('পরবর্তী লগইনে পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক', 'Force a password change on next login')}</label>`,
     onSubmit: async (v, fail) => {
       const issues = passwordIssues(v.pw1);
       if (issues.length) return fail(issues[0]);
-      if (v.pw1 !== v.pw2) return fail('দুইটি পাসওয়ার্ড এক নয়');
+      if (v.pw1 !== v.pw2) return fail(t('দুইটি পাসওয়ার্ড এক নয়', 'The two passwords do not match'));
       await resetUserPassword(u.id, v.pw1, session, { mustChange: !!v.mustChange });
-      toast('পাসওয়ার্ড রিসেট হয়েছে', 'success');
+      toast(t('পাসওয়ার্ড রিসেট হয়েছে', 'Password reset'), 'success');
       App.refresh();
       return true;
     },
@@ -491,7 +528,7 @@ export async function accountManager(session, host) {
   const [members, users] = await Promise.all([allMembers(), allUsers()]);
   const rows = members.slice().sort((a, b) => a.memberId.localeCompare(b.memberId)).map(m => ({ m, u: users.find(u => u.memberDocId === m.id) }));
 
-  host.appendChild(banner('info', 'সদস্যের লগইন Username = তার মোবাইল নম্বর। পাসওয়ার্ড কখনো সংরক্ষিত বা প্রদর্শিত হয় না — প্রয়োজনে রিসেট করুন।'));
+  host.appendChild(banner('info', t('সদস্যের লগইন ইউজারনেম = তার মোবাইল নম্বর। পাসওয়ার্ড কখনো সংরক্ষিত বা প্রদর্শিত হয় না — প্রয়োজনে রিসেট করুন।', 'A member signs in with their mobile number as the username. Passwords are never stored in readable form or displayed — reset one when needed.')));
 
   const bar = el('div', { class: 'toolbar' });
   const searchBox = el('div', { class: 'search-box', html: icon('search') });
@@ -550,7 +587,7 @@ export async function accountManager(session, host) {
       return;
     }
     c.body.appendChild(tableWrap(
-      [{ label: 'ID' }, { label: 'নাম' }, { label: 'ইউজারনেম' }, { label: 'সদস্য স্ট্যাটাস' }, { label: 'লগইন স্ট্যাটাস' }, { label: 'অ্যাকশন', cls: 'nowrap' }],
+      [{ label: t('সদস্য আইডি', 'Member ID') }, { label: t('নাম', 'Name') }, { label: t('ইউজারনেম', 'Username') }, { label: t('সদস্য স্ট্যাটাস', 'Member status') }, { label: t('লগইন স্ট্যাটাস', 'Login status') }, { label: t('অ্যাকশন', 'Action'), cls: 'nowrap' }],
       shown.map(({ m, u }) => [
         `<b>${esc(m.memberId)}</b>`, esc(m.nameBn), esc(u ? u.username : '—'),
         { html: statusTag(m.status) },

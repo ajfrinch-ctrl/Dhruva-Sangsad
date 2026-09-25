@@ -34,26 +34,36 @@ export async function pageSettings(session, params = {}) {
 
   /* ---- tile menu ---- */
   const SECTIONS = [
-    { id: 'activity', ic: 'log', bn: 'কার্যক্রম লগ', en: 'Activity Log', desc: 'কে, কখন, কী করেছে / who did what, when', tone: '' },
-    { id: 'password', ic: 'lock', bn: 'পাসওয়ার্ড পরিবর্তন', en: 'Change Password', desc: 'নিরাপদ রাখুন / keep your account safe', tone: '' },
-    { id: 'account', ic: 'member', bn: 'আমার অ্যাকাউন্ট', en: 'My Account', desc: 'ইউজার, রোল, ডিভাইস / user, role, device', tone: '' },
-    { id: 'language', ic: 'globe', bn: 'ভাষা', en: 'Language', desc: 'বাংলা / English', tone: '' },
+    { id: 'activity', ic: 'log', bn: 'কার্যক্রম লগ', en: 'Activity Log', dBn: 'কে, কখন, কী করেছে', dEn: 'who did what, when', tone: '' },
+    { id: 'password', ic: 'lock', bn: 'পাসওয়ার্ড পরিবর্তন', en: 'Change Password', dBn: 'অ্যাকাউন্ট নিরাপদ রাখুন', dEn: 'keep your account safe', tone: '' },
+    { id: 'account', ic: 'member', bn: 'আমার অ্যাকাউন্ট', en: 'My Account', dBn: 'ইউজার, রোল, ডিভাইস', dEn: 'user, role, device', tone: '' },
+    { id: 'language', ic: 'globe', bn: 'ভাষা', en: 'Language', dBn: 'বাংলা বা ইংরেজি', dEn: 'Bangla or English', tone: '' },
   ];
   if (staff && (can(session, 'member:approve') || can(session, 'deposit:approve'))) {
-    SECTIONS.push({ id: 'approvals', ic: 'approve', bn: 'অনুমোদন', en: 'Approvals', desc: pending ? `${pending}টি অনুরোধ অপেক্ষায়` : 'সব অনুমোদন সম্পন্ন', route: 'authorization', badge: pending });
+    SECTIONS.push({
+      id: 'approvals', ic: 'approve', bn: 'অপেক্ষমাণ অনুরোধ', en: 'Pending Requests',
+      dBn: pending ? `${pending}টি অনুরোধ অপেক্ষায়` : 'সব অনুমোদন সম্পন্ন',
+      dEn: pending ? `${pending} request(s) waiting` : 'all approvals done',
+      route: 'authorization', badge: pending,
+    });
   }
   if (session.role === 'admin') {
-    SECTIONS.push({ id: 'staff', ic: 'maker', bn: 'স্টাফ', en: 'Staff', desc: `${makers} জন Maker`, tone: '' });
-    SECTIONS.push({ id: 'accounts', ic: 'members', bn: 'সদস্য লগইন', en: 'Member Logins', desc: 'চালু/বন্ধ, পাসওয়ার্ড রিসেট', tone: '' });
+    SECTIONS.push({ id: 'staff', ic: 'maker', bn: 'স্টাফ', en: 'Staff', dBn: `${makers} জন মেকার`, dEn: `${makers} maker(s)`, tone: '' });
+    SECTIONS.push({ id: 'accounts', ic: 'members', bn: 'সদস্য লগইন', en: 'Member Logins', dBn: 'চালু/বন্ধ, পাসওয়ার্ড রিসেট', dEn: 'enable/disable, password reset', tone: '' });
   }
   if (can(session, 'settings:manage')) {
-    SECTIONS.push({ id: 'organisation', ic: 'building', bn: 'সংগঠন', en: 'Organisation', desc: 'নাম, লোগো, কিস্তি, টেমপ্লেট', tone: '' });
-    SECTIONS.push({ id: 'firebase', ic: 'sync', bn: 'ক্লাউড সিঙ্ক', en: 'Cloud Sync', desc: queue.length ? `${queue.length}টি সিঙ্ক বাকি` : 'Firebase সংযোগ', badge: queue.length, tone: '' });
+    SECTIONS.push({ id: 'organisation', ic: 'building', bn: 'সংগঠন', en: 'Organisation', dBn: 'নাম, লোগো, কিস্তি, টেমপ্লেট', dEn: 'name, logo, installment, templates', tone: '' });
+    SECTIONS.push({
+      id: 'firebase', ic: 'sync', bn: 'ক্লাউড সিঙ্ক', en: 'Cloud Sync',
+      dBn: queue.length ? `${queue.length}টি সিঙ্ক বাকি` : 'Firebase সংযোগ',
+      dEn: queue.length ? `${queue.length} item(s) to sync` : 'Firebase connection',
+      badge: queue.length, tone: '',
+    });
   }
   if (can(session, 'backup:manage')) {
-    SECTIONS.push({ id: 'backup', ic: 'backup', bn: 'ব্যাকআপ', en: 'Backup', desc: 'সংরক্ষণ ও পুনরুদ্ধার', tone: '' });
+    SECTIONS.push({ id: 'backup', ic: 'backup', bn: 'ব্যাকআপ', en: 'Backup', dBn: 'সংরক্ষণ ও পুনরুদ্ধার', dEn: 'export and restore', tone: '' });
   }
-  SECTIONS.push({ id: 'about', ic: 'info', bn: 'অ্যাপ তথ্য', en: 'About', desc: 'সংস্করণ, ডিভাইস, সংযোগ', tone: 'gray' });
+  SECTIONS.push({ id: 'about', ic: 'info', bn: 'অ্যাপ তথ্য', en: 'About', dBn: 'সংস্করণ, ডিভাইস, সংযোগ', dEn: 'version, device, connection', tone: 'gray' });
 
   /* member-role view: only the entries they need */
   const visible = staff ? SECTIONS : SECTIONS.filter(x => !['staff', 'accounts', 'organisation', 'firebase', 'backup', 'approvals'].includes(x.id));
@@ -62,7 +72,7 @@ export async function pageSettings(session, params = {}) {
   visible.forEach(s => {
     const b = el('button', { type: 'button', class: `sec-tile${s.tone ? ' ' + s.tone : ''}` });
     b.innerHTML = `<span class="st-ic">${icon(s.ic)}</span>
-      <span class="st-tx"><span class="st-t">${esc(t(s.bn.split(' / ')[0], s.en))}</span><span class="st-s">${esc(t(s.desc.split(' / ')[0], s.desc))}</span></span>`
+      <span class="st-tx"><span class="st-t">${esc(t(s.bn, s.en))}</span><span class="st-s">${esc(t(s.dBn, s.dEn))}</span></span>`
       + (s.badge ? `<span class="pill">${s.badge}</span>` : '');
     b.addEventListener('click', () => (s.route ? App.go(s.route) : open(s.id)));
     menu.appendChild(b);
@@ -136,7 +146,7 @@ function passwordSection(host) {
       f.reset();
     } catch (err2) { err.textContent = err2.message; }
   });
-  host.appendChild(card('পাসওয়ার্ড পরিবর্তন / Change Password', '', f));
+  host.appendChild(card(t('পাসওয়ার্ড পরিবর্তন', 'Change Password'), 'Change Password', f));
 }
 
 /* ---- My account ---- */
@@ -152,7 +162,7 @@ function accountSection(session, host) {
   ]));
   host.appendChild(card('আমার অ্যাকাউন্ট', 'My Account', acc));
   if (session.role === 'member') {
-    host.appendChild(btn(t('আমার প্রোফাইল', 'My Profile'), 'member', 'ghost', () => App.go('member-panel'), { block: true }));
+    host.appendChild(btn(t('আমার প্রোফাইল', 'My Profile'), 'member', 'ghost', () => App.go('profile'), { block: true }));
   }
 }
 
@@ -194,8 +204,8 @@ function aboutSection(host) {
 /* ---- Organisation (admin/maker with settings:manage) ---- */
 function resizeLogoFile(file) {
   return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith('image/')) return reject(new Error('ছবি ফাইল দিন / Choose an image file'));
-    if (file.size > 4 * 1024 * 1024) return reject(new Error('ফাইল খুব বড় (সর্বোচ্চ ৪ MB)'));
+    if (!file || !file.type.startsWith('image/')) return reject(new Error(t('ছবি ফাইল দিন', 'Choose an image file')));
+    if (file.size > 4 * 1024 * 1024) return reject(new Error(t('ফাইল খুব বড় (সর্বোচ্চ ৪ MB)', 'File is too large (max 4 MB)')));
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -211,7 +221,7 @@ function resizeLogoFile(file) {
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       resolve(c.toDataURL('image/png'));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('ছবি খোলা যায়নি')); }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('ছবি খোলা যায়নি', 'The image could not be opened'))); }
     img.src = url;
   });
 }
@@ -258,9 +268,9 @@ async function organisationSection(session, host) {
     try {
       pendingLogo = await resizeLogoFile(file);
       paintPreview();
-      toast('লোগো নির্বাচন করা হয়েছে — Save করুন', 'info');
+      toast(t('লোগো নির্বাচন করা হয়েছে — Save করুন', 'Logo selected — press Save'), 'info');
     } catch (err) {
-      toast(err.message || 'লোগো লোড করা যায়নি', 'error');
+      toast(err.message || t('লোগো লোড করা যায়নি', 'The logo could not be loaded'), 'error');
       fileInput.value = '';
     }
   });
@@ -292,7 +302,7 @@ async function organisationSection(session, host) {
       });
     } catch (err) {
       b.disabled = false;
-      toast('সেটিংস সংরক্ষণ ব্যর্থ: ' + err.message, 'error');
+      toast(t('সেটিংস সংরক্ষণ ব্যর্থ', 'Saving settings failed') + ': ' + err.message, 'error');
       return;
     }
     b.disabled = false;
@@ -304,15 +314,15 @@ async function organisationSection(session, host) {
 
   /* --- danger zone --- */
   const dz = el('div');
-  dz.appendChild(banner('warn', 'নিচের কাজগুলো স্থায়ী। কাজ করার আগে অবশ্যই ব্যাকআপ নিন।'));
+  dz.appendChild(banner('warn', t('নিচের কাজগুলো স্থায়ী। কাজ করার আগে অবশ্যই ব্যাকআপ নিন।', 'These actions are permanent. Always take a backup first.')));
   const dRow = el('div', { class: 'btn-row', style: 'margin-top:8px' });
   dRow.appendChild(btn('ব্যাকআপ ও রিস্টোর / Backup & Restore', 'backup', 'ghost', () => App.go('settings', { section: 'backup' })));
   dRow.appendChild(btn('স্থানীয় ডাটা মুছুন / Clear local data', 'trash', 'danger', async () => {
-    if (!(await confirmBox('এই ডিভাইসের সমস্ত স্থানীয় ডাটা (সদস্য, জমা, লগ, ব্যবহারকারী) মুছে যাবে। Firebase-এ ডাটা থাকলে পুনরায় Pull করা যাবে। নিশ্চিত?', { okLabel: 'Erase', danger: true }))) return;
-    if (!(await confirmBox('শেষ সতর্কতা — সত্যিই মুছে ফেলবেন?', { okLabel: 'Yes, erase', danger: true }))) return;
+    if (!(await confirmBox(t('এই ডিভাইসের সমস্ত স্থানীয় ডাটা (সদস্য, জমা, লগ, ব্যবহারকারী) মুছে যাবে। Firebase-এ ডাটা থাকলে পুনরায় Pull করা যাবে। নিশ্চিত?', 'All local data (members, deposits, logs, users) on this device will be erased. If the data exists in Firebase it can be pulled again. Continue?'), { okLabel: t('মুছে ফেলুন', 'Erase'), danger: true }))) return;
+    if (!(await confirmBox(t('শেষ সতর্কতা — সত্যিই মুছে ফেলবেন?', 'Last warning — really erase everything?'), { okLabel: t('হ্যাঁ, মুছে ফেলুন', 'Yes, erase'), danger: true }))) return;
     for (const st of Object.keys(STORES)) await dbClear(st);
     invalidate();
-    toast('স্থানীয় ডাটা মুছে ফেলা হয়েছে', 'warn');
+    toast(t('স্থানীয় ডাটা মুছে ফেলা হয়েছে', 'Local data erased'), 'warn');
     setTimeout(() => location.reload(), 700);
   }));
   const dc = card('বিপদজনক অঞ্চল', 'Danger Zone', dz);
@@ -351,38 +361,38 @@ async function firebaseSection(session, host) {
   /* cloud actions (previously on the Backup page header) */
   const cRow = el('div', { class: 'btn-stack', style: 'margin-top:10px' });
   cRow.appendChild(btn('এখনই সিঙ্ক / Sync now', 'sync', 'soft', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    try { const n = await firebase.flush(); toast(`${n}টি সিঙ্ক হয়েছে`, 'success'); App.refresh(); }
+    if (!firebase.configured) { toast(t('প্রথমে Firebase কনফিগার করুন', 'Configure Firebase first'), 'warn'); return; }
+    try { const n = await firebase.flush(); toast(t(`${n}টি সিঙ্ক হয়েছে`, `${n} item(s) synced`), 'success'); App.refresh(); }
     catch (err) { toast(err.message, 'error'); }
   }, { block: true }));
   cRow.appendChild(btn('ক্লাউড থেকে আনুন / Pull from cloud', 'download', 'soft', async () => {
     if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    if (!(await confirmBox('Firebase থেকে সব ডাটা টেনে এনে স্থানীয় ডাটার সাথে মিলানো হবে। চালিয়ে যাবেন?', { okLabel: 'আনুন' }))) return;
-    try { const n = await firebase.pullAll(); const { dedupeTxnIds } = await import('../store.js'); await dedupeTxnIds(); invalidate(); toast(`${n}টি রেকর্ড আনা হয়েছে`, 'success'); App.refresh(); }
+    if (!(await confirmBox(t('Firebase থেকে সব ডাটা টেনে এনে স্থানীয় ডাটার সাথে মিলানো হবে। চালিয়ে যাবেন?', 'All data will be pulled from Firebase and merged with this device. Continue?'), { okLabel: t('আনুন', 'Pull') }))) return;
+    try { const n = await firebase.pullAll(); const { dedupeTxnIds } = await import('../store.js'); await dedupeTxnIds(); invalidate(); toast(t(`${n}টি রেকর্ড আনা হয়েছে`, `${n} record(s) pulled`), 'success'); App.refresh(); }
     catch (err) { toast(err.message, 'error'); }
   }, { block: true }));
   cRow.appendChild(btn('ক্লাউডে পাঠান / Push to cloud', 'upload', 'ghost', async () => {
     if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    if (!(await confirmBox('স্থানীয় সব ডাটা Firebase-এ পাঠানো হবে এবং সার্ভারের একই রেকর্ড প্রতিস্থাপিত হবে। চালিয়ে যাবেন?', { okLabel: 'পাঠান', danger: true }))) return;
-    try { const n = await firebase.pushAll(); toast(`${n}টি রেকর্ড পাঠানো হয়েছে`, 'success'); }
+    if (!(await confirmBox(t('স্থানীয় সব ডাটা Firebase-এ পাঠানো হবে এবং সার্ভারের একই রেকর্ড প্রতিস্থাপিত হবে। চালিয়ে যাবেন?', 'All local data will be uploaded to Firebase, replacing the same records on the server. Continue?'), { okLabel: t('পাঠান', 'Push'), danger: true }))) return;
+    try { const n = await firebase.pushAll(); toast(t(`${n}টি রেকর্ড পাঠানো হয়েছে`, `${n} record(s) pushed`), 'success'); }
     catch (err) { toast(err.message, 'error'); }
   }, { block: true }));
 
   fb.addEventListener('submit', async e => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(fb).entries());
-    if (!v.apiKey || !v.databaseURL) { toast('apiKey ও databaseURL আবশ্যক', 'error'); return; }
+    if (!v.apiKey || !v.databaseURL) { toast(t('apiKey ও databaseURL আবশ্যক', 'apiKey and databaseURL are required'), 'error'); return; }
     try {
       await firebase.saveConfig(v);
       await logActivity('SETTINGS_UPDATE', 'Firebase configuration updated', session);
-      toast(firebase.ready ? 'Firebase সংযুক্ত হয়েছে' : 'সংরক্ষিত হয়েছে', firebase.ready ? 'success' : 'info');
+      toast(firebase.ready ? t('Firebase সংযুক্ত হয়েছে', 'Firebase connected') : t('সংরক্ষিত হয়েছে', 'Saved'), firebase.ready ? 'success' : 'info');
       paintStat();
     } catch (err) { toast(err.message, 'error'); }
   });
   fb.querySelector('#fbClear').addEventListener('click', async () => {
-    if (!(await confirmBox('Firebase সংযোগ বিচ্ছিন্ন করবেন? অ্যাপটি শুধুমাত্র অফলাইনে চলবে।', { okLabel: 'Disconnect', danger: true }))) return;
+    if (!(await confirmBox(t('Firebase সংযোগ বিচ্ছিন্ন করবেন? অ্যাপটি শুধুমাত্র অফলাইনে চলবে।', 'Disconnect Firebase? The app will run offline only.'), { okLabel: t('বিচ্ছিন্ন করুন', 'Disconnect'), danger: true }))) return;
     await firebase.saveConfig(null);
-    toast('সংযোগ বিচ্ছিন্ন / Disconnected', 'warn');
+    toast(t('সংযোগ বিচ্ছিন্ন', 'Disconnected'), 'warn');
     App.refresh();
   });
   fb.querySelector('#fbSync').addEventListener('click', async () => {

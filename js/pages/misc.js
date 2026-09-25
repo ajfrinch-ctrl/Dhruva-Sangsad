@@ -1,72 +1,15 @@
 /* Notifications (top-right bell) + Activity Log (Settings only). */
 import {
-  el, esc, toast, fmtDate, fmtTime, todayISO, debounce, modal, t,
+  el, esc, fmtDate, fmtTime, todayISO, debounce, t,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, btn, filterSheet, emptyState } from '../ui.js';
-import { visibleNotifications, markNotificationRead, allLogs, logUserName } from '../store.js';
-import { App } from '../app.js';
+import { allLogs, logUserName } from '../store.js';
 
-const NOTIF_ICON = { register: 'register', deposit: 'deposit', approve: 'approve', reject: 'reject', info: 'bell', warn: 'warn', due: 'due' };
+/* Activity Log (Settings → Activity Log).
+   The notification centre lives in its own module (pages/notifications.js) —
+   it is NOT duplicated here: one feature, one implementation. */
 
-/* ==================== Notifications (popup from top-right bell) ==================== */
-export async function openNotifications(session) {
-  const items = await visibleNotifications(session);
-  const isRead = n => !!(n.readBy && n.readBy[session.id]);
-
-  const body = el('div');
-  const head = el('div', { class: 'btn-row', style: 'margin-bottom:10px' });
-  head.appendChild(btn('সব পঠিত করুন', 'check', 'soft', async () => {
-    const unread = items.filter(n => !isRead(n));
-    if (!unread.length) { toast('কোনো অপঠিত বিজ্ঞপ্তি নেই', 'info'); return; }
-    for (const n of unread) await markNotificationRead(n.id, session.id);
-    toast(`${unread.length}টি বিজ্ঞপ্তি পঠিত চিহ্নিত হয়েছে`, 'success');
-    App.refreshNotifBadge();
-    body.replaceChildren();
-    buildList();
-  }, { size: 'xs' }));
-  body.appendChild(head);
-
-  function buildList() {
-    if (!items.length) {
-      body.appendChild(el('div', { class: 'empty', html: `${icon('bell')}এখনো কোনো বিজ্ঞপ্তি নেই` }));
-      return;
-    }
-    const list = el('div', { class: 'list' });
-    items.forEach(n => {
-      const sticky = !!(n.sticky || n.kind === 'due');
-      const read = !sticky && isRead(n);
-      const li = el('div', { class: 'li' + (read ? '' : ' unread') + (n.kind === 'due' ? ' wa-msg' : '') });
-      li.innerHTML = `
-        <div class="ic ${n.kind === 'due' ? 'r' : n.kind === 'reject' ? 'b' : 'a'}">${icon(NOTIF_ICON[n.kind] || 'bell')}</div>
-        <div class="bd"><div class="t">${esc(n.title)}${read || sticky ? (sticky ? ' <span class="tag due">বকেয়া</span>' : '') : ' <span class="tag pending">নতুন</span>'}</div>
-          <div class="s">${esc(n.body || '')}</div>
-          ${n.action === 'deposit' ? '<div class="s" style="margin-top:6px"><span class="tag info">এখনই জমা দিন →</span></div>' : ''}</div>
-        <div class="w">${esc(fmtDate(n.createdAt))}<br>${esc(fmtTime(n.createdAt))}</div>`;
-      li.style.cursor = 'pointer';
-      li.title = t('ট্যাপ করে পঠিত চিহ্নিত করুন', 'Tap to mark read');
-      li.addEventListener('click', async () => {
-        if (!sticky && !read) {
-          await markNotificationRead(n.id, session.id);
-          li.classList.remove('unread');
-          li.querySelector('.tag.pending')?.remove();
-          App.refreshNotifBadge();
-        }
-        if (n.action === 'deposit') {
-          document.querySelector('.modal-back')?.remove();
-          App.go('deposits', { section: 'entry' });
-        }
-      });
-      list.appendChild(li);
-    });
-    body.appendChild(list);
-  }
-  buildList();
-
-  return modal({ title: t('বিজ্ঞপ্তি', 'Notifications'), body, width: 540, actions: [{ label: t('বন্ধ করুন', 'Close'), value: true, kind: 'primary' }] });
-}
-
-/* ==================== Activity Log ==================== */
 const ACTION_META = {
   REGISTRATION: { ic: 'register', bn: 'নিবন্ধন' },
   MEMBER_UPDATE: { ic: 'edit', bn: 'সদস্য হালনাগাদ' },
