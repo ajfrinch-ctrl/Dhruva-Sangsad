@@ -4,7 +4,7 @@ import {
   DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, monthKey, t,
 } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage, emptyState, bottomSheet } from '../ui.js';
+import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, tabs, embedPage, emptyState, segChips, filterSheet } from '../ui.js';
 import { memberPicker } from '../picker.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, submitDeposit, memberSummary, setDepositStatus,
@@ -34,42 +34,7 @@ const WTYPE_SHORT = [
   { value: 'other', bn: 'অন্যান্য', en: 'Other' },
 ];
 
-/* Segmented single-select chips backed by a hidden input, so FormData,
-   validation and the store see the exact same field as the old <select>.
-   Unknown initial values fall back to the first option (old selects did the
-   same by rendering it first). */
-function segChips(name, options, value, { onChange = null } = {}) {
-  const wrap = el('div', { class: 'seg', role: 'radiogroup' });
-  const hidden = el('input', { type: 'hidden', name, value: options.some(o => o.value === value) ? value : options[0].value });
-  const paint = () => {
-    [...wrap.querySelectorAll('.seg-chip')].forEach(b => {
-      const on = b.dataset.value === hidden.value;
-      b.classList.toggle('on', on);
-      b.setAttribute('aria-checked', on ? 'true' : 'false');
-    });
-  };
-  options.forEach(o => {
-    const b = el('button', { type: 'button', class: 'seg-chip', role: 'radio', 'aria-checked': 'false', text: t(o.bn, o.en) });
-    b.dataset.value = o.value;
-    b.addEventListener('click', () => {
-      if (hidden.value === o.value) return;
-      hidden.value = o.value;
-      paint();
-      hidden.dispatchEvent(new Event('change', { bubbles: true }));
-      if (onChange) onChange(o.value);
-    });
-    wrap.appendChild(b);
-  });
-  paint();
-  const root = el('div');
-  root.append(wrap, hidden);
-  return {
-    root, hidden,
-    get value() { return hidden.value; },
-    set(v) { if (options.some(o => o.value === v) && hidden.value !== v) { hidden.value = v; paint(); } },
-    reset() { this.set(options[0].value); },
-  };
-}
+/* segChips + filterSheet live in js/ui.js (shared with restore mode + activity log). */
 
 /* ==================== Deposits hub (Entry / Withdrawal / Transactions) ==================== */
 export async function pageDepositsHub(session, params = {}) {
@@ -483,40 +448,6 @@ const DEP_STATUS_OPTS = [
 
 /* Reusable filter sheet: single-select chip groups + date range. Picks stay
    local until [প্রয়োগ করুন]; [ফিল্টার মুছুন] clears everything. */
-function filterSheet({ state, onApply, onClear }) {
-  const tmp = { ...state };
-  const body = el('div', { class: 'fsheet' });
-  const grp = (label, opts, key) => {
-    const sec = el('div', { class: 'fsheet-sec' });
-    sec.appendChild(el('div', { class: 'fsheet-lbl', text: label }));
-    sec.appendChild(segChips('f_' + key, opts, tmp[key], { onChange: v => { tmp[key] = v; } }).root);
-    body.appendChild(sec);
-  };
-  grp(t('স্ট্যাটাস', 'Status'), DEP_STATUS_OPTS, 'st');
-  grp(t('ধরন', 'Type'), [{ value: '', bn: 'সব', en: 'All' }, ...TYPE_SHORT], 'tp');
-  grp(t('পদ্ধতি', 'Method'), [{ value: '', bn: 'সব', en: 'All' }, ...METHOD_SHORT], 'mt');
-  const dates = el('div', { class: 'fsheet-dates' });
-  const mkD = (lbl, val) => {
-    const f = el('div', { class: 'field' });
-    f.appendChild(el('label', { text: lbl }));
-    const i = el('input', { type: 'date', value: val || '' });
-    f.appendChild(i);
-    dates.appendChild(f);
-    return i;
-  };
-  const fromI = mkD(t('তারিখ: শুরু', 'Date: from'), tmp.from);
-  const toI = mkD(t('শেষ', 'to'), tmp.to);
-  body.appendChild(dates);
-  const bar = el('div', { class: 'fsheet-actions' });
-  const applyB = el('button', { type: 'button', class: 'btn btn-primary', text: t('প্রয়োগ করুন', 'Apply') });
-  const clearB = el('button', { type: 'button', class: 'btn btn-ghost', text: t('ফিল্টার মুছুন', 'Clear filters') });
-  bar.append(applyB, clearB);
-  body.appendChild(bar);
-  const { close } = bottomSheet({ title: t('ফিল্টার', 'Filter'), body });
-  applyB.addEventListener('click', () => { tmp.from = fromI.value; tmp.to = toI.value; close(); onApply(tmp); });
-  clearB.addEventListener('click', () => { close(); onClear(); });
-}
-
 /* ==================== Deposit history ==================== */
 export async function pageDepositHistory(session, params = {}) {
   const [members, deposits, cfg] = await Promise.all([allMembers(), allDeposits(), settings()]);
@@ -543,6 +474,12 @@ export async function pageDepositHistory(session, params = {}) {
   paintBadge();
   filterBtn.addEventListener('click', () => filterSheet({
     state: { st, tp, mt, from, to },
+    sections: [
+      { key: 'st', label: t('স্ট্যাটাস', 'Status'), options: DEP_STATUS_OPTS },
+      { key: 'tp', label: t('ধরন', 'Type'), options: [{ value: '', bn: 'সব', en: 'All' }, ...TYPE_SHORT] },
+      { key: 'mt', label: t('পদ্ধতি', 'Method'), options: [{ value: '', bn: 'সব', en: 'All' }, ...METHOD_SHORT] },
+    ],
+    dates: { fromLabel: t('তারিখ: শুরু', 'Date: from'), toLabel: t('শেষ', 'to') },
     onApply: s => { ({ st, tp, mt, from, to } = s); paintBadge(); render(); },
     onClear: () => { st = tp = mt = from = to = ''; paintBadge(); render(); },
   }));

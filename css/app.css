@@ -1017,3 +1017,14 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
   background:linear-gradient(180deg,transparent,var(--bg) 45%)}
 .export-bar .icon-btn{width:46px;height:46px;font-size:19px;box-shadow:var(--shadow)}
 @media(max-width:640px){.export-bar{gap:12px}}
+/* ============ Phase NGO — admin: backup blocks, danger zone, user cards, activity ============ */
+.btn-stack{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.btn-stack .btn{min-height:46px}
+.card.danger-zone{border:1.5px solid var(--red-line)}
+.card.danger-zone .card-head h3{color:var(--red-dark)}
+.user-card{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.user-card .ul-1{font-size:14px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.user-card .ul-2{font-size:12.5px;color:var(--muted);margin-top:2px}
+.user-card .ul-3{margin-top:5px}
+.user-card .ul-act{margin-top:8px}
+.act-list{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}

@@ -7,7 +7,7 @@ import {
   allMembers, allDeposits, allWithdrawals, allLogs, settings, memberSummary, summariesFor,
   orgTotals, getMember, withdrawalBalance, summaryOpts, logUserName,
 } from '../store.js';
-import { actionMeta } from './misc.js';
+import { actRow } from './misc.js';
 import { App } from '../app.js';
 
 /* ---------------- shared building blocks ---------------- */
@@ -56,15 +56,7 @@ function activityCard(logs) {
   if (!logs.length) {
     body.appendChild(el('div', { class: 'empty', html: `${icon('log')}${esc(t('এখনো কোনো কার্যক্রম নেই', 'No activity yet'))}` }));
   } else {
-    logs.slice(0, 6).forEach(l => {
-      const meta = actionMeta(l.action);
-      const row = el('div', { class: 'act' });
-      row.innerHTML = `<span class="ai">${icon(meta.ic)}</span>
-        <span class="ab"><span class="at">${esc(meta.bn)}</span>
-          <span class="as">${esc(logUserName(l))}${l.details ? ' · ' + esc(l.details) : ''}</span></span>
-        <span class="aw">${esc(fmtDate(l.createdAt))}<br>${esc(fmtTime(l.createdAt))}</span>`;
-      body.appendChild(row);
-    });
+    logs.slice(0, 6).forEach(l => body.appendChild(actRow(l)));
   }
   box.appendChild(body);
   return box;

@@ -5,7 +5,7 @@ import {
   isValidEmail, APP_NAME_BN, APP_NAME_EN, debounce,
 } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, embedPage } from '../ui.js';
+import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, embedPage, segChips, emptyState } from '../ui.js';
 import { attachSwipe } from '../gestures.js';
 import { pageActivity } from './misc.js';
 import {
@@ -43,15 +43,15 @@ export async function pageBackup(session) {
   /* -------- local backup -------- */
   const bBody = el('div');
   bBody.appendChild(banner('info', 'ব্যাকআপ ফাইলে সমস্ত সদস্য, জমা, ব্যবহারকারী (হ্যাশকৃত পাসওয়ার্ডসহ), বিজ্ঞপ্তি, লগ ও সেটিংস সংরক্ষিত থাকে। ফাইলটি নিরাপদ স্থানে রাখুন।'));
-  const bRow = el('div', { class: 'btn-row', style: 'margin-top:8px' });
-  bRow.appendChild(btn('JSON ব্যাকআপ ডাউনলোড / Download Backup', 'download', 'primary', async () => {
+  const bRow = el('div', { class: 'btn-stack' });
+  bRow.appendChild(btn('ব্যাকআপ ডাউনলোড (JSON)', 'download', 'primary', async () => {
     const payload = await exportAll();
     const name = `Dhruvo_Sangsad_Backup_${todayISO()}_${String(Date.now()).slice(-6)}.json`;
     downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), name);
     await logActivity('BACKUP', `Backup downloaded (${name})`, session);
-    toast('ব্যাকআপ ডাউনলোড হয়েছে / Backup downloaded', 'success');
-  }));
-  bRow.appendChild(btn('Excel ব্যাকআপ / Excel Export', 'excel', 'soft', async () => {
+    toast('ব্যাকআপ ডাউনলোড হয়েছে', 'success');
+  }, { block: true }));
+  bRow.appendChild(btn('Excel Export', 'excel', 'soft', async () => {
     const cfg = await settings();
     const sums = await summariesFor(members, deposits, cfg);
     const mRows = [['Member ID', 'Name (Bangla)', 'Name (English)', 'Mobile', 'WhatsApp', 'Email', 'NID', 'DOB', 'Profession', 'Address', 'Installment', 'Join Date', 'Status', 'Total Deposit', 'Total Due', 'Total Advance']];
@@ -69,8 +69,8 @@ export async function pageBackup(session) {
       { name: 'Members', rows: mRows }, { name: 'Deposits', rows: dRows }, { name: 'Activity Log', rows: lRows },
     ], `Dhruvo_Sangsad_Data_${todayISO()}.xlsx`);
     await logActivity('BACKUP', 'Excel export downloaded', session);
-    toast('Excel ডাউনলোড হয়েছে / Excel downloaded', 'success');
-  }));
+    toast('Excel ডাউনলোড হয়েছে', 'success');
+  }, { block: true }));
   const bc = card('ব্যাকআপ', 'Backup', bBody);
   bc.body.appendChild(bRow);
   wrap.appendChild(bc);
@@ -80,67 +80,72 @@ export async function pageBackup(session) {
   rBody.appendChild(banner('warn', '<b>সতর্কতা:</b> পুনরুদ্ধার করলে বর্তমান স্থানীয় ডাটা মুছে গিয়ে ব্যাকআপ ফাইলের ডাটা বসবে। কাজটি ফেরানো যাবে না।'));
   const file = el('input', { type: 'file', accept: '.json,application/json' });
   const ff = el('div', { class: 'field', style: 'margin-top:8px' });
-  ff.appendChild(el('label', { text: 'ব্যাকআপ ফাইল নির্বাচন / Select backup file (.json)' }));
+  ff.appendChild(el('label', { text: 'ব্যাকআপ ফাইল (.json)' }));
   ff.appendChild(file);
   rBody.appendChild(ff);
-  const rRow = el('div', { class: 'btn-row', style: 'margin-top:8px' });
-  const modeSel = el('select', { style: 'max-width:220px' });
-  [['wipe', 'সম্পূর্ণ প্রতিস্থাপন / Replace all'], ['merge', 'একত্রীকরণ / Merge into existing']].forEach(([v, l]) => modeSel.appendChild(el('option', { value: v }, [l])));
-  const mf = el('div', { class: 'field', style: 'max-width:240px' });
-  mf.appendChild(el('label', { text: 'পুনরুদ্ধার পদ্ধতি / Restore mode' })); mf.appendChild(modeSel);
+  const rRow = el('div', { class: 'btn-stack' });
+  const modeSeg = segChips('mode', [
+    { value: 'wipe', bn: 'সব মুছে প্রতিস্থাপন', en: 'Replace all' },
+    { value: 'merge', bn: 'আগের ডেটার সাথে মেশান', en: 'Merge into existing' },
+  ], 'wipe');
+  const mf = el('div', { class: 'field' });
+  mf.appendChild(el('label', { text: 'পুনরুদ্ধার পদ্ধতি' })); mf.appendChild(modeSeg.root);
   rBody.appendChild(mf);
-  rRow.appendChild(btn('পুনরুদ্ধার / Restore', 'restore', 'danger', async () => {
+  rRow.appendChild(btn('পুনরুদ্ধার করুন', 'restore', 'danger', async () => {
     const f = file.files && file.files[0];
-    if (!f) { toast('প্রথমে একটি ব্যাকআপ ফাইল নির্বাচন করুন / Select a backup file first', 'warn'); return; }
+    if (!f) { toast('প্রথমে একটি ব্যাকআপ ফাইল নির্বাচন করুন', 'warn'); return; }
     let payload;
     try { payload = JSON.parse(await f.text()); }
-    catch { toast('ফাইলটি পড়া যায়নি / Invalid JSON file', 'error'); return; }
-    if (!payload || !payload.data) { toast('এটি বৈধ ব্যাকআপ ফাইল নয় / Not a valid backup file', 'error'); return; }
+    catch { toast('ফাইলটি পড়া যায়নি', 'error'); return; }
+    if (!payload || !payload.data) { toast('এটি বৈধ ব্যাকআপ ফাইল নয়', 'error'); return; }
     const counts = Object.entries(payload.data).map(([k, v]) => `${k}: ${(v || []).length}`).join(' · ');
     const ok = await confirmBox(
-      `ব্যাকআপ তারিখ: ${fmtDateTime(payload.exportedAt)}\n${counts}\n\n${modeSel.value === 'wipe' ? 'বর্তমান সব ডাটা মুছে যাবে।' : 'বিদ্যমান ডাটার সাথে একত্রিত হবে।'} আপনি কি নিশ্চিত?`,
-      { title: 'পুনরুদ্ধার নিশ্চিত করুন / Confirm Restore', okLabel: 'Restore', danger: true });
+      `ব্যাকআপ তারিখ: ${fmtDateTime(payload.exportedAt)}\n${counts}\n\n${modeSeg.value === 'wipe' ? 'বর্তমান সব ডাটা মুছে যাবে।' : 'বিদ্যমান ডাটার সাথে একত্রিত হবে।'} আপনি কি নিশ্চিত?`,
+      { title: 'পুনরুদ্ধার নিশ্চিত করুন', okLabel: 'পুনরুদ্ধার করুন', danger: true });
     if (!ok) return;
     try {
-      const names = await importAll(payload, { wipe: modeSel.value === 'wipe' });
+      const names = await importAll(payload, { wipe: modeSeg.value === 'wipe' });
       invalidate();
       await logActivity('RESTORE', `Restored from backup (${names.join(', ')})`, session);
-      await alertBox('পুনরুদ্ধার সফল হয়েছে। অ্যাপ পুনরায় লোড হবে। / Restore successful — the app will reload.', 'সফল / Success');
+      await alertBox('পুনরুদ্ধার সফল হয়েছে। অ্যাপ পুনরায় লোড হবে।', 'সফল');
       location.reload();
     } catch (err) { toast('পুনরুদ্ধার ব্যর্থ: ' + err.message, 'error'); }
-  }));
+  }, { block: true }));
   const rc = card('পুনরুদ্ধার', 'Restore', rBody);
+  rc.classList.add('danger-zone');
   rc.body.appendChild(rRow);
   wrap.appendChild(rc);
 
   /* -------- cloud sync -------- */
   const cBody = el('div');
   const cfg = await settings();
+  const syncMeta = { synced: ['হালনাগাদ', 'approved'], syncing: ['সিঙ্ক হচ্ছে', 'pending'], online: ['অনলাইন', 'info'], offline: ['অফলাইন', 'gray'], 'sync-error': ['ত্রুটি', 'rejected'] };
+  const [syncBn, syncCls] = syncMeta[firebase.status] || syncMeta.offline;
   cBody.appendChild(kv([
-    ['Firebase', firebase.configured ? '<span class="tag approved">CONFIGURED</span>' : '<span class="tag gray">NOT CONFIGURED</span>'],
-    ['Status', `<span class="tag ${firebase.status === 'synced' ? 'approved' : firebase.status === 'offline' ? 'gray' : 'info'}">${esc((firebase.status || 'offline').toUpperCase())}</span>`],
-    ['Device ID', esc(deviceId())],
-    ['Pending sync items', String(queue.length)],
+    ['Firebase', firebase.configured ? '<span class="tag approved">সেটআপ আছে</span>' : '<span class="tag gray">সেটআপ নেই</span>'],
+    ['স্ট্যাটাস', `<span class="tag ${syncCls}">${esc(t(syncBn, firebase.status || 'offline'))}</span>`],
+    ['ডিভাইস ID', esc(deviceId())],
+    ['সিঙ্ক বাকি', String(queue.length)],
   ]));
-  const cRow = el('div', { class: 'btn-row', style: 'margin-top:8px' });
-  cRow.appendChild(btn('Firebase কনফিগার / Configure', 'settings', 'ghost', () => App.go('settings', { tab: 'firebase' })));
+  const cRow = el('div', { class: 'btn-stack' });
+  cRow.appendChild(btn('Firebase কনফিগার / Configure', 'settings', 'ghost', () => App.go('settings', { tab: 'firebase' }), { block: true }));
   cRow.appendChild(btn('এখনই সিঙ্ক / Sync now', 'sync', 'soft', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন / Configure Firebase first', 'warn'); return; }
-    try { const n = await firebase.flush(); toast(`${n} item(s) synced`, 'success'); App.refresh(); }
-    catch (err) { toast(err.message, 'error'); }
-  }));
-  cRow.appendChild(btn('Cloud → Local (Pull)', 'download', 'ghost', async () => {
     if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    if (!(await confirmBox('Firebase থেকে সব ডাটা টেনে এনে স্থানীয় ডাটার সাথে মিলানো হবে। চালিয়ে যাবেন?', { okLabel: 'Pull' }))) return;
-    try { const n = await firebase.pullAll(); invalidate(); toast(`${n} record(s) pulled`, 'success'); App.refresh(); }
+    try { const n = await firebase.flush(); toast(`${n}টি সিঙ্ক হয়েছে`, 'success'); App.refresh(); }
     catch (err) { toast(err.message, 'error'); }
-  }));
-  cRow.appendChild(btn('Local → Cloud (Push)', 'upload', 'ghost', async () => {
+  }, { block: true }));
+  cRow.appendChild(btn('ক্লাউড থেকে আনুন / Pull from cloud', 'download', 'soft', async () => {
     if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    if (!(await confirmBox('স্থানীয় সব ডাটা Firebase-এ পাঠানো হবে এবং সার্ভারের একই রেকর্ড প্রতিস্থাপিত হবে। চালিয়ে যাবেন?', { okLabel: 'Push', danger: true }))) return;
-    try { const n = await firebase.pushAll(); toast(`${n} record(s) pushed`, 'success'); }
+    if (!(await confirmBox('Firebase থেকে সব ডাটা টেনে এনে স্থানীয় ডাটার সাথে মিলানো হবে। চালিয়ে যাবেন?', { okLabel: 'আনুন' }))) return;
+    try { const n = await firebase.pullAll(); invalidate(); toast(`${n}টি রেকর্ড আনা হয়েছে`, 'success'); App.refresh(); }
     catch (err) { toast(err.message, 'error'); }
-  }));
+  }, { block: true }));
+  cRow.appendChild(btn('ক্লাউডে পাঠান / Push to cloud', 'upload', 'ghost', async () => {
+    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
+    if (!(await confirmBox('স্থানীয় সব ডাটা Firebase-এ পাঠানো হবে এবং সার্ভারের একই রেকর্ড প্রতিস্থাপিত হবে। চালিয়ে যাবেন?', { okLabel: 'পাঠান', danger: true }))) return;
+    try { const n = await firebase.pushAll(); toast(`${n}টি রেকর্ড পাঠানো হয়েছে`, 'success'); }
+    catch (err) { toast(err.message, 'error'); }
+  }, { block: true }));
   const cc = card('ক্লাউড সিঙ্ক', 'Cloud Sync (Firebase)', cBody);
   cc.body.appendChild(cRow);
   wrap.appendChild(cc);
@@ -349,6 +354,47 @@ export async function pageAuthorization(session) {
   return wrap;
 }
 
+/* ==================== Staff & login cards (mobile) ====================
+   Desktop keeps the tableWrap tables below; under 768px the same rows render
+   as 3-line cards. Tags stay Bengali-first in both views. */
+const staffRoleTag = u => `<span class="tag ${u.role === 'admin' ? 'info' : 'approved'}">${esc(u.role === 'admin' ? t('অ্যাডমিন', 'Admin') : 'Maker')}</span>`;
+const staffStatusTag = u => `<span class="tag ${u.active === false ? 'rejected' : 'approved'}">${u.active === false ? esc(t('নিষ্ক্রিয়', 'Inactive')) : esc(t('সক্রিয়', 'Active'))}</span>${u.mustChangePassword ? ` <span class="tag pending">${esc(t('পাসওয়ার্ড বদলান', 'Change password'))}</span>` : ''}`;
+const loginStatusTag = u => !u ? `<span class="tag gray">${esc(t('অ্যাকাউন্ট নেই', 'No account'))}</span>`
+  : `<span class="tag ${u.active === false ? 'rejected' : 'approved'}">${u.active === false ? esc(t('বন্ধ', 'Disabled')) : esc(t('চালু', 'Enabled'))}</span>`;
+
+function staffCard(u, acts) {
+  const d = el('div', { class: 'user-card' });
+  d.innerHTML = `<div class="ul-1"><b>${esc(u.displayName || u.username)}</b> ${staffRoleTag(u)}</div>
+    <div class="ul-2">${esc(u.username)}${u.mobile ? ' · ' + esc(u.mobile) : ''}</div>
+    <div class="ul-3">${staffStatusTag(u)}</div>`;
+  const ar = el('div', { class: 'ul-act' });
+  ar.appendChild(acts);
+  d.appendChild(ar);
+  return d;
+}
+
+function accountCard(m, u, acts) {
+  const d = el('div', { class: 'user-card' });
+  d.innerHTML = `<div class="ul-1"><b>${esc(m.nameBn)}</b> <span class="faint fs8">${esc(m.memberId)}</span> ${statusTag(m.status)}</div>
+    <div class="ul-2">${esc(u ? u.username : '—')}</div>
+    <div class="ul-3">${loginStatusTag(u)}</div>`;
+  const ar = el('div', { class: 'ul-act' });
+  ar.appendChild(acts);
+  d.appendChild(ar);
+  return d;
+}
+
+const isNarrowList = () => !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+function onBreakpoint(host, render) {
+  if (!window.matchMedia) return;
+  const mq = window.matchMedia('(max-width: 767px)');
+  const onBp = () => {
+    if (!host.isConnected) { if (mq.removeEventListener) mq.removeEventListener('change', onBp); return; }
+    render();
+  };
+  if (mq.addEventListener) mq.addEventListener('change', onBp);
+}
+
 async function staffManager(session, host) {
   const users = await allUsers();
   const staff = users.filter(u => u.role === 'maker' || u.role === 'admin')
@@ -373,10 +419,28 @@ async function staffManager(session, host) {
   const role = mkSel(t('রোল', 'Role'), [['', t('সব', 'All')], ['admin', 'Admin'], ['maker', 'Maker']], '130px');
   const stat = mkSel(t('স্ট্যাটাস', 'Status'), [['', t('সব', 'All')], ['active', t('সক্রিয়', 'Active')], ['inactive', t('নিষ্ক্রিয়', 'Inactive')]], '130px');
   bar.append(searchBox, role.f, stat.f);
-  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; role.sel.value = ''; stat.sel.value = ''; render(); }, { size: 'xs' }));
+  bar.appendChild(btn(t('মুছুন', 'Clear'), 'clear', 'ghost', () => { q.value = ''; role.sel.value = ''; stat.sel.value = ''; render(); }, { size: 'xs' }));
   host.appendChild(bar);
   host.appendChild(c);
 
+  /* Same actions feed the desktop table and the mobile card. */
+  const actsOf = u => {
+    const acts = el('div', { class: 'btn-row' });
+    acts.appendChild(btn(t('পাসওয়ার্ড', 'Password'), 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
+    if (u.role !== 'admin') {
+      acts.appendChild(btn(u.active === false ? t('চালু', 'Activate') : t('বন্ধ', 'Deactivate'), u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
+        await setUserActive(u.id, u.active === false, session);
+        toast(u.active === false ? t('অ্যাকাউন্ট সক্রিয়', 'Activated') : t('অ্যাকাউন্ট নিষ্ক্রিয়', 'Deactivated'), 'success');
+        App.refresh();
+      }, { size: 'xs' }));
+      acts.appendChild(btn(t('মুছুন', 'Delete'), 'trash', 'softred', async () => {
+        if (!(await confirmBox(`${u.username} অ্যাকাউন্টটি স্থায়ীভাবে মুছে ফেলবেন?`, { okLabel: 'মুছুন', danger: true }))) return;
+        try { await deleteUser(u.id, session); toast(t('অ্যাকাউন্ট মুছে ফেলা হয়েছে', 'Account deleted'), 'warn'); App.refresh(); }
+        catch (err) { toast(err.message, 'error'); }
+      }, { size: 'xs' }));
+    }
+    return acts;
+  };
   const render = () => {
     const term = q.value.trim().toLowerCase();
     const rows = staff.filter(u => {
@@ -390,65 +454,58 @@ async function staffManager(session, host) {
     if (staff.length > rows.length || term) {
       c.body.appendChild(el('div', { class: 'count-line', text: `${rows.length} / ${staff.length} জন` }));
     }
-    c.body.appendChild(tableWrap(
-      [{ label: 'Username' }, { label: 'নাম / Name' }, { label: 'Role' }, { label: 'Mobile' }, { label: 'Status' }, { label: 'তৈরি / Created' }, { label: 'Action', cls: 'nowrap' }],
-      rows.map(u => {
-      const acts = el('div', { class: 'btn-row' });
-      acts.appendChild(btn(t('পাসওয়ার্ড', 'Password'), 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
-      if (u.role !== 'admin') {
-        acts.appendChild(btn(u.active === false ? t('চালু', 'Activate') : t('বন্ধ', 'Deactivate'), u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
-          await setUserActive(u.id, u.active === false, session);
-          toast(u.active === false ? 'অ্যাকাউন্ট সক্রিয় / Activated' : 'অ্যাকাউন্ট নিষ্ক্রিয় / Deactivated', 'success');
-          App.refresh();
-        }, { size: 'xs' }));
-        acts.appendChild(btn(t('মুছুন', 'Delete'), 'trash', 'softred', async () => {
-          if (!(await confirmBox(`${u.username} অ্যাকাউন্টটি স্থায়ীভাবে মুছে ফেলবেন?`, { okLabel: 'Delete', danger: true }))) return;
-          try { await deleteUser(u.id, session); toast('অ্যাকাউন্ট মুছে ফেলা হয়েছে / Account deleted', 'warn'); App.refresh(); }
-          catch (err) { toast(err.message, 'error'); }
-        }, { size: 'xs' }));
+    if (isNarrowList()) {
+      if (!rows.length) {
+        c.body.appendChild(emptyState({ ic: 'maker', title: t('কোনো স্টাফ অ্যাকাউন্ট নেই', 'No staff accounts'), compact: true }));
+        return;
       }
-      return [
+      rows.forEach(u => c.body.appendChild(staffCard(u, actsOf(u))));
+      return;
+    }
+    c.body.appendChild(tableWrap(
+      [{ label: 'ইউজারনেম' }, { label: 'নাম' }, { label: 'রোল' }, { label: 'মোবাইল' }, { label: 'স্ট্যাটাস' }, { label: 'তৈরি' }, { label: 'অ্যাকশন', cls: 'nowrap' }],
+      rows.map(u => [
         `<b>${esc(u.username)}</b>`, esc(u.displayName || ''),
-        `<span class="tag ${u.role === 'admin' ? 'info' : 'approved'}">${esc(u.role.toUpperCase())}</span>`,
+        { html: staffRoleTag(u) },
         esc(u.mobile || '—'),
-        `<span class="tag ${u.active === false ? 'rejected' : 'approved'}">${u.active === false ? 'INACTIVE' : 'ACTIVE'}</span>${u.mustChangePassword ? ' <span class="tag pending">PW CHANGE</span>' : ''}`,
+        { html: staffStatusTag(u) },
         esc(fmtDate(u.createdAt)),
-        { node: acts, cls: 'nowrap' },
-      ];
-    }),
+        { node: actsOf(u), cls: 'nowrap' },
+      ]),
       { empty: t('কোনো স্টাফ অ্যাকাউন্ট নেই', 'No staff accounts'), emptyIcon: 'maker' },
     ));
   };
   q.addEventListener('input', debounce(render, 180));
   role.sel.addEventListener('change', render);
   stat.sel.addEventListener('change', render);
+  onBreakpoint(c, render);
   render();
   host.appendChild(banner('info', 'Maker সদস্য অনুমোদন, জমা এন্ট্রি ও অনুমোদন, প্রতিবেদন ও WhatsApp রিমাইন্ডার ব্যবহার করতে পারেন। Maker কেবল <b>আজকের তারিখের</b> জমা সম্পাদনা বা মুছতে পারবেন এবং Member ID পরিবর্তন করতে পারবেন না।'));
 }
 
 function newStaff(session) {
   return formModal({
-    title: 'নতুন Maker অ্যাকাউন্ট / New Maker Account',
-    width: 460, okLabel: 'Create', dismissible: true,
+    title: 'নতুন Maker অ্যাকাউন্ট',
+    width: 460, okLabel: 'তৈরি করুন', dismissible: true,
     html: `<div class="grid g2">
-        <div class="field"><label>Username <span class="req">*</span></label><input name="username" required autocomplete="off"></div>
-        <div class="field"><label>নাম / Display Name <span class="req">*</span></label><input name="displayName" required></div>
-        <div class="field"><label>Mobile</label><input name="mobile" inputmode="numeric" maxlength="11"></div>
-        <div class="field"><label>Email</label><input name="email" type="email"></div>
-        <div class="field"><label>Password <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
-        <div class="field"><label>Confirm Password <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>ইউজারনেম <span class="req">*</span></label><input name="username" required autocomplete="off"></div>
+        <div class="field"><label>নাম <span class="req">*</span></label><input name="displayName" required></div>
+        <div class="field"><label>মোবাইল</label><input name="mobile" inputmode="numeric" maxlength="11"></div>
+        <div class="field"><label>ইমেইল</label><input name="email" type="email"></div>
+        <div class="field"><label>পাসওয়ার্ড <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>পাসওয়ার্ড (আবার) <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
       </div>
       <div class="hint">প্রথম লগইনে Maker-কে পাসওয়ার্ড পরিবর্তন করতে হবে।</div>`,
     onSubmit: async (v, fail) => {
-      if (!String(v.username || '').trim()) return fail('Username আবশ্যক');
+      if (!String(v.username || '').trim()) return fail('ইউজারনেম আবশ্যক');
       if (!String(v.displayName || '').trim()) return fail('নাম আবশ্যক');
       if (v.mobile && !isValidMobile(v.mobile)) return fail('সঠিক মোবাইল নম্বর দিন');
-      if (v.email && !isValidEmail(v.email)) return fail('সঠিক Email দিন');
+      if (v.email && !isValidEmail(v.email)) return fail('সঠিক ইমেইল দিন');
       const issues = passwordIssues(v.pw1);
       if (issues.length) return fail(issues[0]);
-      if (v.pw1 !== v.pw2) return fail('দুইটি Password এক নয় / Passwords do not match');
+      if (v.pw1 !== v.pw2) return fail('দুইটি পাসওয়ার্ড এক নয়');
       await createStaffUser({ username: v.username, displayName: v.displayName, password: v.pw1, role: 'maker', mobile: v.mobile, email: v.email }, session);
-      toast('Maker অ্যাকাউন্ট তৈরি হয়েছে / Maker account created', 'success');
+      toast('Maker অ্যাকাউন্ট তৈরি হয়েছে', 'success');
       App.refresh();
       return true;
     },
@@ -457,20 +514,20 @@ function newStaff(session) {
 
 function resetPw(session, u) {
   return formModal({
-    title: `পাসওয়ার্ড রিসেট / Reset Password — ${u.username}`,
-    width: 420, okLabel: 'Reset', dismissible: true,
+    title: `পাসওয়ার্ড রিসেট — ${u.username}`,
+    width: 420, okLabel: 'রিসেট করুন', dismissible: true,
     html: `<div class="banner warn">${icon('warn')}<span>নতুন পাসওয়ার্ড ব্যবহারকারীকে নিরাপদে জানিয়ে দিন। পুরাতন পাসওয়ার্ড আর কাজ করবে না।</span></div>
       <div class="grid g2">
-        <div class="field"><label>New Password <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
-        <div class="field"><label>Confirm Password <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>পাসওয়ার্ড <span class="req">*</span></label><input name="pw1" type="password" required autocomplete="new-password"></div>
+        <div class="field"><label>পাসওয়ার্ড (আবার) <span class="req">*</span></label><input name="pw2" type="password" required autocomplete="new-password"></div>
       </div>
       <label class="check"><input type="checkbox" name="mustChange" checked> পরবর্তী লগইনে পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক</label>`,
     onSubmit: async (v, fail) => {
       const issues = passwordIssues(v.pw1);
       if (issues.length) return fail(issues[0]);
-      if (v.pw1 !== v.pw2) return fail('দুইটি Password এক নয় / Passwords do not match');
+      if (v.pw1 !== v.pw2) return fail('দুইটি পাসওয়ার্ড এক নয়');
       await resetUserPassword(u.id, v.pw1, session, { mustChange: !!v.mustChange });
-      toast('পাসওয়ার্ড রিসেট হয়েছে / Password reset', 'success');
+      toast('পাসওয়ার্ড রিসেট হয়েছে', 'success');
       App.refresh();
       return true;
     },
@@ -502,12 +559,25 @@ async function accountManager(session, host) {
     ['', t('সব', 'All')], ['active', t('সক্রিয়', 'Active')], ['pending', t('অপেক্ষমাণ', 'Pending')], ['rejected', t('বাতিল', 'Rejected')],
   ], '150px');
   bar.append(searchBox, login.f, mstat.f);
-  bar.appendChild(btn('Clear', 'clear', 'ghost', () => { q.value = ''; login.sel.value = ''; mstat.sel.value = ''; render(); }, { size: 'xs' }));
+  bar.appendChild(btn(t('মুছুন', 'Clear'), 'clear', 'ghost', () => { q.value = ''; login.sel.value = ''; mstat.sel.value = ''; render(); }, { size: 'xs' }));
   host.appendChild(bar);
 
   const c = card('সদস্য লগইন অ্যাকাউন্ট', 'Member Login Accounts', el('div'));
   host.appendChild(c);
 
+  /* Same actions feed the desktop table and the mobile card. */
+  const actsOf = (m, u) => {
+    const acts = el('div', { class: 'btn-row' });
+    if (u) {
+      acts.appendChild(btn(t('পাসওয়ার্ড', 'Password'), 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
+      acts.appendChild(btn(u.active === false ? t('চালু', 'Enable') : t('বন্ধ', 'Disable'), u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
+        await setUserActive(u.id, u.active === false, session);
+        toast(t('লগইন স্ট্যাটাস হালনাগাদ', 'Login status updated'), 'success'); App.refresh();
+      }, { size: 'xs' }));
+    }
+    acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => App.go('members', { tab: 'update', memberDocId: m.id }), { size: 'xs' }));
+    return acts;
+  };
   const render = () => {
     const term = q.value.trim().toLowerCase();
     const shown = rows.filter(({ m, u }) => {
@@ -520,31 +590,29 @@ async function accountManager(session, host) {
     });
     c.body.replaceChildren();
     c.body.appendChild(el('div', { class: 'count-line', text: `${shown.length} / ${rows.length} সদস্য` }));
+    if (isNarrowList()) {
+      if (!shown.length) {
+        c.body.appendChild(emptyState({ ic: 'members', title: t('এই ফিল্টারে কোনো সদস্য নেই', 'No members match this filter'), compact: true }));
+        return;
+      }
+      shown.forEach(({ m, u }) => c.body.appendChild(accountCard(m, u, actsOf(m, u))));
+      return;
+    }
     c.body.appendChild(tableWrap(
-      [{ label: 'Member ID' }, { label: 'নাম / Name' }, { label: 'Username (Mobile)' }, { label: 'সদস্য স্ট্যাটাস' }, { label: 'লগইন স্ট্যাটাস' }, { label: 'Action', cls: 'nowrap' }],
-      shown.map(({ m, u }) => {
-        const acts = el('div', { class: 'btn-row' });
-        if (u) {
-          acts.appendChild(btn(t('পাসওয়ার্ড', 'Password'), 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
-          acts.appendChild(btn(u.active === false ? t('চালু', 'Enable') : t('বন্ধ', 'Disable'), u.active === false ? 'approve' : 'lock', u.active === false ? 'soft' : 'softred', async () => {
-            await setUserActive(u.id, u.active === false, session);
-            toast('লগইন স্ট্যাটাস হালনাগাদ / Login status updated', 'success'); App.refresh();
-          }, { size: 'xs' }));
-        }
-        acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => App.go('members', { tab: 'update', memberDocId: m.id }), { size: 'xs' }));
-        return [
-          `<b>${esc(m.memberId)}</b>`, esc(m.nameBn), esc(u ? u.username : '—'),
-          { html: statusTag(m.status) },
-          u ? `<span class="tag ${u.active === false ? 'rejected' : 'approved'}">${u.active === false ? 'DISABLED' : 'ENABLED'}</span>` : '<span class="tag gray">NO ACCOUNT</span>',
-          { node: acts, cls: 'nowrap' },
-        ];
-      }),
+      [{ label: 'ID' }, { label: 'নাম' }, { label: 'ইউজারনেম' }, { label: 'সদস্য স্ট্যাটাস' }, { label: 'লগইন স্ট্যাটাস' }, { label: 'অ্যাকশন', cls: 'nowrap' }],
+      shown.map(({ m, u }) => [
+        `<b>${esc(m.memberId)}</b>`, esc(m.nameBn), esc(u ? u.username : '—'),
+        { html: statusTag(m.status) },
+        { html: loginStatusTag(u) },
+        { node: actsOf(m, u), cls: 'nowrap' },
+      ]),
       { empty: t('এই ফিল্টারে কোনো সদস্য নেই', 'No members match this filter'), emptyIcon: 'members' },
     ));
   };
   q.addEventListener('input', debounce(render, 180));
   login.sel.addEventListener('change', render);
   mstat.sel.addEventListener('change', render);
+  onBreakpoint(c, render);
   render();
 }
 
@@ -797,7 +865,7 @@ function accountSection(session, host) {
   acc.appendChild(kv([
     ['ব্যবহারকারী / User', esc(session.displayName || session.username)],
     ['Username', esc(session.username)],
-    ['রোল / Role', `<span class="tag ${session.role === 'admin' ? 'info' : session.role === 'maker' ? 'approved' : 'gray'}">${esc(session.role.toUpperCase())}</span>`],
+    ['রোল / Role', `<span class="tag ${session.role === 'admin' ? 'info' : session.role === 'maker' ? 'approved' : 'gray'}">${esc(session.role === 'admin' ? t('অ্যাডমিন', 'Admin') : session.role === 'maker' ? 'Maker' : t('সদস্য', 'Member'))}</span>`],
     ...(session.memberId ? [['Member ID', esc(session.memberId)]] : []),
     ['লগইন সময় / Login at', esc(fmtDateTime(session.loginAt))],
     ['Device ID', esc(deviceId())],

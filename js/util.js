@@ -160,12 +160,12 @@ export function modal({ title, body, actions = [], width = 420, dismissible = tr
     const box = el('div', { class: 'modal', style: `max-width:${width}px` });
     const head = el('div', { class: 'modal-head' }, [el('h3', { text: title || '' })]);
     if (dismissible) {
-      head.appendChild(el('button', { class: 'icon-btn', title: 'Close', html: '&times;', onclick: () => done(null) }));
+      head.appendChild(el('button', { class: 'icon-btn', title: t('বন্ধ', 'Close'), html: '&times;', onclick: () => done(null) }));
     }
     const bd = el('div', { class: 'modal-body' });
     if (typeof body === 'string') bd.innerHTML = body; else if (body) bd.appendChild(body);
     const ft = el('div', { class: 'modal-foot' });
-    (actions.length ? actions : [{ label: 'OK', value: true, kind: 'primary' }]).forEach(a => {
+    (actions.length ? actions : [{ label: t('ঠিক আছে', 'OK'), value: true, kind: 'primary' }]).forEach(a => {
       ft.appendChild(el('button', {
         class: `btn btn-${a.kind || 'ghost'}`, type: 'button',
         onclick: () => { if (a.onClick) { const r = a.onClick(bd); if (r === false) return; } done(a.value); }
