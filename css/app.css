@@ -1495,3 +1495,6 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .btn-block,.cta-block,.form-sticky .btn,.ac-acts .btn,.action-card .ac-t{white-space:normal;overflow-wrap:anywhere}
 .action-card .ac-t{text-align:left}
 .form-sticky .btn,.ac-acts .btn{text-align:center}
+
+/* approval card: member ID chip next to the applicant's name */
+.ac-mid{font-weight:700;color:var(--muted);letter-spacing:.2px}
