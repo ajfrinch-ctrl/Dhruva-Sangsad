@@ -12,7 +12,7 @@
  */
 import { $, el, clear, toast, esc, alertBox, confirmBox, t, tx } from './util.js';
 import { logoSrc, applyLogo, APP_VERSION } from './brand.js';
-import { icon } from './icons.js';
+import { icon, bigIcon } from './icons.js';
 import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, checkBootstrapSession } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
@@ -394,7 +394,7 @@ function paintNav(route) {
   NAV.filter(i => canRoute(s, i.id)).forEach(i => {
     rail.appendChild(el('a', {
       class: `rail-tab${route === i.id ? ' on' : ''}`, href: hashFor(i.id),
-      html: `${icon(i.icon)}<span>${esc(t(i.bn, i.en))}</span>`,
+      html: `${bigIcon(i.icon)}<span>${esc(t(i.bn, i.en))}</span>`,
       onclick: (ev) => { ev.preventDefault(); App.go(i.id); },
     }));
   });
@@ -511,7 +511,7 @@ function registerSW() {
 function wireChrome() {
   const notifBtn = $('#btnNotif');
   if (notifBtn) {
-    notifBtn.innerHTML = icon('bell');
+    notifBtn.innerHTML = bigIcon('bell');
     notifBtn.addEventListener('click', () => {
       if (!App.session) return;
       import('./pages/notifications.js').then(m => m.openNotifications(App.session)).catch(() => {});
@@ -520,7 +520,7 @@ function wireChrome() {
 
   const moreBtn = $('#navMore');
   if (moreBtn) {
-    moreBtn.innerHTML = `${icon('menu')}<span class="ni-lbl">More</span>`;
+    moreBtn.innerHTML = `${bigIcon('menu')}<span class="ni-lbl">More</span>`;
     moreBtn.addEventListener('click', () => App.openMore());
   }
 
@@ -532,7 +532,7 @@ function wireChrome() {
       a.appendChild(s);
       return s;
     })();
-    a.innerHTML = icon(ic);
+    a.innerHTML = bigIcon(ic);
     a.appendChild(label);
     a.addEventListener('click', ev => {
       ev.preventDefault();

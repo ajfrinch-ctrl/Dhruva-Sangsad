@@ -1572,3 +1572,112 @@ html[data-theme="dark"] .txr,html[data-theme="amoled"] .txr{background:#000;bord
 .mrow{flex-wrap:wrap}
 /* stacked list tools: the search box must not inherit the row flex-basis as a height */
 .list-tools .search-box{flex:0 0 auto}
+
+/* =====================================================================
+   v7.2 — iOS-style frosted-glass chrome + "water-drop" glass icons
+   · top bar, bottom bar and bottom sheets are translucent and blur what
+     scrolls beneath them (content now scrolls UNDER both bars)
+   · offline = red-tinted glass top bar (no banner, no text)
+   · AI water-drop icons in the big icon slots; SVG stays for small ones
+   ===================================================================== */
+:root{
+  --glass-bg:rgba(255,255,255,.66);
+  --glass-bg-strong:rgba(255,255,255,.78);
+  --glass-line:rgba(255,255,255,.55);
+  --glass-hair:rgba(15,23,42,.08);
+  --glass-blur:saturate(180%) blur(22px);
+}
+html[data-theme="dark"],html[data-theme="amoled"]{
+  --glass-bg:rgba(14,14,16,.62);
+  --glass-bg-strong:rgba(14,14,16,.78);
+  --glass-line:rgba(255,255,255,.08);
+  --glass-hair:rgba(255,255,255,.10);
+}
+
+/* ---- top bar ---- */
+.topbar,html[data-role] .topbar{
+  background:var(--glass-bg) !important;
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  border:0 !important;border-bottom:1px solid var(--glass-hair) !important;
+  box-shadow:0 1px 0 var(--glass-line) inset,0 6px 24px rgba(16,24,40,.06);
+}
+html[data-theme="dark"] .topbar,html[data-theme="amoled"] .topbar,
+html[data-theme="dark"][data-role] .topbar,html[data-theme="amoled"][data-role] .topbar{background:var(--glass-bg) !important}
+/* status is shown as a hairline glow, offline as a red tint of the whole bar */
+.topbar.sync-synced,.topbar.sync-online,.topbar.sync-syncing{border-bottom-color:rgba(22,163,74,.35) !important}
+.topbar.sync-offline,.topbar.sync-error,
+html[data-role] .topbar.sync-offline,html[data-role] .topbar.sync-error{
+  background:rgba(225,29,72,.16) !important;
+  border-bottom:2px solid #e11d48 !important;
+}
+html[data-theme="dark"] .topbar.sync-offline,html[data-theme="amoled"] .topbar.sync-offline,
+html[data-theme="dark"] .topbar.sync-error,html[data-theme="amoled"] .topbar.sync-error{background:rgba(225,29,72,.28) !important}
+.topbar.sync-offline .brand-txt .n,.topbar.sync-error .brand-txt .n,
+.topbar.sync-offline .brand-txt .r,.topbar.sync-error .brand-txt .r{color:#be123c}
+.topbar .icon-btn{background:rgba(255,255,255,.55);border-color:var(--glass-hair);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+html[data-theme="dark"] .topbar .icon-btn,html[data-theme="amoled"] .topbar .icon-btn{background:rgba(255,255,255,.06)}
+
+/* ---- bottom bar ---- */
+.bottom-nav,html[data-theme="dark"] .bottom-nav,html[data-theme="amoled"] .bottom-nav{
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  border-top:1px solid var(--glass-hair);
+  box-shadow:0 1px 0 var(--glass-line) inset,0 -8px 28px rgba(16,24,40,.06);
+}
+.bottom-nav .nav-item.on::before{display:none}   /* the glowing icon marks the tab now */
+
+/* ---- sheets (More / notifications / filters) ---- */
+.sheet,html[data-theme="dark"] .sheet,html[data-theme="amoled"] .sheet{
+  background:var(--glass-bg-strong);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  border:1px solid var(--glass-line);border-bottom:0;
+  box-shadow:0 -12px 40px rgba(16,24,40,.18);
+}
+.sheet-backdrop{background:rgba(17,24,39,.28);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.sheet-item .si-ic,html[data-theme="dark"] .sheet-item .si-ic,html[data-theme="amoled"] .sheet-item .si-ic{
+  background:rgba(255,255,255,.45);border:1px solid var(--glass-line);width:40px;height:40px;border-radius:12px}
+html[data-theme="dark"] .sheet-item .si-ic,html[data-theme="amoled"] .sheet-item .si-ic{background:rgba(255,255,255,.06)}
+
+/* ---- content scrolls under the bars (mobile shell) ---- */
+@media (max-width:1023px){
+  .main{
+    margin-top:0;margin-bottom:0;
+    height:100dvh;
+    padding-top:calc(var(--header-h) + 14px);
+    padding-bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px) + 22px);
+  }
+}
+
+/* ---- solid fallback when the browser cannot blur ---- */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .topbar,html[data-role] .topbar,.bottom-nav,.sheet{background:var(--card,#fff) !important}
+  html[data-theme="dark"] .topbar,html[data-theme="amoled"] .topbar,
+  html[data-theme="dark"] .bottom-nav,html[data-theme="amoled"] .bottom-nav,
+  html[data-theme="dark"] .sheet,html[data-theme="amoled"] .sheet{background:#0b0b0b !important}
+}
+
+/* ---- water-drop icons ---- */
+.icon-ai{display:block;width:1em;height:1em;object-fit:contain;pointer-events:none;user-select:none;
+  filter:drop-shadow(0 4px 6px rgba(16,24,40,.16));transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .25s}
+.bottom-nav .nav-item .icon-ai{width:31px;height:31px;margin-top:-2px;opacity:.95;filter:drop-shadow(0 3px 4px rgba(16,24,40,.2))}
+.bottom-nav .nav-item.on .icon-ai{opacity:1;filter:drop-shadow(0 6px 10px rgba(22,163,74,.35));transform:translateY(-3px) scale(1.12)}
+.bottom-nav .nav-item:active .icon-ai{transform:scale(.92)}
+.rail .rail-tab .icon-ai{width:26px;height:26px}
+.topbar .icon-btn .icon-ai{width:26px;height:26px}
+.sec-tile .st-ic,.action-card .ac-ic,.ac-ic{overflow:visible}
+.sec-tile .st-ic .icon-ai{width:40px;height:40px}
+.action-card .ac-ic .icon-ai,.ac-ic .icon-ai{width:42px;height:42px;filter:drop-shadow(0 6px 8px rgba(0,0,0,.22))}
+.sheet-item .si-ic .icon-ai{width:32px;height:32px}
+/* tiles: a soft glass well instead of the flat green square */
+.sec-tile .st-ic:has(.icon-ai){background:linear-gradient(160deg,rgba(255,255,255,.9),rgba(220,252,231,.6));
+  border:1px solid rgba(255,255,255,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 2px 6px rgba(16,24,40,.06)}
+html[data-theme="dark"] .sec-tile .st-ic:has(.icon-ai),html[data-theme="amoled"] .sec-tile .st-ic:has(.icon-ai){
+  background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);box-shadow:none}
+.action-card .ac-ic:has(.icon-ai){background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.35)}
+/* gentle float on the active tab and the primary action card */
+@keyframes ds-float{0%,100%{transform:translateY(-3px) scale(1.12)}50%{transform:translateY(-6px) scale(1.12)}}
+@keyframes ds-float-soft{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.bottom-nav .nav-item.on .icon-ai{animation:ds-float 3.2s ease-in-out infinite}
+.action-card.primary .ac-ic .icon-ai{animation:ds-float-soft 3.6s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.icon-ai{animation:none !important}}

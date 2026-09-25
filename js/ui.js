@@ -3,7 +3,7 @@
    screen). All labels go through t()/auto() so a label can never mix
    languages. */
 import { el, esc, money, taka, fmtDate, STATUS_BN, STATUS_EN, t, tx, auto } from './util.js';
-import { icon } from './icons.js';
+import { icon, bigIcon } from './icons.js';
 
 /* ================= page scaffolding ================= */
 
@@ -75,7 +75,7 @@ export function actionCard({ label, sub = '', ic = 'plus', tone = 'primary', bad
     class: `action-card ${tone}`,
     ...(href ? { href } : { type: 'button' }),
   });
-  node.innerHTML = `<span class="ac-ic">${icon(ic)}</span>
+  node.innerHTML = `<span class="ac-ic">${bigIcon(ic)}</span>
     <span class="ac-tx"><span class="ac-t">${esc(tx(label))}</span>${sub ? `<span class="ac-s">${esc(tx(sub))}</span>` : ''}</span>
     ${badge > 0 ? `<span class="pill">${badge > 99 ? '99+' : badge}</span>` : ''}
     ${href ? '' : `<span class="ac-go">${icon('chevron')}</span>`}`;
@@ -400,7 +400,7 @@ export function tileMenu(items, onPick, { ariaLabel = '' } = {}) {
   const grid = el('div', { class: 'sec-menu', role: 'list', ...(ariaLabel ? { 'aria-label': ariaLabel } : {}) });
   items.filter(Boolean).forEach(it => {
     const b = el('button', { type: 'button', class: `sec-tile${it.tone ? ' ' + it.tone : ''}`, role: 'listitem', onclick: () => onPick(it.id) });
-    b.innerHTML = `<span class="st-ic">${icon(it.ic)}</span>
+    b.innerHTML = `<span class="st-ic">${bigIcon(it.ic)}</span>
       <span class="st-tx"><span class="st-t">${esc(t(it.bn, it.en))}</span>${it.sub ? `<span class="st-s">${esc(tx(it.sub))}</span>` : ''}</span>`
       + (it.badge ? `<span class="pill">${it.badge > 99 ? '99+' : it.badge}</span>` : '');
     grid.appendChild(b);
@@ -489,7 +489,7 @@ export function bottomSheet({ title, items = [], body = null, onClose = null } =
     if (it === 'sep') { list.appendChild(el('div', { class: 'sheet-sep' })); return; }
     if (it && typeof it === 'object' && it.header) { list.appendChild(el('div', { class: 'sheet-header', text: tx(it.header) })); return; }
     const row = el('button', { type: 'button', class: `sheet-item${it.danger ? ' danger' : ''}` });
-    row.innerHTML = `<span class="si-ic">${icon(it.ic || 'info')}</span><span class="si-tx">${esc(tx(it.label))}</span>`;
+    row.innerHTML = `<span class="si-ic">${bigIcon(it.ic || 'info')}</span><span class="si-tx">${esc(tx(it.label))}</span>`;
     if (it.right) { const r = el('span', { class: 'si-right' }); r.appendChild(it.right); row.appendChild(r); }
     else if (it.value != null) row.appendChild(el('span', { class: 'si-val', text: it.value }));
     /* ONE tap: the sheet is removed synchronously first, then the action runs. */

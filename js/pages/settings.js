@@ -5,7 +5,7 @@
 import {
   el, esc, toast, fmtDateTime, num, confirmBox, deviceId, t, auto,
 } from '../util.js';
-import { icon } from '../icons.js';
+import { icon, bigIcon } from '../icons.js';
 import { page, card, banner, btn, kv, embedPage } from '../ui.js';
 import {
   allMembers, allDeposits, allWithdrawals, allUsers, settings, saveSettings,
@@ -69,7 +69,7 @@ export async function pageSettings(session, params = {}) {
   const menu = el('div', { class: 'sec-menu' });
   visible.forEach(s => {
     const b = el('button', { type: 'button', class: `sec-tile${s.tone ? ' ' + s.tone : ''}` });
-    b.innerHTML = `<span class="st-ic">${icon(s.ic)}</span>
+    b.innerHTML = `<span class="st-ic">${bigIcon(s.ic)}</span>
       <span class="st-tx"><span class="st-t">${esc(t(s.bn, s.en))}</span><span class="st-s">${esc(t(s.dBn, s.dEn))}</span></span>`
       + (s.badge ? `<span class="pill">${s.badge}</span>` : '');
     b.addEventListener('click', () => (s.route ? App.go(s.route) : open(s.id)));
