@@ -320,7 +320,7 @@ export const App = {
     this.unread = list.length;
     const btn = $('#btnNotif');
     if (!btn) return;
-    btn.innerHTML = icon('bell');
+    btn.innerHTML = bigIcon('bell');
     if (this.unread > 0) btn.appendChild(el('span', { class: 'badge', text: this.unread > 99 ? '99+' : String(this.unread) }));
     btn.setAttribute('aria-label', t(`নোটিফিকেশন (${this.unread})`, `Notifications (${this.unread})`));
   },

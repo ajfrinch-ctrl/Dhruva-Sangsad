@@ -79,6 +79,7 @@ export function icon(name, cls = '') {
    back to the SVG automatically, so the set can grow without code changes. */
 export const AI_ICONS = new Set([
   'home', 'members', 'member', 'deposit', 'receipt', 'report', 'chart', 'approve', 'settings', 'menu',
+  'plus', 'withdraw', 'bell', 'lock', 'log', 'maker', 'building', 'backup', 'info', 'sync',
 ]);
 export const AI_ICON_DIR = './icons/ai/';
 export function bigIcon(name, cls = '') {
