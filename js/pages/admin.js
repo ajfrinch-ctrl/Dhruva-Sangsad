@@ -1,31 +1,30 @@
-/* Backup & Restore, Authorization Pending, Member Panel, Settings hub */
+/* Approvals inbox + shared staff/account management + Backup & Restore.
+   The settings hub itself moved to pages/settings.js; the member profile moved
+   to pages/member-panel.js. Activity Log lives ONLY under Settings. */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, fmtTime, todayISO,
   confirmBox, alertBox, downloadBlob, deviceId, typeLabel, methodLabel, isValidMobile,
-  isValidEmail, APP_NAME_BN, APP_NAME_EN, debounce,
+  isValidEmail, debounce, t,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, tableWrap, statusTag, banner, btn, kv, statCard, embedPage, segChips, emptyState } from '../ui.js';
 import { attachSwipe } from '../gestures.js';
-import { pageActivity, memberLogCard } from './misc.js';
 import {
-  allMembers, allDeposits, allWithdrawals, allUsers, allLogs, settings, saveSettings, setMemberStatus,
+  allMembers, allDeposits, allWithdrawals, allUsers, allLogs, settings, setMemberStatus,
   setDepositStatus, setWithdrawalStatus, memberSummary, summariesFor, orgTotals, createStaffUser, setUserActive,
-  resetUserPassword, deleteUser, logActivity, invalidate, getMember, statementRows, withdrawalTypeLabel,
+  resetUserPassword, deleteUser, logActivity, invalidate, getMember, withdrawalTypeLabel,
   logUserName, summaryOpts,
 } from '../store.js';
-import { exportAll, importAll, queueAll, getSetting, dbClear, STORES } from '../db.js';
-import { firebase, DEFAULT_FIREBASE_CONFIG } from '../firebase.js';
-import { getLang, setLang, t } from '../i18n.js';
-import { APP_VERSION, logoSrc } from '../brand.js';
+import { exportAll, importAll, queueAll, dbClear, STORES } from '../db.js';
+import { firebase } from '../firebase.js';
 import { can } from '../auth.js';
 import { passwordIssues } from '../crypto.js';
 import { App } from '../app.js';
-import { formModal, changePasswordDialog } from './account.js';
+import { formModal } from './account.js';
 import { rejectReason, viewMember } from './members.js';
 import { downloadExcel } from '../pdf.js';
 
-/* ==================== Backup & Restore ==================== */
+/* ==================== Backup & Restore (Admin) ==================== */
 export async function pageBackup(session) {
   const wrap = page('ব্যাকআপ ও পুনরুদ্ধার', 'Backup & Restore', 'backup');
   if (!can(session, 'backup:manage')) { wrap.appendChild(banner('err', 'এই পেজটি শুধুমাত্র Admin ব্যবহার করতে পারবেন। / Admin only.')); return wrap; }
@@ -59,9 +58,9 @@ export async function pageBackup(session) {
       const m = s.member;
       mRows.push([m.memberId, m.nameBn, m.nameEn, m.mobile, m.whatsapp, m.email || '', m.nid || '', fmtDate(m.dob), m.profession || '', m.address || '', num(m.installment), fmtDate(m.joinDate), m.status, s.totalDeposit, s.due, s.advance]);
     });
-    const dRows = [['Deposit ID', 'Date', 'Member ID', 'Member Name', 'Type', 'Method', 'Amount', 'Description', 'Comment', 'Status', 'Submitted At', 'Approved At']];
+    const dRows = [['Txn ID', 'Deposit ID', 'Date', 'Member ID', 'Member Name', 'Type', 'Method', 'Amount', 'Description', 'Comment', 'Status', 'Submitted At', 'Approved At']];
     deposits.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)))
-      .forEach(d => dRows.push([d.id, fmtDate(d.date), d.memberId, d.memberName, typeLabel(d.type).en, methodLabel(d.method).en, num(d.amount), d.description || '', d.comment || '', d.status, fmtDateTime(d.submittedAt), d.approvedAt ? fmtDateTime(d.approvedAt) : '']));
+      .forEach(d => dRows.push([d.txnId || '', d.id, fmtDate(d.date), d.memberId, d.memberName, typeLabel(d.type).en, methodLabel(d.method).en, num(d.amount), d.description || '', d.comment || '', d.status, fmtDateTime(d.submittedAt), d.approvedAt ? fmtDateTime(d.approvedAt) : '']));
     const lRows = [['Date', 'Time', 'User', 'Role', 'Action', 'Details']];
     logs.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
       .forEach(l => lRows.push([fmtDate(l.createdAt), fmtTime(l.createdAt), logUserName(l), l.role || '', l.action, l.details || '']));
@@ -115,48 +114,10 @@ export async function pageBackup(session) {
   rc.classList.add('danger-zone');
   rc.body.appendChild(rRow);
   wrap.appendChild(rc);
-
-  /* -------- cloud sync -------- */
-  const cBody = el('div');
-  const cfg = await settings();
-  const syncMeta = { synced: ['হালনাগাদ', 'approved'], syncing: ['সিঙ্ক হচ্ছে', 'pending'], online: ['অনলাইন', 'info'], offline: ['অফলাইন', 'gray'], 'sync-error': ['ত্রুটি', 'rejected'] };
-  const [syncBn, syncCls] = syncMeta[firebase.status] || syncMeta.offline;
-  cBody.appendChild(kv([
-    ['Firebase', firebase.configured ? '<span class="tag approved">সেটআপ আছে</span>' : '<span class="tag gray">সেটআপ নেই</span>'],
-    ['স্ট্যাটাস', `<span class="tag ${syncCls}">${esc(t(syncBn, firebase.status || 'offline'))}</span>`],
-    ['ডিভাইস ID', esc(deviceId())],
-    ['সিঙ্ক বাকি', String(queue.length)],
-  ]));
-  const cRow = el('div', { class: 'btn-stack' });
-  cRow.appendChild(btn('Firebase কনফিগার / Configure', 'settings', 'ghost', () => App.go('settings', { tab: 'firebase' }), { block: true }));
-  cRow.appendChild(btn('এখনই সিঙ্ক / Sync now', 'sync', 'soft', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    try { const n = await firebase.flush(); toast(`${n}টি সিঙ্ক হয়েছে`, 'success'); App.refresh(); }
-    catch (err) { toast(err.message, 'error'); }
-  }, { block: true }));
-  cRow.appendChild(btn('ক্লাউড থেকে আনুন / Pull from cloud', 'download', 'soft', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    if (!(await confirmBox('Firebase থেকে সব ডাটা টেনে এনে স্থানীয় ডাটার সাথে মিলানো হবে। চালিয়ে যাবেন?', { okLabel: 'আনুন' }))) return;
-    try { const n = await firebase.pullAll(); invalidate(); toast(`${n}টি রেকর্ড আনা হয়েছে`, 'success'); App.refresh(); }
-    catch (err) { toast(err.message, 'error'); }
-  }, { block: true }));
-  cRow.appendChild(btn('ক্লাউডে পাঠান / Push to cloud', 'upload', 'ghost', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    if (!(await confirmBox('স্থানীয় সব ডাটা Firebase-এ পাঠানো হবে এবং সার্ভারের একই রেকর্ড প্রতিস্থাপিত হবে। চালিয়ে যাবেন?', { okLabel: 'পাঠান', danger: true }))) return;
-    try { const n = await firebase.pushAll(); toast(`${n}টি রেকর্ড পাঠানো হয়েছে`, 'success'); }
-    catch (err) { toast(err.message, 'error'); }
-  }, { block: true }));
-  const cc = card('ক্লাউড সিঙ্ক', 'Cloud Sync (Firebase)', cBody);
-  cc.body.appendChild(cRow);
-  wrap.appendChild(cc);
   return wrap;
 }
 
-/* ==================== shared approval queues ====================
-   Everything waiting for a decision is normalised into one list of "items",
-   so the approval page is a single filterable inbox instead of three stacked
-   tables. Every action from the old tables is preserved. */
-
+/* ==================== shared approval queues ==================== */
 async function pendingMemberItems(session, deposits, cfg) {
   const members = await allMembers();
   return members.filter(m => m.status === 'pending')
@@ -184,7 +145,7 @@ async function pendingMemberItems(session, deposits, cfg) {
             await setMemberStatus(m.id, 'rejected', session, r); toast('সদস্য বাতিল / Member rejected', 'warn'); App.refresh();
           },
         },
-        { label: t('সম্পাদনা', 'Edit'), ic: 'edit', kind: 'ghost', run: () => App.go('members', { tab: 'update', memberDocId: m.id }) },
+        { label: t('সম্পাদনা', 'Edit'), ic: 'edit', kind: 'ghost', run: () => App.go('members', { section: 'update', memberDocId: m.id }) },
       ],
     }));
 }
@@ -200,7 +161,7 @@ async function pendingDepositItems(session) {
       ic: 'deposit',
       title: d.memberName,
       sub: `${d.memberId} · ${fmtDate(d.date)}`,
-      meta: `${typeLabel(d.type).bn} · ${methodLabel(d.method).bn}${descOf(d) ? ' · ' + descOf(d) : ''}`,
+      meta: `${d.txnId ? d.txnId + ' · ' : ''}${typeLabel(d.type).bn} · ${methodLabel(d.method).bn}${descOf(d) ? ' · ' + descOf(d) : ''}`,
       amount: num(d.amount),
       sort: String(d.submittedAt || ''),
       actions: [
@@ -230,7 +191,7 @@ async function pendingWithdrawalItems(session) {
       ic: 'withdraw',
       title: w.memberName,
       sub: `${w.memberId} · ${fmtDate(w.date)}`,
-      meta: `${withdrawalTypeLabel(w.type).bn} · ${methodLabel(w.method).bn}${descOf(w) ? ' · ' + descOf(w) : ''}`,
+      meta: `${w.txnId ? w.txnId + ' · ' : ''}${withdrawalTypeLabel(w.type).bn} · ${methodLabel(w.method).bn}${descOf(w) ? ' · ' + descOf(w) : ''}`,
       amount: num(w.amount),
       sort: String(w.submittedAt || ''),
       actions: [
@@ -251,7 +212,6 @@ async function pendingWithdrawalItems(session) {
     }));
 }
 
-/** One pending request, rendered as a row with its actions on the right. */
 function approvalRow(item) {
   const KIND = { member: t('সদস্য', 'Member'), deposit: t('জমা', 'Deposit'), withdrawal: t('উত্তোলন', 'Withdrawal') };
   const row = el('div', { class: `appr ${item.kind}` });
@@ -267,8 +227,6 @@ function approvalRow(item) {
   const acts = el('div', { class: 'acts' });
   item.actions.forEach(a => acts.appendChild(btn(a.label, a.ic, a.kind, a.run, { size: 'xs' })));
   row.appendChild(acts);
-  /* Step-8 polish: swipe right → approve, swipe left → reject.
-     Both fire the same dialog-gated handlers as the buttons above. */
   const approve = item.actions.find(a => a.ic === 'approve');
   const reject = item.actions.find(a => a.ic === 'reject');
   attachSwipe(row, {
@@ -307,7 +265,6 @@ export async function pageAuthorization(session) {
   );
   wrap.appendChild(stats);
 
-  /* --- filter chips --- */
   const FILTERS = [
     { id: 'all', label: t('সব', 'All') },
     { id: 'member', label: t('সদস্য', 'Members') },
@@ -354,9 +311,7 @@ export async function pageAuthorization(session) {
   return wrap;
 }
 
-/* ==================== Staff & login cards (mobile) ====================
-   Desktop keeps the tableWrap tables below; under 768px the same rows render
-   as 3-line cards. Tags stay Bengali-first in both views. */
+/* ==================== Staff & member-account managers (used by Settings) ============ */
 const staffRoleTag = u => `<span class="tag ${u.role === 'admin' ? 'info' : 'approved'}">${esc(u.role === 'admin' ? t('অ্যাডমিন', 'Admin') : 'Maker')}</span>`;
 const staffStatusTag = u => `<span class="tag ${u.active === false ? 'rejected' : 'approved'}">${u.active === false ? esc(t('নিষ্ক্রিয়', 'Inactive')) : esc(t('সক্রিয়', 'Active'))}</span>${u.mustChangePassword ? ` <span class="tag pending">${esc(t('পাসওয়ার্ড বদলান', 'Change password'))}</span>` : ''}`;
 const loginStatusTag = u => !u ? `<span class="tag gray">${esc(t('অ্যাকাউন্ট নেই', 'No account'))}</span>`
@@ -384,8 +339,8 @@ function accountCard(m, u, acts) {
   return d;
 }
 
-const isNarrowList = () => !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
-function onBreakpoint(host, render) {
+export const isNarrowList = () => !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+export function onBreakpoint(host, render) {
   if (!window.matchMedia) return;
   const mq = window.matchMedia('(max-width: 767px)');
   const onBp = () => {
@@ -395,7 +350,7 @@ function onBreakpoint(host, render) {
   if (mq.addEventListener) mq.addEventListener('change', onBp);
 }
 
-async function staffManager(session, host) {
+export async function staffManager(session, host) {
   const users = await allUsers();
   const staff = users.filter(u => u.role === 'maker' || u.role === 'admin')
     .sort((a, b) => (a.role === b.role ? (a.username || '').localeCompare(b.username || '') : a.role === 'admin' ? -1 : 1));
@@ -404,7 +359,6 @@ async function staffManager(session, host) {
     btn('নতুন Maker', 'plus', 'primary', () => newStaff(session), { size: 'xs' }),
   ]);
 
-  /* --- search + filter --- */
   const bar = el('div', { class: 'toolbar' });
   const searchBox = el('div', { class: 'search-box', html: icon('search') });
   const q = el('input', { placeholder: t('Username / নাম / মোবাইল', 'Username / name / mobile'), autocomplete: 'off' });
@@ -423,7 +377,6 @@ async function staffManager(session, host) {
   host.appendChild(bar);
   host.appendChild(c);
 
-  /* Same actions feed the desktop table and the mobile card. */
   const actsOf = u => {
     const acts = el('div', { class: 'btn-row' });
     acts.appendChild(btn(t('পাসওয়ার্ড', 'Password'), 'key', 'ghost', () => resetPw(session, u), { size: 'xs' }));
@@ -534,13 +487,12 @@ function resetPw(session, u) {
   });
 }
 
-async function accountManager(session, host) {
+export async function accountManager(session, host) {
   const [members, users] = await Promise.all([allMembers(), allUsers()]);
   const rows = members.slice().sort((a, b) => a.memberId.localeCompare(b.memberId)).map(m => ({ m, u: users.find(u => u.memberDocId === m.id) }));
 
   host.appendChild(banner('info', 'সদস্যের লগইন Username = তার মোবাইল নম্বর। পাসওয়ার্ড কখনো সংরক্ষিত বা প্রদর্শিত হয় না — প্রয়োজনে রিসেট করুন।'));
 
-  /* --- search + filter --- */
   const bar = el('div', { class: 'toolbar' });
   const searchBox = el('div', { class: 'search-box', html: icon('search') });
   const q = el('input', { placeholder: t('Member ID / নাম / মোবাইল', 'Member ID / name / mobile'), autocomplete: 'off' });
@@ -565,7 +517,6 @@ async function accountManager(session, host) {
   const c = card('সদস্য লগইন অ্যাকাউন্ট', 'Member Login Accounts', el('div'));
   host.appendChild(c);
 
-  /* Same actions feed the desktop table and the mobile card. */
   const actsOf = (m, u) => {
     const acts = el('div', { class: 'btn-row' });
     if (u) {
@@ -575,7 +526,7 @@ async function accountManager(session, host) {
         toast(t('লগইন স্ট্যাটাস হালনাগাদ', 'Login status updated'), 'success'); App.refresh();
       }, { size: 'xs' }));
     }
-    acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => App.go('members', { tab: 'update', memberDocId: m.id }), { size: 'xs' }));
+    acts.appendChild(btn(t('সম্পাদনা', 'Edit'), 'edit', 'ghost', () => App.go('members', { section: 'update', memberDocId: m.id }), { size: 'xs' }));
     return acts;
   };
   const render = () => {
@@ -614,470 +565,4 @@ async function accountManager(session, host) {
   mstat.sel.addEventListener('change', render);
   onBreakpoint(c, render);
   render();
-}
-
-/* ==================== Member Panel ==================== */
-export async function pageMemberPanel(session, params = {}) {
-  const wrap = page('সদস্য প্যানেল', 'Member Panel', 'member');
-  if (session.role !== 'member') { wrap.appendChild(banner('err', 'এই পেজটি শুধুমাত্র সদস্যদের জন্য। / Members only.')); return wrap; }
-  const [deposits, cfg] = await Promise.all([allDeposits(), settings()]);
-  const m = await getMember(session.memberDocId);
-  if (!m) { wrap.appendChild(banner('err', 'সদস্য প্রোফাইল পাওয়া যায়নি / Member profile not found')); return wrap; }
-  const s = memberSummary(m, deposits, summaryOpts(cfg));
-
-  if (m.status === 'pending') wrap.appendChild(banner('warn', 'আপনার সদস্যপদ এখনো অনুমোদনের অপেক্ষায়। অনুমোদনের পূর্বে জমা দাখিল করা যাবে না।'));
-  if (m.status === 'rejected') wrap.appendChild(banner('err', `আপনার সদস্যপদ বাতিল করা হয়েছে।${m.rejectReason ? ' কারণ: ' + esc(m.rejectReason) : ''}`));
-
-  const stats = el('div', { class: 'stats' });
-  stats.append(
-    statCard({ label: 'মাসিক কিস্তি / Installment', value: taka(m.installment), sub: `${s.months} মাস হিসাবযোগ্য`, ic: 'money' }),
-    statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count}টি অনুমোদিত`, ic: 'deposit' }),
-    statCard({ label: 'বকেয়া / Total Due', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
-    statCard({ label: 'অগ্রিম / Total Advance', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance', tone: 'blue' }),
-  );
-  wrap.appendChild(stats);
-
-  /* profile (read-only for approved fields) */
-  const prof = el('div');
-  prof.appendChild(kv([
-    ['সদস্য আইডি / Member ID', `<b style="color:var(--green-dark)">${esc(m.memberId)}</b>`],
-    ['নাম (বাংলা) / Name (Bangla)', esc(m.nameBn)], ['নাম (ইংরেজি) / Name (English)', esc(m.nameEn)],
-    ['পিতার নাম / Father', esc(m.fatherBn || m.fatherEn || '')], ['মাতার নাম / Mother', esc(m.motherBn || m.motherEn || '')],
-    ['মোবাইল / Mobile', esc(m.mobile)], ['হোয়াটসঅ্যাপ / WhatsApp', esc(m.whatsapp)],
-    ['ইমেইল / Email', esc(m.email || '')], ['এনআইডি / NID', esc(m.nid || '')],
-    ['জন্ম তারিখ / Date of Birth', esc(fmtDate(m.dob))], ['পেশা / Profession', esc(m.profession || '')],
-    ['ঠিকানা / Address', esc(m.address || '')],
-    ['যোগদানের তারিখ / Join Date', esc(fmtDate(m.joinDate))],
-    ['স্ট্যাটাস / Status', statusTag(m.status)],
-  ]));
-  const pRow = el('div', { class: 'btn-row', style: 'margin-top:9px' });
-  pRow.append(
-    btn('পাসওয়ার্ড পরিবর্তন / Change Password', 'lock', 'ghost', () => changePasswordDialog()),
-    btn('স্টেটমেন্ট / Statement', 'report', 'ghost', () => App.go('reports', { report: 'statement' })),
-    btn('লেনদেন / Transactions', 'history', 'ghost', () => App.go('deposit', { tab: 'transactions' })),
-  );
-  if (m.status === 'active') pRow.appendChild(btn('জমা দাখিল / Submit Deposit', 'deposit', 'primary', () => App.go('deposit')));
-  const pc = card('আমার প্রোফাইল', 'My Profile', prof);
-  pc.body.appendChild(pRow);
-  pc.body.appendChild(el('div', { class: 'fs8 muted', style: 'margin-top:6px', text: t('প্রোফাইল সংশোধনের প্রয়োজন হলে Maker/Admin-এর সাথে যোগাযোগ করুন। সদস্য নিজে প্রোফাইল এডিট করতে পারবেন না।', 'For profile corrections contact Maker/Admin. Members cannot edit their profile.') }));
-  wrap.appendChild(pc);
-
-  /* কার্যক্রম লগ — collapsed row; tap expands the most recent 10 own entries.
-     The More sheet links to this same card (expandLog: true). */
-  wrap.appendChild(await memberLogCard(session, { open: !!params.expandLog }));
-
-  /* my deposits */
-  const rows = statementRows(s).reverse();
-  wrap.appendChild(card('আমার জমা', 'My Approved Deposits', tableWrap(
-    [{ label: 'ক্রম / SL', cls: 'num' }, { label: 'তারিখ / Date' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'ক্রমপুঞ্জিত', cls: 'num' }],
-    rows.map(r => [
-      { text: String(r.sl), cls: 'num' }, esc(fmtDate(r.deposit.date)),
-      esc(typeLabel(r.deposit.type).bn), esc(methodLabel(r.deposit.method).bn),
-      { text: money(r.deposit.amount), cls: 'num' }, { text: money(r.cumulative), cls: 'num' }],
-    ),
-    {
-      empty: 'কোনো অনুমোদিত জমা নেই / No approved deposit yet', emptyIcon: 'deposit',
-      footer: rows.length ? [{ html: '' }, { html: '<b>সর্বমোট / Total</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(s.totalDeposit)}</b>`, cls: 'num' }, { html: '' }] : null,
-    },
-  )));
-
-  const pend = deposits.filter(d => (d.memberDocId === m.id || d.memberId === m.memberId) && d.status !== 'approved')
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  if (pend.length) {
-    wrap.appendChild(card('অপেক্ষমাণ ও বাতিল জমা', 'Pending & Rejected Deposits', tableWrap(
-      [{ label: 'তারিখ / Date' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'স্ট্যাটাস / Status' }, { label: 'মন্তব্য / Note' }],
-      pend.map(d => [esc(fmtDate(d.date)), esc(typeLabel(d.type).bn), esc(methodLabel(d.method).bn),
-        { text: money(d.amount), cls: 'num' }, { html: statusTag(d.status) }, esc(d.rejectReason || d.description || '—')]),
-    )));
-  }
-  return wrap;
-}
-
-/* ==================== Admin hub (tile home) ==================== */
-
-/** One big tile on the admin home screen. */
-function hubTile(sec, onPick) {
-  const b = el('button', { type: 'button', class: `hub-tile${sec.tone ? ' ' + sec.tone : ''}`, onclick: onPick });
-  b.innerHTML = `<span class="tic">${icon(sec.ic)}</span>
-    <span class="tb">
-      <span class="tt">${esc(t(sec.bn, sec.en))}${sec.badge ? `<span class="badge${sec.badge.n ? '' : ' zero'}">${esc(sec.badge.n)}</span>` : ''}</span>
-      <span class="ts">${esc(t(sec.descBn, sec.descEn))}</span>
-    </span>
-    <span class="go">${icon('chevron')}</span>`;
-  return b;
-}
-
-const HUB_GROUPS = [
-  { id: 'me', bn: 'আমার', en: 'Mine' },
-  { id: 'approve', bn: 'অনুমোদন', en: 'Approvals' },
-  { id: 'manage', bn: 'ব্যবস্থাপনা', en: 'Management' },
-  { id: 'org', bn: 'সংগঠন', en: 'Organisation' },
-  { id: 'data', bn: 'ডেটা', en: 'Data' },
-  { id: 'system', bn: 'সিস্টেম', en: 'System' },
-];
-
-export async function pageSettings(session, params = {}) {
-  const staff = session.role === 'admin' || session.role === 'maker';
-  const wrap = page(staff ? 'অ্যাডমিন' : 'সেটিংস', staff ? 'Admin' : 'Settings', staff ? 'admin' : 'settings');
-
-  const [members, deposits, withdrawals, users, queue] = await Promise.all([
-    allMembers(), allDeposits(), allWithdrawals(), allUsers(), queueAll(),
-  ]);
-  const pending = members.filter(m => m.status === 'pending').length
-    + deposits.filter(d => d.status === 'pending').length
-    + withdrawals.filter(w => w.status === 'pending').length;
-  const makers = users.filter(u => u.role === 'maker').length;
-
-  const SECTIONS = [
-    { id: 'account', group: 'me', ic: 'admin', bn: 'আমার অ্যাকাউন্ট', en: 'My Account', descBn: 'প্রোফাইল ও পাসওয়ার্ড', descEn: 'Profile and password' },
-    { id: 'language', group: 'me', ic: 'globe', bn: 'ভাষা', en: 'Language', descBn: 'বাংলা / English', descEn: 'Bangla / English' },
-    { id: 'about', group: 'me', ic: 'info', bn: 'অ্যাপ তথ্য', en: 'About', descBn: 'সংস্করণ, ডিভাইস, সংযোগ', descEn: 'Version, device, connection' },
-  ];
-  if (can(session, 'member:approve') || can(session, 'deposit:approve')) {
-    SECTIONS.push({
-      id: 'approvals', group: 'approve', ic: 'approve', bn: 'অনুমোদন', en: 'Approvals',
-      descBn: pending ? `${pending}টি অনুরোধ অপেক্ষায়` : 'সব অনুমোদন সম্পন্ন',
-      descEn: pending ? `${pending} request(s) waiting` : 'All approvals done',
-      route: 'authorization', badge: { n: pending }, tone: pending ? 'warn' : '',
-    });
-  }
-  if (session.role === 'admin') {
-    SECTIONS.push({
-      id: 'staff', group: 'manage', ic: 'maker', bn: 'স্টাফ', en: 'Staff',
-      descBn: `${makers} জন Maker`, descEn: `${makers} maker(s)`, badge: { n: makers },
-    });
-    SECTIONS.push({
-      id: 'accounts', group: 'manage', ic: 'members', bn: 'সদস্য লগইন', en: 'Member Logins',
-      descBn: 'চালু/বন্ধ, পাসওয়ার্ড রিসেট', descEn: 'Enable, disable, reset password',
-    });
-  }
-  if (can(session, 'settings:manage')) {
-    SECTIONS.push({
-      id: 'organisation', group: 'org', ic: 'building', bn: 'সংগঠন', en: 'Organisation',
-      descBn: 'নাম, লোগো, কিস্তি, টেমপ্লেট', descEn: 'Name, logo, installment, template',
-    });
-    SECTIONS.push({
-      id: 'firebase', group: 'data', ic: 'sync', bn: 'ক্লাউড সিঙ্ক', en: 'Cloud Sync',
-      descBn: queue.length ? `${queue.length}টি সিঙ্ক বাকি` : 'Firebase সংযোগ',
-      descEn: queue.length ? `${queue.length} item(s) pending` : 'Firebase connection',
-      badge: { n: queue.length },
-    });
-  }
-  if (can(session, 'backup:manage')) {
-    SECTIONS.push({
-      id: 'backup', group: 'data', ic: 'backup', bn: 'ব্যাকআপ', en: 'Backup',
-      descBn: 'সংরক্ষণ ও পুনরুদ্ধার', descEn: 'Save and restore',
-    });
-  }
-  /* Members get the activity log from the profile page (collapsed row) +
-     the More sheet — not a third full-list entry in this hub. */
-  if (staff) {
-    SECTIONS.push({
-      id: 'activity', group: 'system', ic: 'log', bn: 'কার্যকলাপ লগ', en: 'Activity Log',
-      descBn: 'কে, কখন, কী করেছে', descEn: 'Who did what, and when',
-    });
-  }
-
-  const host = el('div');
-  wrap.appendChild(host);
-  let active = params.tab && SECTIONS.some(s => s.id === params.tab && !s.route) ? params.tab : '';
-
-  const setTab = id => { App.params = { ...(App.params || {}), tab: id }; };
-
-  function renderHome() {
-    host.replaceChildren();
-    HUB_GROUPS.forEach(g => {
-      const items = SECTIONS.filter(s => s.group === g.id);
-      if (!items.length) return;
-      host.appendChild(el('div', { class: 'hub-group-title', text: t(g.bn, g.en) }));
-      const grid = el('div', { class: 'hub-grid' });
-      items.forEach(s => grid.appendChild(hubTile(s, () => (s.route ? App.go(s.route) : open(s.id)))));
-      host.appendChild(grid);
-    });
-  }
-
-  async function paint() {
-    host.replaceChildren();
-    if (!active) return renderHome();
-    const sec = SECTIONS.find(s => s.id === active);
-    if (!sec) return renderHome();
-
-    const bar = el('div', { class: 'hub-bar' });
-    bar.appendChild(btn(staff ? t('অ্যাডমিন হোম', 'Admin home') : t('সেটিংস হোম', 'Settings home'), 'back', 'ghost', home, { size: 'xs' }));
-    const head = el('div', { class: 'hub-sec' });
-    head.innerHTML = `<div class="ic">${icon(sec.ic)}</div><div><h2>${esc(t(sec.bn, sec.en))}</h2><div class="s">${esc(t(sec.descBn, sec.descEn))}</div></div>`;
-    const pane = el('div');
-    host.append(bar, head, pane);
-
-    if (active === 'account') accountSection(session, pane);
-    else if (active === 'language') languageSection(pane);
-    else if (active === 'about') aboutSection(pane);
-    else if (active === 'organisation') await organisationSection(session, pane);
-    else if (active === 'firebase') await firebaseSection(session, pane);
-    else if (active === 'staff') await staffManager(session, pane);
-    else if (active === 'accounts') await accountManager(session, pane);
-    else if (active === 'activity') await embedPage(pane, pageActivity, session);
-    else if (active === 'backup') await embedPage(pane, pageBackup, session);
-  }
-
-  async function open(id) {
-    active = id;
-    setTab(id);
-    await paint();
-    window.scrollTo(0, 0);
-  }
-  async function home() {
-    active = '';
-    setTab('');
-    await paint();
-    window.scrollTo(0, 0);
-  }
-
-  /* Esc returns to the tile home; auto-detaches once this page is replaced. */
-  const onKey = ev => {
-    if (!host.isConnected) { window.removeEventListener('keydown', onKey); return; }
-    if (ev.key === 'Escape' && active) home();
-  };
-  window.addEventListener('keydown', onKey);
-
-  await paint();
-  return wrap;
-}
-
-function languageSection(host) {
-  const cur = getLang();
-  const wrap = el('div');
-  wrap.appendChild(el('p', { class: 'muted', style: 'margin:0 0 12px', text: t(
-    'অ্যাপের ভাষা বেছে নিন। বাংলা নির্বাচন করলে সবকিছু বাংলায় দেখাবে, ইংরেজি নির্বাচন করলে সবকিছু ইংরেজিতে।',
-    'Choose the app language. Bangla shows the whole interface in Bangla; English shows it in English.',
-  ) }));
-  const row = el('div', { class: 'lang-pick' });
-  [
-    { id: 'bn', title: 'বাংলা', sub: 'Bangla' },
-    { id: 'en', title: 'English', sub: 'ইংরেজি' },
-  ].forEach(opt => {
-    const b = el('button', {
-      type: 'button',
-      class: `lang-opt${cur === opt.id ? ' on' : ''}`,
-      onclick: () => { setLang(opt.id); },
-    });
-    b.innerHTML = `<strong>${esc(opt.title)}</strong><span>${esc(opt.sub)}</span>`;
-    row.appendChild(b);
-  });
-  wrap.appendChild(row);
-  host.appendChild(card('ভাষা', 'Language', wrap));
-}
-
-function accountSection(session, host) {
-  const acc = el('div');
-  acc.appendChild(kv([
-    ['ব্যবহারকারী / User', esc(session.displayName || session.username)],
-    ['ইউজারনেম / Username', esc(session.username)],
-    ['রোল / Role', `<span class="tag ${session.role === 'admin' ? 'info' : session.role === 'maker' ? 'approved' : 'gray'}">${esc(session.role === 'admin' ? t('অ্যাডমিন', 'Admin') : session.role === 'maker' ? 'Maker' : t('সদস্য', 'Member'))}</span>`],
-    ...(session.memberId ? [['সদস্য আইডি / Member ID', esc(session.memberId)]] : []),
-    ['লগইন সময় / Login at', esc(fmtDateTime(session.loginAt))],
-    ['ডিভাইস আইডি / Device ID', esc(deviceId())],
-  ]));
-  const accRow = el('div', { class: 'btn-row', style: 'margin-top:9px' });
-  accRow.appendChild(btn('পাসওয়ার্ড পরিবর্তন / Change Password', 'lock', 'primary', () => changePasswordDialog()));
-  const accCard = card('আমার অ্যাকাউন্ট', 'My Account', acc);
-  accCard.body.appendChild(accRow);
-  host.appendChild(accCard);
-
-  if (session.role === 'member') {
-    accRow.appendChild(btn(t('আমার প্রোফাইল', 'My Profile'), 'member', 'ghost', () => App.go('member-panel')));
-  }
-}
-
-function aboutSection(host) {
-  host.appendChild(card('অ্যাপ সম্পর্কে', 'About', kv([
-    ['অ্যাপ / Application', `${esc(APP_NAME_BN)} — ${esc(APP_NAME_EN)}`],
-    ['সংস্করণ / Version', APP_VERSION],
-    ['ধরন / Type', 'Offline-first PWA · IndexedDB + Firebase Realtime Database'],
-    ['সংযোগ / Connection', navigator.onLine ? `<span class="tag approved">${esc(t('অনলাইন', 'Online'))}</span>` : `<span class="tag gray">${esc(t('অফলাইন', 'Offline'))}</span>`],
-    ['ডিভাইস আইডি / Device ID', esc(deviceId())],
-    ['ব্যাকআপ / Data safety', t('অ্যাডমিন (Maker) → ব্যাকআপ', 'Admin (Maker) → Backup')],
-  ])));
-}
-
-function resizeLogoFile(file) {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith('image/')) return reject(new Error('ছবি ফাইল দিন / Choose an image file'));
-    if (file.size > 4 * 1024 * 1024) return reject(new Error('ফাইল খুব বড় (সর্বোচ্চ ৪ MB)'));
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const max = 512;
-      // SVG may report no intrinsic size — fall back to the resize ceiling.
-      let w = img.naturalWidth || img.width || 512, h = img.naturalHeight || img.height || 512;
-      if (w > max || h > max) {
-        const s = Math.min(max / w, max / h);
-        w = Math.round(w * s); h = Math.round(h * s);
-      }
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, w); c.height = Math.max(1, h);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL('image/png'));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('ছবি খোলা যায়নি')); };
-    img.src = url;
-  });
-}
-
-async function organisationSection(session, host) {
-  const cfg = await settings();
-  const f = el('form', { class: 'grid', novalidate: true });
-  f.innerHTML = `
-    <div class="grid g2">
-      <div class="field"><label>সংগঠনের নাম (বাংলা) <span class="req">*</span></label><input name="orgNameBn" value="${esc(cfg.orgNameBn)}" required></div>
-      <div class="field"><label>Organisation Name (English) <span class="req">*</span></label><input name="orgNameEn" value="${esc(cfg.orgNameEn)}" required></div>
-      <div class="field"><label>ঠিকানা / Address</label><input name="orgAddress" value="${esc(cfg.orgAddress || '')}"></div>
-      <div class="field"><label>ফোন / Phone</label><input name="orgPhone" value="${esc(cfg.orgPhone || '')}"></div>
-      <div class="field"><label>ডিফল্ট মাসিক কিস্তি (৳)</label><input name="defaultInstallment" type="number" min="0" value="${esc(cfg.defaultInstallment)}"></div>
-      <div class="field"><label>মাসিক আদায় লক্ষ্যমাত্রা (৳)</label><input name="monthlyTarget" type="number" min="0" value="${esc(cfg.monthlyTarget)}"><div class="hint">০ দিলে সক্রিয় সদস্যদের কিস্তির যোগফল লক্ষ্য ধরা হবে।</div></div>
-    </div>
-    <label class="check"><input type="checkbox" name="countSpecialTowardsInstallment" ${cfg.countSpecialTowardsInstallment ? 'checked' : ''}> বিশেষ চাঁদা ও অন্যান্য জমাকেও কিস্তি হিসেবে গণনা করুন</label>
-    <div class="field" style="margin-top:8px">
-      <label>প্রতিষ্ঠান / অ্যাপ লোগো</label>
-      <div class="logo-edit">
-        <img class="logo-preview" id="logoPreview" src="${esc(cfg.orgLogo || 'icons/logo.png')}" alt="logo">
-        <div>
-          <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-          <div class="hint">PNG / JPG — মোবাইল স্ক্রিনে অটোফিট হবে। সর্বোচ্চ ~৫১২px।</div>
-          <button class="btn btn-ghost btn-xs" type="button" id="logoReset">ডিফল্ট লোগো</button>
-        </div>
-      </div>
-    </div>
-    <div class="field" style="margin-top:8px"><label>WhatsApp বকেয়া রিমাইন্ডার টেমপ্লেট</label>
-      <textarea name="waTemplate" rows="7">${esc(cfg.waTemplate)}</textarea>
-      <div class="hint"><b>[Member Name]</b> অংশটি স্বয়ংক্রিয়ভাবে সদস্যের নাম দিয়ে প্রতিস্থাপিত হবে। বার্তায় কোনো টাকার অঙ্ক থাকবে না।</div></div>
-    <div class="form-actions">
-      <button class="btn btn-primary" type="submit">${icon('save')}<span>Save / সংরক্ষণ</span></button>
-      <button class="btn btn-ghost" type="reset">${icon('clear')}<span>Reset</span></button>
-    </div>`;
-  /* --- logo picker: preview immediately, persist on Save --- */
-  const preview = f.querySelector('#logoPreview');
-  const fileInput = f.querySelector('#logoFile');
-  let pendingLogo = cfg.orgLogo || '';   // '' means “use the default logo”
-  const paintPreview = () => { preview.src = logoSrc({ orgLogo: pendingLogo }); };
-  paintPreview();
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) return;
-    try {
-      pendingLogo = await resizeLogoFile(file);
-      paintPreview();
-      toast('লোগো নির্বাচন করা হয়েছে — Save করুন / Logo selected — press Save', 'info');
-    } catch (err) {
-      toast(err.message || 'লোগো লোড করা যায়নি', 'error');
-      fileInput.value = '';
-    }
-  });
-  f.querySelector('#logoReset').addEventListener('click', () => {
-    pendingLogo = '';
-    fileInput.value = '';
-    paintPreview();
-  });
-  f.addEventListener('reset', () => setTimeout(() => {
-    pendingLogo = cfg.orgLogo || '';
-    fileInput.value = '';
-    paintPreview();
-  }, 0));
-
-  f.addEventListener('submit', async e => {
-    e.preventDefault();
-    const v = Object.fromEntries(new FormData(f).entries());
-    if (!String(v.orgNameBn || '').trim() || !String(v.orgNameEn || '').trim()) { toast('সংগঠনের নাম আবশ্যক / Organisation name required', 'error'); return; }
-    if (!String(v.waTemplate || '').includes('[Member Name]')) { toast('টেমপ্লেটে [Member Name] অবশ্যই থাকতে হবে', 'error'); return; }
-    const b = f.querySelector('button[type=submit]'); b.disabled = true;
-    try {
-      await saveSettings({
-        orgNameBn: v.orgNameBn.trim(), orgNameEn: v.orgNameEn.trim(),
-        orgAddress: (v.orgAddress || '').trim(), orgPhone: (v.orgPhone || '').trim(),
-        defaultInstallment: num(v.defaultInstallment), monthlyTarget: num(v.monthlyTarget),
-        countSpecialTowardsInstallment: !!v.countSpecialTowardsInstallment,
-        waTemplate: v.waTemplate,
-        orgLogo: pendingLogo,
-      });
-    } catch (err) {
-      b.disabled = false;
-      toast('সেটিংস সংরক্ষণ ব্যর্থ: ' + err.message, 'error');
-      return;
-    }
-    b.disabled = false;
-    await logActivity('SETTINGS_UPDATE', 'Organisation settings updated', session);
-    toast('সেটিংস সংরক্ষিত হয়েছে / Settings saved', 'success');
-    App.refresh();
-  });
-  host.appendChild(card('সংগঠন ও হিসাব সেটিংস', 'Organisation & Accounting Settings', f));
-
-  /* --- danger zone --- */
-  const dz = el('div');
-  dz.appendChild(banner('warn', 'নিচের কাজগুলো স্থায়ী। কাজ করার আগে অবশ্যই ব্যাকআপ নিন।'));
-  const dRow = el('div', { class: 'btn-row', style: 'margin-top:8px' });
-  dRow.appendChild(btn('ব্যাকআপ ও রিস্টোর / Backup & Restore', 'backup', 'ghost', () => App.go('settings', { tab: 'backup' })));
-  dRow.appendChild(btn('স্থানীয় ডাটা মুছুন / Clear local data', 'trash', 'danger', async () => {
-    if (!(await confirmBox('এই ডিভাইসের সমস্ত স্থানীয় ডাটা (সদস্য, জমা, লগ, ব্যবহারকারী) মুছে যাবে। Firebase-এ ডাটা থাকলে পুনরায় Pull করা যাবে। নিশ্চিত?', { okLabel: 'Erase', danger: true }))) return;
-    if (!(await confirmBox('শেষ সতর্কতা — সত্যিই মুছে ফেলবেন?', { okLabel: 'Yes, erase', danger: true }))) return;
-    for (const st of Object.keys(STORES)) await dbClear(st);
-    invalidate();
-    toast('স্থানীয় ডাটা মুছে ফেলা হয়েছে / Local data cleared', 'warn');
-    setTimeout(() => location.reload(), 700);
-  }));
-  const dc = card('বিপদজনক অঞ্চল', 'Danger Zone', dz);
-  dc.body.appendChild(dRow);
-  host.appendChild(dc);
-}
-
-async function firebaseSection(session, host) {
-  const fbCfg = await getSetting('firebaseConfig', null);
-  // Show the active config: a saved override, otherwise the built-in project default.
-  const shown = (fbCfg && fbCfg.databaseURL) ? fbCfg : DEFAULT_FIREBASE_CONFIG;
-  const fb = el('form', { class: 'grid', novalidate: true });
-  const g = (k, ph) => `<div class="field"><label>${k}</label><input name="${k}" value="${esc((shown && shown[k]) || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
-  fb.innerHTML = `
-    <div class="grid g2">
-      ${g('apiKey', 'AIza…')}${g('authDomain', 'your-project.firebaseapp.com')}
-      ${g('databaseURL', 'https://your-project-default-rtdb.firebaseio.com')}${g('projectId', 'your-project-id')}
-      ${g('storageBucket', 'your-project.appspot.com')}${g('messagingSenderId', '1234567890')}
-      ${g('appId', '1:123:web:abc')}
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-primary" type="submit">${icon('save')}<span>Save & Connect</span></button>
-      <button class="btn btn-ghost" type="button" id="fbClear">${icon('clear')}<span>Disconnect</span></button>
-      <button class="btn btn-soft" type="button" id="fbSync">${icon('sync')}<span>Sync now</span></button>
-    </div>
-    <div class="fs8 muted" id="fbStat"></div>`;
-  const stat = fb.querySelector('#fbStat');
-  const paintStat = () => {
-    // Auto-detach once the tab is re-rendered — otherwise every visit to this
-    // tab leaks another listener.
-    if (!stat.isConnected) { window.removeEventListener('ds:sync-status', paintStat); return; }
-    stat.textContent = `Status: ${firebase.status}${firebase.lastError ? ' — ' + firebase.lastError : ''}`;
-  };
-  paintStat();
-  window.addEventListener('ds:sync-status', paintStat);
-  fb.addEventListener('submit', async e => {
-    e.preventDefault();
-    const v = Object.fromEntries(new FormData(fb).entries());
-    if (!v.apiKey || !v.databaseURL) { toast('apiKey ও databaseURL আবশ্যক / apiKey and databaseURL are required', 'error'); return; }
-    try {
-      await firebase.saveConfig(v);
-      await logActivity('SETTINGS_UPDATE', 'Firebase configuration updated', session);
-      toast(firebase.ready ? 'Firebase সংযুক্ত হয়েছে / Firebase connected' : 'সংরক্ষিত হয়েছে / Saved', firebase.ready ? 'success' : 'info');
-      paintStat();
-    } catch (err) { toast(err.message, 'error'); }
-  });
-  fb.querySelector('#fbClear').addEventListener('click', async () => {
-    if (!(await confirmBox('Firebase সংযোগ বিচ্ছিন্ন করবেন? অ্যাপটি শুধুমাত্র অফলাইনে চলবে।', { okLabel: 'Disconnect', danger: true }))) return;
-    await firebase.saveConfig(null);
-    toast('সংযোগ বিচ্ছিন্ন / Disconnected', 'warn');
-    App.refresh();
-  });
-  fb.querySelector('#fbSync').addEventListener('click', async () => {
-    if (!firebase.configured) { toast('প্রথমে Firebase কনফিগার করুন', 'warn'); return; }
-    try { const n = await firebase.flush(); toast(`${n} item(s) synced`, 'success'); } catch (err) { toast(err.message, 'error'); }
-  });
-  host.appendChild(card('ক্লাউড সিঙ্ক', 'Firebase Realtime Database', fb));
 }

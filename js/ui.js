@@ -243,6 +243,96 @@ export function segChips(name, options, value, { onChange = null } = {}) {
   };
 }
 
+/* ================= modern app-like selectors (v6.6) ================= */
+
+/**
+ * optionGrid — icon-card single-select in a strict 2-column grid.
+ * Odd number of options: the last card keeps its normal size (never stretched).
+ * Emits the same contract as segChips: { root, hidden, value, set(), reset() }.
+ * `options` = [{ value, bn, en, ic }] (ic = icon name).
+ */
+export function optionGrid(name, options, value, { onChange = null, cols = 2 } = {}) {
+  const wrap = el('div', { class: `opt-grid${cols === 1 ? ' one-col' : ''}`, role: 'radiogroup' });
+  const hidden = el('input', { type: 'hidden', name, value: options.some(o => o.value === value) ? value : options[0].value });
+  const paint = () => {
+    [...wrap.querySelectorAll('.opt-card')].forEach(b => {
+      const on = b.dataset.value === hidden.value;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  };
+  options.forEach(o => {
+    const b = el('button', {
+      type: 'button', class: 'opt-card', role: 'radio', 'aria-checked': 'false',
+      html: `<span class="oc-ic">${icon(o.ic || 'plus')}</span><span class="oc-tx">${esc(t(o.bn, o.en))}</span>`,
+    });
+    b.dataset.value = o.value;
+    b.addEventListener('click', () => {
+      if (hidden.value === o.value) return;
+      hidden.value = o.value;
+      paint();
+      hidden.dispatchEvent(new Event('change', { bubbles: true }));
+      if (onChange) onChange(o.value);
+    });
+    wrap.appendChild(b);
+  });
+  paint();
+  const root = el('div');
+  root.append(wrap, hidden);
+  return {
+    root, hidden,
+    get value() { return hidden.value; },
+    set(v) { if (options.some(o => o.value === v) && hidden.value !== v) { hidden.value = v; paint(); } },
+    reset() { this.set(options[0].value); },
+  };
+}
+
+/**
+ * tileMenu — the icon-based section grid used by the Deposits / Transactions /
+ * Reports / Settings hubs. items = [{ id, ic, bn, en, sub?, tone?, badge? }].
+ */
+export function tileMenu(items, onPick, { ariaLabel = '' } = {}) {
+  const grid = el('div', { class: 'sec-menu', role: 'list', ...(ariaLabel ? { 'aria-label': ariaLabel } : {}) });
+  items.filter(Boolean).forEach(it => {
+    const b = el('button', {
+      type: 'button', class: `sec-tile${it.tone ? ' ' + it.tone : ''}`, role: 'listitem',
+      onclick: () => onPick(it.id),
+    });
+    b.innerHTML = `<span class="st-ic">${icon(it.ic)}</span>
+      <span class="st-tx"><span class="st-t">${esc(t(it.bn, it.en))}</span>${it.sub ? `<span class="st-s">${esc(tx(it.sub))}</span>` : ''}</span>`
+      + (it.badge ? `<span class="pill${it.badge > 99 ? ' big' : ''}">${it.badge > 99 ? '99+' : it.badge}</span>` : '');
+    grid.appendChild(b);
+  });
+  return grid;
+}
+
+/** Unique transaction id chip (20260920001) — clickable on desktop, copy on tap. */
+export function txnIdChip(id) {
+  if (!id) return '';
+  return `<button type="button" class="txn-id" data-copy="${esc(id)}" title="${t('কপি করুন', 'Copy')}">${esc(id)}</button>`;
+}
+/** Wire [data-copy] chips inside a container (event delegation, one listener). */
+export function bindCopyIds(container) {
+  container.addEventListener('click', e => {
+    const b = e.target.closest ? e.target.closest('[data-copy]') : null;
+    if (!b) return;
+    e.stopPropagation();
+    const v = b.dataset.copy;
+    const ok = () => { b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 1200); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(ok).catch(() => {});
+    else { const ta = el('textarea', { value: v }); document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); ok(); } catch {} ta.remove(); }
+  });
+}
+
+/** Back-to-menu bar shown inside a hub section (works with browser/in-app back too). */
+export function sectionBar(titleBn, titleEn, ic, onBack, backLabel) {
+  const bar = el('div', { class: 'sec-bar' });
+  const back = el('button', { type: 'button', class: 'sec-back', html: `${icon('back')}<span>${esc(t(backLabel || 'ফিরে যান', backLabel || 'Back'))}</span>`, onclick: onBack });
+  const ttl = el('div', { class: 'sec-bar-t', html: `${icon(ic)}<b>${esc(t(titleBn, titleEn))}</b>` });
+  bar.append(back, ttl);
+  return bar;
+}
+
 /**
  * Generic filter sheet: chip sections + optional date range + apply/clear.
  * `sections` = [{ key, label, options:[{value,bn,en}] }]; `dates` = { fromLabel, toLabel } or null.

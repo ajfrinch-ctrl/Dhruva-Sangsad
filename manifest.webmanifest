@@ -19,8 +19,8 @@
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "জমা এন্ট্রি / Deposit", "short_name": "জমা", "url": "./index.html#deposit", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "জমা এন্ট্রি / Deposit", "short_name": "জমা", "url": "./index.html#deposits", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "রিপোর্ট / Reports", "short_name": "রিপোর্ট", "url": "./index.html#reports", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "সদস্য অনুসন্ধান / Search", "short_name": "অনুসন্ধান", "url": "./index.html#search", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "সদস্য অনুসন্ধান / Search", "short_name": "অনুসন্ধান", "url": "./index.html#members", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

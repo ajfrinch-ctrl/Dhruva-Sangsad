@@ -1,77 +1,111 @@
-/* ধ্রুব সংসদ — application shell, router, role-based navigation guard, idle timeout */
+/* ধ্রুব সংসদ — application shell, section-aware hash router, role guard,
+   clean top bar ([Back/Menu] · title · [Bell]), idle timeout.
+   No floating action buttons anywhere — every action lives in its section. */
 import { $, el, clear, toast, esc, alertBox, confirmBox, t } from './util.js';
 import { logoSrc } from './brand.js';
 import { setLang, getLang } from './i18n.js';
 import { icon } from './icons.js';
 import { openDB } from './db.js';
-import { ensureBootstrapAdmin, getSession, clearSession, logout, can, PERMISSIONS, checkBootstrapSession } from './auth.js';
+import { ensureBootstrapAdmin, getSession, clearSession, logout, can, checkBootstrapSession } from './auth.js';
 import { renderAuth, setAuthMode } from './ui-auth.js';
 import { firebase } from './firebase.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
 import { bottomSheet, switchEl, skeleton, errorState } from './ui.js';
 import { initShellGestures } from './gestures.js';
 import { initInstallPrompt } from './install-prompt.js';
-import { visibleNotifications, invalidate, logActivity, settings, syncDueNotifications, allMembers, allDeposits, allWithdrawals } from './store.js';
+import { visibleNotifications, logActivity, settings, syncDueNotifications, ensureTxnIds, dedupeTxnIds, allMembers, allDeposits, allWithdrawals } from './store.js';
 import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
 import { pageHome } from './pages/dashboard.js';
 import { pageMembersHub } from './pages/members.js';
 import { pageDepositsHub } from './pages/deposits.js';
-import { pageAuthorization, pageSettings, pageMemberPanel } from './pages/admin.js';
+import { pageTransactionsHub } from './pages/transactions.js';
+import { pageStatements } from './pages/statements.js';
 import { pageReports } from './pages/reports.js';
+import { pageSettings } from './pages/settings.js';
+import { pageMemberPanel } from './pages/member-panel.js';
+import { pageAuthorization } from './pages/admin.js';
 import { openNotifications } from './pages/misc.js';
 
-/* Mobile-first navigation.
-   `slots` = which items sit in the bottom bar (the rest live in “More”);
-   members get their own 3 slots. Desktop renders every item in the left rail. */
+/* Mobile-first navigation — grouped by domain, one home per feature. */
 const NAV = [
-  { id: 'home', bn: 'হোম', en: 'Home', icon: 'dashboard', slots: ['staff', 'member'] },
+  { id: 'home', bn: 'হোম', en: 'Home', icon: 'home', slots: ['staff', 'member'] },
   { id: 'members', bn: 'সদস্য', en: 'Members', icon: 'members', slots: ['staff'] },
-  { id: 'deposit', bn: 'জমা', en: 'Deposits', icon: 'deposit', slots: ['staff', 'member'] },
+  { id: 'deposits', bn: 'জমা', en: 'Deposits', icon: 'deposit', slots: ['staff', 'member'] },
+  { id: 'transactions', bn: 'লেনদেন', en: 'Txns', icon: 'receipt', slots: ['member'] },
+  { id: 'statements', bn: 'স্টেটমেন্ট', en: 'Statement', icon: 'report', slots: [] },
+  { id: 'reports', bn: 'রিপোর্ট', en: 'Reports', icon: 'chart', slots: [] },
   { id: 'authorization', bn: 'অনুমোদন', en: 'Approvals', icon: 'approve', slots: ['staff'] },
-  { id: 'member-panel', bn: 'আমার', en: 'Mine', icon: 'member', slots: ['member'] },
-  { id: 'reports', bn: 'রিপোর্ট', en: 'Reports', icon: 'report', slots: [] },
-  /* Staff see this as the admin hub; members keep the plain “Settings” label. */
-  { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings', bnStaff: 'অ্যাডমিন', enStaff: 'Admin', slots: [] },
+  { id: 'settings', bn: 'সেটিংস', en: 'Settings', icon: 'settings', slots: [] },
+  { id: 'member-panel', bn: 'প্রোফাইল', en: 'Profile', icon: 'member', slots: [] },
 ];
 
-/* Contextual primary action (FAB). Only the screens where one action dominates.
-   `member` = label override for the member role (their own deposit). */
-const FAB = {
-  members: { ic: 'plus', bn: 'সদস্য যোগ', en: 'Add member', perm: 'member:edit', run: () => App.go('members', { tab: 'register' }) },
-  deposit: { ic: 'plus', bn: 'জমা যোগ', en: 'Add deposit', member: { bn: 'জমা দাখিল', en: 'Submit deposit' }, perm: 'deposit:create-any', run: () => App.go('deposit', { tab: 'entry' }) },
-};
+/* legacy route aliases (old bookmarks / notification links) */
+const ALIAS = { 'deposit': 'deposits', 'member-panel': 'member-panel' };
 
 const PAGES = {
   'home': pageHome,
   'members': pageMembersHub,
-  'deposit': pageDepositsHub,
-  'authorization': pageAuthorization,
+  'deposits': pageDepositsHub,
+  'transactions': pageTransactionsHub,
+  'statements': pageStatements,
   'reports': pageReports,
   'settings': pageSettings,
   'member-panel': pageMemberPanel,
+  'authorization': pageAuthorization,
 };
+
+/* "#route/section" — every hub sub-page is deep-linkable and back-navigable. */
+export function parseHash(h) {
+  let raw = String(h || '').replace(/^#/, '');
+  if (!raw) return { route: 'home', section: '' };
+  const [route, section = ''] = raw.split('/');
+  return { route: ALIAS[route] || route, section };
+}
+export function hashFor(route, params = {}) {
+  const sec = params.section || params.tab || '';
+  return `#${route}${sec ? '/' + sec : ''}`;
+}
+
+/** Extra params that survive a refresh inside the hash (e.g. memberDocId). */
+const sessionParams = {};
 
 export const App = {
   session: null,
   route: 'home',
+  section: '',
   unread: 0,
+  navDepth: 0,
   async go(route, params = {}) {
     const s = this.session;
     if (!s) { this.showAuth(); return; }
-    if (!PAGES[route] || !can(s, route)) {
+    route = ALIAS[route] || route;
+    if (!PAGES[route]) { route = 'home'; params = {}; }
+    if (!can(s, route)) {
       toast(t('এই মডিউলে প্রবেশাধিকার নেই', 'You do not have access to this module'), 'error');
-      route = 'home';
+      route = 'home'; params = {};
     }
+    /* remember memberDocId-style params for refresh/section switches */
+    for (const k of Object.keys(params)) if (k !== 'section' && k !== 'tab') sessionParams[`${route}.${k}`] = params[k];
+    const merged = { ...params };
+    for (const k of Object.keys(sessionParams)) {
+      if (k.startsWith(route + '.') && merged[k.slice(route.length + 1)] === undefined) merged[k.slice(route.length + 1)] = sessionParams[k];
+    }
+    const target = hashFor(route, merged);
+    const pushing = location.hash !== target;
+    if (pushing) { this.navDepth++; location.hash = target; }
+    await this.render(route, merged);
+  },
+  async render(route, params = {}) {
     this.route = route;
-    this.params = params;
-    location.hash = '#' + route;
+    const { section } = parseHash(hashFor(route, params));
+    this.section = section;
     resetIdleTimer();
     const view = $('#view');
     clear(view);
     view.appendChild(skeleton({ rows: 3, cards: 4 }));
     try {
-      const node = await PAGES[route](s, params);
+      const node = await PAGES[route](this.session, params);
       clear(view);
       view.appendChild(node);
       view.scrollTop = 0; window.scrollTo(0, 0);
@@ -81,11 +115,27 @@ export const App = {
       view.appendChild(errorState({
         title: t('এই পেজটি লোড করা যায়নি', 'This page could not be loaded'),
         hint: e && e.message ? e.message : '',
-        onRetry: () => this.go(route, params),
+        onRetry: () => this.render(route, params),
       }));
     }
     this.paintNav();
     this.paintFooter();
+    this.paintBack();
+  },
+  refresh() {
+    const params = { section: this.section || '' };
+    for (const k of Object.keys(sessionParams)) {
+      if (k.startsWith(this.route + '.')) params[k.slice(this.route.length + 1)] = sessionParams[k];
+    }
+    return this.render(this.route, params);
+  },
+  /** In-app back: browser history first (covers More→page, Android back,
+   *  refresh), fall back to the section's hub, then home. Never a blank page. */
+  back() {
+    if (this.navDepth > 0 && history.length > 1) { this.navDepth--; history.back(); return; }
+    const hubFor = { deposits: 'deposits', transactions: 'transactions', settings: 'settings', members: 'members', reports: 'reports', statements: 'statements' };
+    if (this.section && hubFor[this.route]) { this.go(this.route, {}); return; }
+    this.go('home');
   },
   applyBrand(cfg) {
     const src = logoSrc(cfg);
@@ -94,24 +144,23 @@ export const App = {
     if (link && src && !String(src).startsWith('data:')) link.href = src;
   },
   async paintFooter() {
-    const el = $('#appFooterOrg');
-    if (!el) return;
+    const elx = $('#appFooterOrg');
+    if (!elx) return;
     try {
       const cfg = await settings();
       this.applyBrand(cfg);
       const bn = (cfg.orgNameBn || '').trim();
       const en = (cfg.orgNameEn || '').trim();
       const extra = [cfg.orgAddress, cfg.orgPhone].filter(Boolean).join(' · ');
-      el.innerHTML = `<img class="foot-logo js-org-logo" src="${esc(logoSrc(cfg))}" alt="">`
+      elx.innerHTML = `<img class="foot-logo js-org-logo" src="${esc(logoSrc(cfg))}" alt="">`
         + `<strong>${esc(bn || 'ধ্রুব সংসদ')}</strong>`
         + (en ? `<span class="app-footer-en">${esc(en)}</span>` : '')
         + (extra ? `<span class="app-footer-meta">${esc(extra)}</span>` : '')
         + `<span class="app-footer-meta">v${esc(APP_VERSION)}</span>`;
     } catch {
-      el.textContent = 'ধ্রুব সংসদ';
+      elx.textContent = 'ধ্রুব সংসদ';
     }
   },
-  refresh() { return this.go(this.route, this.params || {}); },
 
   labelOf(item) {
     const s = this.session;
@@ -122,7 +171,6 @@ export const App = {
     );
   },
 
-  /** One nav button, shaped for the bottom bar or the desktop rail. */
   navButton(item, where) {
     const label = this.labelOf(item);
     const b = el('button', {
@@ -135,7 +183,6 @@ export const App = {
     return b;
   },
 
-  /** The 5th slot of the bottom bar + the last rail item: everything else. */
   moreButton(where) {
     const b = el('button', {
       class: 'nav-tab nav-more', type: 'button', dataset: { route: 'more' },
@@ -149,13 +196,11 @@ export const App = {
 
   paintNav() {
     const s = this.session; if (!s) return;
-    const nav = $('#topnav');
-    if (nav) nav.hidden = true;          // replaced by the bottom bar / rail
     const bottom = $('#bottomnav');
     const rail = $('#rail');
     const group = s.role === 'member' ? 'member' : 'staff';
 
-    /* bottom bar: the 4 (or 3) primary destinations + “More” */
+    /* bottom bar: 4 primary destinations + “More” (secondary items live there) */
     if (bottom) {
       bottom.hidden = false;
       bottom.replaceChildren();
@@ -168,104 +213,21 @@ export const App = {
     if (rail) {
       rail.hidden = false;
       rail.replaceChildren();
-      const logo = el('div', { class: 'rail-logo', html: icon('dashboard') });
-      rail.appendChild(logo);
+      rail.appendChild(el('div', { class: 'rail-logo', html: icon('home') }));
       NAV.filter(i => can(s, i.id)).forEach(i => rail.appendChild(this.navButton(i, 'rail')));
       rail.appendChild(this.moreButton('rail'));
     }
 
     this.paintApprovalBadge();
-    this.paintFab();
-
-    const setBtn = $('#btnSettings');
-    if (setBtn) setBtn.hidden = true;   // “Settings” now lives in the More sheet
-    const userName = s.displayName || s.username || s.memberId || '';
-    const roleBn = { admin: t('অ্যাডমিন', 'Admin'), maker: 'Maker', member: t('সদস্য', 'Member') }[s.role];
-    const brand = $('#brandRole');
-    brand.innerHTML = `<span class="brand-name">${esc(userName)}</span><span class="brand-role-tag">${esc(roleBn || (s.role || '').toUpperCase())}</span>`;
   },
 
-  /** Contextual FAB — one dominant action per screen, hidden elsewhere.
-      Home has no FAB for members (the quick actions already cover it). */
-  paintFab() {
-    const s = this.session;
-    const fab = $('#fab');
-    if (!fab) return;
-    const f = FAB[this.route];
-    const allowed = f && (!f.perm || can(s, f.perm) || (f.perm === 'deposit:create-any' && can(s, 'deposit:create-own')));
-    if (!allowed) { fab.hidden = true; return; }
-    fab.hidden = false;
-    const lbl = (!s || s.role !== 'member') || !f.member ? { bn: f.bn, en: f.en } : f.member;
-    fab.innerHTML = `${icon(f.ic)}<span>${esc(t(lbl.bn, lbl.en))}</span>`;
-    fab.onclick = f.run;
-  },
-
-  /** “More” sheet.
-      Member: আমার → অ্যাকাউন্ট (সেটিংস, কার্যক্রম লগ) → পছন্দ → লগআউট.
-      Staff:  Mine → Admin tools → Preferences → Logout. */
-  openMore() {
-    const s = this.session; if (!s) return;
-    const isStaff = s.role !== 'member';
-    const group = isStaff ? 'staff' : 'member';
-    const leftovers = NAV.filter(i => can(s, i.id) && !(i.slots || []).includes(group));
-    const items = [];
-    const themeRow = {
-      ic: getTheme() === 'amoled' ? 'moon' : 'sun', label: t('ডার্ক মোড', 'Dark mode'),
-      keepOpen: true, right: switchEl(getTheme() === 'amoled', () => toggleTheme()),
-    };
-    const langRow = {
-      ic: 'globe', label: t('ভাষা / Language', 'Language'),
-      keepOpen: true, right: switchEl(getLang() === 'en', () => setLang(getLang() === 'en' ? 'bn' : 'en')),
-    };
-
-    if (!isStaff) {
-      /* — সদস্য: আমার → রিপোর্ট/স্টেটমেন্ট — */
-      items.push({ header: t('আমার', 'Mine') });
-      leftovers.filter(i => i.id === 'reports')
-        .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
-      /* — অ্যাকাউন্ট: সেটিংস + কার্যক্রম লগ (প্রোফাইলের কোলাপ্সড ভিউতে নিয়ে যায়) — */
-      items.push({ header: t('অ্যাকাউন্ট', 'Account') });
-      leftovers.filter(i => i.id === 'settings')
-        .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
-      items.push({ ic: 'log', label: t('কার্যক্রম লগ', 'Activity Log'), run: () => this.go('member-panel', { expandLog: true }) });
-      /* — পছন্দ (মোবাইলে কীবোর্ড শর্টকাট লুকানো) — */
-      items.push({ header: t('পছন্দ', 'Preferences') });
-      items.push(themeRow, langRow);
-      items.push('sep');
-      items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => this.doLogout() });
-      return bottomSheet({ title: t('আরও', 'More'), items });
-    }
-
-    /* — আমার (staff): reports — */
-    items.push({ header: t('আমার', 'Mine') });
-    leftovers.filter(i => i.id !== 'settings')
-      .forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
-
-    /* — অ্যাডমিন টুলস (staff) — */
-    const tools = [];
-    leftovers.filter(i => i.id === 'settings' && isStaff)
-      .forEach(i => tools.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
-    if (can(s, 'staff:manage')) {
-      tools.push({ ic: 'maker', label: t('ইউজার ম্যানেজমেন্ট', 'User management'), run: () => this.go('settings', { tab: 'staff' }) });
-    }
-    if (can(s, 'backup:manage')) {
-      tools.push({ ic: 'backup', label: t('ব্যাকআপ', 'Backup'), run: () => this.go('settings', { tab: 'backup' }) });
-    }
-    if (isStaff) {
-      tools.push({ ic: 'log', label: t('অ্যাকটিভিটি লগ', 'Activity Log'), run: () => this.go('settings', { tab: 'activity' }) });
-    }
-    if (tools.length) {
-      items.push({ header: t('অ্যাডমিন টুলস', 'Admin tools') });
-      items.push(...tools);
-    }
-
-    /* — পছন্দ — */
-    items.push({ header: t('পছন্দ', 'Preferences') });
-    items.push({ ic: 'key', label: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'), run: () => shortcutSheet() });
-    items.push(themeRow, langRow);
-    items.push('sep');
-    items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => this.doLogout() });
-    return bottomSheet({ title: t('আরও', 'More'), items });
+  /** Top bar: Back only when there is somewhere to go. No shortcut clutter. */
+  paintBack() {
+    const btn = $('#btnBack');
+    if (!btn) return;
+    const showBack = this.route !== 'home' || !!this.section;
+    btn.hidden = !showBack;
+    btn.innerHTML = icon('back');
   },
 
   /** Red pill on the Approvals item: how many requests are waiting. */
@@ -289,15 +251,40 @@ export const App = {
     const list = await visibleNotifications(s);
     this.unread = list.filter(n => n.sticky || n.kind === 'due' || !(n.readBy || {})[s.id]).length;
     const btn = $('#btnNotif');
+    if (!btn) return;
     btn.innerHTML = icon('bell');
     if (this.unread > 0) btn.appendChild(el('span', { class: 'badge', text: this.unread > 99 ? '99+' : String(this.unread) }));
+  },
+
+  /** “More” sheet — secondary destinations & preferences only.
+   *  Activity Log and Change Password are reached THROUGH Settings, never
+   *  listed as separate shortcuts. */
+  openMore() {
+    const s = this.session; if (!s) return;
+    const isStaff = s.role !== 'member';
+    const group = isStaff ? 'staff' : 'member';
+    const leftovers = NAV.filter(i => can(s, i.id) && !(i.slots || []).includes(group));
+    const items = [];
+    const themeRow = {
+      ic: getTheme() === 'amoled' ? 'sun' : 'moon', label: t('ডার্ক মোড', 'Dark mode'),
+      keepOpen: true, right: switchEl(getTheme() === 'amoled', () => { toggleTheme(); this.refresh(); }),
+    };
+
+    items.push({ header: t('মেনু', 'Menu') });
+    leftovers.forEach(i => items.push({ ic: i.icon, label: this.labelOf(i), run: () => this.go(i.id) }));
+    items.push('sep');
+    items.push({ header: t('পছন্দ', 'Preferences') });
+    items.push(themeRow);
+    items.push({ ic: 'globe', label: t('ভাষা: ' + (getLang() === 'en' ? 'English' : 'বাংলা'), 'Language: ' + (getLang() === 'en' ? 'English' : 'Bangla')), keepOpen: true, right: switchEl(getLang() === 'en', () => setLang(getLang() === 'en' ? 'bn' : 'en')) });
+    items.push('sep');
+    items.push({ ic: 'logout', label: t('লগআউট', 'Logout'), danger: true, run: () => this.doLogout() });
+    return bottomSheet({ title: t('আরও', 'More'), items });
   },
 
   showAuth() {
     $('#app').classList.remove('on');
     $('#app').setAttribute('aria-hidden', 'true');
     clear($('#view'));
-    clear($('#topnav'));
     const scr = $('#authScreen');
     scr.classList.remove('hidden');
     renderAuth(scr, s => this.enter(s));
@@ -334,8 +321,16 @@ export const App = {
     }
     try { await syncDueNotifications(); } catch {}
     await this.refreshNotifBadge();
-    const hash = (location.hash || '').replace('#', '');
-    await this.go(hash && PAGES[hash] && can(this.session, hash) ? hash : 'home');
+    const { route, section } = parseHash(location.hash);
+    if (PAGES[route] && can(this.session, route)) {
+      const params = { section };
+      for (const k of Object.keys(sessionParams)) {
+        if (k.startsWith(route + '.')) params[k.slice(route.length + 1)] = sessionParams[k];
+      }
+      await this.render(route, params);
+    } else {
+      await this.go('home');
+    }
   },
 
   async doLogout() {
@@ -345,8 +340,7 @@ export const App = {
     applyRole('');
     clearIdleTimer();
     setAuthMode('login');
-    location.hash = '';
-    toast(t('লগআউট সম্পন্ন', 'Logged out'), 'success');
+    history.replaceState(null, '', location.pathname + location.search);
     this.showAuth();
   },
 };
@@ -371,31 +365,28 @@ function paintSync(status) {
   paintOfflineBar(st === 'offline' || st === 'sync-error');
   if (!bar) return;
   bar.classList.remove('sync-online', 'sync-offline', 'sync-syncing', 'sync-synced', 'sync-error');
-  const cls = st === 'sync-error' ? 'sync-error' : `sync-${st}`;
-  bar.classList.add(cls);
+  bar.classList.add(st === 'sync-error' ? 'sync-error' : `sync-${st}`);
   document.documentElement.dataset.sync = st;
 }
 window.addEventListener('ds:sync-status', e => paintSync(e.detail.status));
 
 /* ---------------- keyboard shortcuts (desktop convenience) ---------------- */
 const GO_KEYS = {
-  h: 'home', m: 'members', d: 'deposit', a: 'authorization',
-  r: 'reports', s: 'settings', u: 'users', l: 'activity',
+  h: 'home', m: 'members', d: 'deposits', a: 'authorization',
+  t: 'transactions', s: 'settings', r: 'reports', x: 'statements',
 };
 const SHORTCUTS = [
   ['g h', t('হোম', 'Home')], ['g m', t('সদস্য', 'Members')], ['g d', t('জমা', 'Deposits')],
-  ['g a', t('অনুমোদন', 'Approvals')], ['g r', t('রিপোর্ট', 'Reports')], ['g s', t('সেটিংস', 'Settings')],
-  ['n', t('প্রধান অ্যাকশন (FAB)', 'Primary action (FAB)')],
+  ['g t', t('লেনদেন', 'Transactions')], ['g x', t('স্টেটমেন্ট', 'Statements')], ['g r', t('রিপোর্ট', 'Reports')],
+  ['g a', t('অনুমোদন', 'Approvals')], ['g s', t('সেটিংস', 'Settings')],
   ['/', t('অনুসন্ধান ফিল্ডে যান', 'Focus the search field')],
-  ['?', t('এই সাহায্য', 'This help')], ['Esc', t('শিট/মোডাল বন্ধ', 'Close sheet or dialog')],
+  ['?', t('এই সাহায্য', 'This help')], ['Esc', t('শিট/মোডাল বন্ধ', 'Close sheet or dialog')], ['Backspace', t('ফিরে যান', 'Back')],
 ];
 
 export function shortcutSheet() {
   bottomSheet({
     title: t('কীবোর্ড শর্টকাট', 'Keyboard shortcuts'),
-    items: SHORTCUTS.map(([k, label]) => ({
-      label: `${k} — ${label}`, ic: 'key', keepOpen: true,
-    })),
+    items: SHORTCUTS.map(([k, label]) => ({ label: `${k} — ${label}`, ic: 'key', keepOpen: true })),
   });
 }
 
@@ -414,20 +405,17 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (k === 'Escape') {
-    const back = document.querySelector('.sheet-backdrop');
-    if (back) { back.click(); e.preventDefault(); }
+    const back = document.querySelector('.sheet-backdrop') || document.querySelector('.rpv');
+    if (back) { back.click(); e.preventDefault(); return; }
+    App.back(); e.preventDefault();
     return;
   }
+  if (k === 'Backspace') { App.back(); e.preventDefault(); return; }
   if (k === '?') { shortcutSheet(); return; }
   if (k === '/') {
     const box = document.querySelector('.main input[type="search"]')
-      || [...document.querySelectorAll('.main input')].find(i => /search/i.test(i.placeholder || ''));
+      || [...document.querySelectorAll('.main input')].find(i => /search|খুঁজ/i.test(i.placeholder || ''));
     if (box) { e.preventDefault(); box.focus(); box.select?.(); }
-    return;
-  }
-  if ((k === 'n' || k === 'N') && !chord) {
-    const f = $('#fab');
-    if (f && !f.hidden) { e.preventDefault(); f.click(); }
     return;
   }
   if (k === 'g') { chord = 'g'; setTimeout(() => { chord = null; }, 1200); }
@@ -455,14 +443,13 @@ async function onIdleTimeout() {
   try { firebase.signOut().catch(() => {}); } catch {}
   clearSession();
   setAuthMode('login');
-  location.hash = '';
+  history.replaceState(null, '', location.pathname + location.search);
   App.showAuth();
   alertBox('Your session expired due to 30 minutes of inactivity. Please log in again.', 'সেশন মেয়াদ শেষ / Session Expired');
 }
 
 /* ---------------- boot ---------------- */
 async function boot() {
-  // Prevent double-init if app.js is evaluated twice (with/without ?v=)
   if (window.__DS_BOOTED) return;
   window.__DS_BOOTED = true;
 
@@ -472,9 +459,12 @@ async function boot() {
       new Promise((_, rej) => setTimeout(() => rej(new Error('IndexedDB timeout')), 8000)),
     ]);
     await ensureBootstrapAdmin();
+    /* safe additive migration: unique transaction ids for legacy records.
+       It NEVER deletes or rewrites anything that already has an id. */
+    await ensureTxnIds().catch(() => {});
+    await dedupeTxnIds().catch(() => {});
   } catch (e) {
     console.error('boot db', e);
-    /* A silent console error leaves the user on a blank/broken screen, so say so. */
     try {
       const why = (e && e.message) ? e.message : String(e);
       alertBox(
@@ -487,52 +477,44 @@ async function boot() {
   paintSync(navigator.onLine ? 'online' : 'offline');
   try { firebase.init(); } catch (e) { console.error('firebase', e); }
 
-  /* Step-8 touch polish: pull-to-refresh + collapse-on-scroll topbar. */
   try { initShellGestures({ onRefresh: () => App.refresh() }); } catch (e) { console.error('gestures', e); }
 
-  // onclick replaces any previous handler (safe if boot runs twice)
-  $('#btnLogout').innerHTML = icon('logout');
-  $('#btnLogout').onclick = () => App.doLogout();
+  /* clean top bar: [Back] — title — [Bell] */
+  const backBtn = $('#btnBack');
+  if (backBtn) backBtn.onclick = () => App.back();
+  const notifBtn = $('#btnNotif');
+  if (notifBtn) { notifBtn.innerHTML = icon('bell'); notifBtn.onclick = () => { if (App.session) openNotifications(App.session); }; }
 
-  const setBtn = $('#btnSettings');
-  if (setBtn) {
-    setBtn.innerHTML = icon('settings');
-    setBtn.onclick = () => { if (App.session) App.go('settings'); };
-  }
-
-  $('#btnNotif').innerHTML = icon('bell');
-  $('#btnNotif').onclick = () => { if (App.session) openNotifications(App.session); };
-  const moreBtn = $('#btnMore');
-  if (moreBtn) { moreBtn.innerHTML = icon('menu'); moreBtn.onclick = () => App.openMore(); }
-  const paintThemeBtn = () => {
-    const b = $('#btnTheme'); if (!b) return;
-    const dark = getTheme() === 'amoled';
-    b.innerHTML = icon(dark ? 'sun' : 'moon');
-    b.setAttribute('aria-label', dark ? 'Light mode' : 'Hard dark');
-    b.title = dark ? 'লাইট মোড / Light' : 'হার্ড ডার্ক / Hard dark';
-  };
-  paintThemeBtn();
-  // onclick replaces any previous handler (safe if boot runs twice)
-  $('#btnTheme').onclick = () => { toggleTheme(); paintThemeBtn(); };
-  window.addEventListener('ds:theme', paintThemeBtn);
-
-  // Reset the idle timer on any meaningful user interaction.
   ['mousemove', 'mousedown', 'keydown', 'touchstart', 'touchmove', 'scroll', 'click', 'wheel']
     .forEach(ev => window.addEventListener(ev, resetIdleTimer, { passive: true, capture: true }));
 
   window.addEventListener('ds:data-changed', e => {
     const st = e.detail && e.detail.store;
     if (st === 'notifications' || st === '*') App.refreshNotifBadge();
+    if (st === 'deposits' || st === 'withdrawals' || st === '*') App.paintApprovalBadge();
     if (e.detail && e.detail.remote && App.session) {
       clearTimeout(window.__dsRefresh);
       window.__dsRefresh = setTimeout(() => App.refresh(), 400);
     }
   });
+
+  /* Browser/Android back: hashchange drives the router; never a blank page. */
   window.addEventListener('hashchange', () => {
-    const h = (location.hash || '').replace('#', '');
-    if (App.session && h && h !== App.route && PAGES[h]) App.go(h);
+    if (!App.session) return;
+    const { route, section } = parseHash(location.hash);
+    if (!route) return;
+    const next = PAGES[route] && can(App.session, route) ? route : 'home';
+    if (next === App.route && (section || '') === (App.section || '')) return;   // already there
+    const params = { section };
+    for (const k of Object.keys(sessionParams)) {
+      if (k.startsWith(next + '.')) params[k.slice(next.length + 1)] = sessionParams[k];
+    }
+    App.render(next, params);
   });
-  /* PWA install banner (bottom, Active-Plus style) — driven by beforeinstallprompt. */
+  window.addEventListener('popstate', () => {
+    if (App.navDepth > 0) App.navDepth = Math.max(0, App.navDepth - 1);
+  });
+
   initInstallPrompt();
 
   window.addEventListener('online', () => toast(t('ইন্টারনেট সংযোগ ফিরে এসেছে — সিঙ্ক হচ্ছে', 'Back online — syncing'), 'success'));
@@ -548,12 +530,11 @@ async function boot() {
   } catch (e) {
     console.error('boot enter', e);
     App.showAuth();
-    const t = document.querySelector('#authScreen .auth-title');
-    if (t) t.textContent = 'লোড সমস্যা: ' + (e.message || e);
+    const tx = document.querySelector('#authScreen .auth-title');
+    if (tx) tx.textContent = 'লোড সমস্যা: ' + (e.message || e);
   }
 
   if ('serviceWorker' in navigator) {
-    /* Preview / first load: drop any stale SW that was serving old JS modules. */
     navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
     caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).catch(() => {});
   }

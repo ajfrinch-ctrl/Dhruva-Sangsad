@@ -3,7 +3,7 @@ import {
   dbAll, dbGet, saveRecord, removeRecord, getSetting, setSetting, dbPutRaw, dbBulkPut, enqueue,
 } from './db.js';
 import {
-  uid, nowISO, todayISO, num, normalizeMobile, memberIdFromMobile, monthsBetweenInclusive, monthKey, deviceId,
+  uid, nowISO, todayISO, num, normalizeMobile, memberIdFromMobile, monthsBetweenInclusive, monthKey, deviceId, dateKey8,
 } from './util.js';
 import { hashPassword } from './crypto.js';
 
@@ -264,6 +264,97 @@ export async function setMemberStatus(memberDocId, status, actor, reason = '') {
 }
 
 /* ---------------- deposits ---------------- */
+
+/* ---------------- transaction ids (YYYYMMDDNNN) ----------------
+   One shared per-day sequence across deposits AND withdrawals, so an id can
+   never duplicate. The date part is the ACTUAL PAYMENT DATE (d.date), never
+   the application/submission timestamp. Existing records get backfilled once
+   by ensureTxnIds() — nothing is rewritten that already carries an id. */
+const TXN_SEQ_LEN = 3;
+
+async function maxSeqForDay(date8) {
+  const [deps, wits] = await Promise.all([dbAll('deposits'), dbAll('withdrawals')]);
+  let max = 0;
+  for (const r of deps.concat(wits)) {
+    const id = String(r.txnId || '');
+    if (id.length >= date8.length + TXN_SEQ_LEN && id.startsWith(date8)) {
+      const n = Number(id.slice(date8.length, date8.length + TXN_SEQ_LEN));
+      if (!isNaN(n) && n > max) max = n;
+    }
+  }
+  return max;
+}
+
+/** Next unique transaction id for a payment date (ISO YYYY-MM-DD). */
+export async function nextTxnId(dateISO) {
+  const d8 = dateKey8(dateISO || todayISO());
+  const n = await maxSeqForDay(d8) + 1;
+  return d8 + String(n).padStart(TXN_SEQ_LEN, '0');
+}
+
+/** One-time safe migration: assign ids to legacy records that have none.
+ *  Sorted by (date, submittedAt) so the sequence follows chronology. */
+export async function ensureTxnIds() {
+  try {
+    if (await getSetting('txnIds_v1', false)) return 0;
+    const [deps, wits] = await Promise.all([dbAll('deposits'), dbAll('withdrawals')]);
+    const seq = new Map();               // date8 -> last used sequence
+    const key8 = r => dateKey8(r.date);
+    const take = k => { const n = (seq.get(k) || 0) + 1; seq.set(k, n); return k + String(n).padStart(TXN_SEQ_LEN, '0'); };
+    const cmp = (a, b) => String(a.date || '').localeCompare(String(b.date || ''))
+      || String(a.submittedAt || '').localeCompare(String(b.submittedAt || ''));
+    for (const r of deps) { const k = key8(r); if (r.txnId && String(r.txnId).startsWith(k)) { const n = Number(String(r.txnId).slice(k.length)); if (!isNaN(n) && n > (seq.get(k) || 0)) seq.set(k, n); } }
+    for (const r of wits) { const k = key8(r); if (r.txnId && String(r.txnId).startsWith(k)) { const n = Number(String(r.txnId).slice(k.length)); if (!isNaN(n) && n > (seq.get(k) || 0)) seq.set(k, n); } }
+    let assigned = 0;
+    for (const [store, rows] of [['deposits', deps], ['withdrawals', wits]]) {
+      for (const r of rows.slice().sort(cmp)) {
+        if (r.txnId) continue;
+        await saveRecord(store, { id: r.id, txnId: take(key8(r)) }, { queue: true });
+        assigned++;
+      }
+    }
+    await setSetting('txnIds_v1', true, { queue: false });
+    if (assigned) invalidate();
+    return assigned;
+  } catch (e) { console.warn('[txn] id migration skipped', e); return 0; }
+}
+
+/* After a multi-device pull, two records may carry the same id (both devices
+   assigned it independently while offline). Re-stamp LATER duplicates so the
+   id stays unique without ever touching money data. */
+export async function dedupeTxnIds() {
+  try {
+    const [deps, wits] = await Promise.all([dbAll('deposits'), dbAll('withdrawals')]);
+    const all = deps.map(r => [r, 'deposits']).concat(wits.map(r => [r, 'withdrawals']));
+    const taken = new Set();
+    const dupes = [];
+    all.sort((a, b) => String(a[0].date).localeCompare(String(b[0].date)) || String(a[0].submittedAt || '').localeCompare(String(b[0].submittedAt || '')));
+    for (const [r] of all) {
+      const t = String(r.txnId || '');
+      if (!t) continue;
+      if (taken.has(t)) dupes.push(r); else taken.add(t);
+    }
+    let fixed = 0;
+    for (const r of dupes) {
+      const store = String(r.id || '').startsWith('wit') ? 'withdrawals' : 'deposits';
+      await saveRecord(store, { id: r.id, txnId: await nextTxnId(r.date) }, { queue: true });
+      fixed++;
+    }
+    if (fixed) invalidate();
+    return fixed;
+  } catch (e) { console.warn('[txn] dedupe skipped', e); return 0; }
+}
+
+/** Format for display: 20260920001 -> 20260920001 (raw). Left intact on purpose. */
+export const txnIdOf = r => (r && (r.txnId || '')) || '';
+
+/* Monthly contribution is a FIXED amount (rule: normal monthly deposit can never
+   be typed by hand). The configured installment wins over anything submitted. */
+const monthlyAmountOf = (member, form) => {
+  const inst = num(member && member.installment);
+  return (form && form.type === 'monthly' && inst > 0) ? inst : num(form && form.amount);
+};
+
 export async function submitDeposit(form, actor) {
   const member = await dbGet('members', form.memberDocId);
   if (!member) throw new Error('Member not found');
@@ -272,7 +363,7 @@ export async function submitDeposit(form, actor) {
       ? 'সদস্যপদ অনুমোদনের পূর্বে জমা দাখিল করা যাবে না। / Deposits are not allowed until the membership is approved.'
       : 'বাতিলকৃত সদস্যের জন্য জমা দাখিল করা যাবে না। / Deposits are not allowed for a rejected member.');
   }
-  const amount = num(form.amount);
+  const amount = monthlyAmountOf(member, form);
   if (!(amount > 0)) throw new Error('জমার পরিমাণ দিন / Enter deposit amount');
   if (!form.date) throw new Error('তারিখ দিন / Enter deposit date');
   if ((form.type === 'special' || form.type === 'other') && !String(form.description || '').trim()) {
@@ -281,6 +372,7 @@ export async function submitDeposit(form, actor) {
   const byStaff = actor && (actor.role === 'admin' || actor.role === 'maker');
   const rec = {
     id: uid('dep'),
+    txnId: await nextTxnId(form.date),
     memberDocId: member.id,
     memberId: member.memberId,
     memberName: member.nameBn || member.nameEn,
@@ -347,7 +439,16 @@ export async function updateDeposit(depositId, patch, actor) {
   if (!perm.ok) throw new Error(perm.msg);
   const next = { ...d };
   for (const f of ['date', 'type', 'description', 'amount', 'method', 'comment']) if (f in patch) next[f] = f === 'amount' ? num(patch[f]) : patch[f];
+  if (patch.amount === undefined && next.type === 'monthly') {
+    const mem = await dbGet('members', next.memberDocId);
+    const fixed = num(mem && mem.installment);
+    if (fixed > 0) next.amount = fixed;
+  }
   if (!(next.amount > 0)) throw new Error('জমার পরিমাণ দিন / Enter deposit amount');
+  /* The id follows the payment date — re-stamp when the date moved. */
+  if (String(next.date).slice(0, 10) !== String(d.date).slice(0, 10) || !next.txnId) {
+    next.txnId = await nextTxnId(next.date);
+  }
   if ((next.type === 'special' || next.type === 'other') && !String(next.description || '').trim()) throw new Error('বিবরণ আবশ্যক / Description required');
   if (actor.role === 'maker' && String(next.date).slice(0, 10) !== todayISO()) throw new Error('Maker শুধুমাত্র আজকের তারিখ ব্যবহার করতে পারবেন। / Maker may only use today\'s date.');
   await saveRecord('deposits', next, { queue: true, actorId: actor.id });
@@ -405,6 +506,7 @@ export async function submitWithdrawal(form, actor) {
   const byStaff = actor && (actor.role === 'admin' || actor.role === 'maker');
   const rec = {
     id: uid('wit'),
+    txnId: await nextTxnId(form.date),
     memberDocId: member.id,
     memberId: member.memberId,
     memberName: member.nameBn || member.nameEn,

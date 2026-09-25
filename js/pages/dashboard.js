@@ -1,16 +1,33 @@
-/* Dashboard — mobile-first: hero → quick actions → 2-column stats → pending → activity.
-   Same numbers as before, arranged for a phone screen first. */
+/* Dashboard — greeting → notices → summary. Clean, no shortcut collection,
+   no activity-log button, no floating "Submit Deposit" and no status banner:
+   approval info lives in Notifications, and the dashboard only shows state. */
 import { el, esc, taka, num, money, fmtDate, fmtTime, todayISO, t } from '../util.js';
 import { icon } from '../icons.js';
-import { page, card, statCard, banner, btn, statusTag } from '../ui.js';
+import { page, statCard, statusTag } from '../ui.js';
 import {
-  allMembers, allDeposits, allWithdrawals, allLogs, settings, memberSummary, summariesFor,
-  orgTotals, getMember, withdrawalBalance, summaryOpts, logUserName,
+  allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor,
+  orgTotals, getMember, withdrawalBalance, summaryOpts, visibleNotifications,
 } from '../store.js';
-import { actRow } from './misc.js';
 import { App } from '../app.js';
 
 /* ---------------- shared building blocks ---------------- */
+
+/** Time-based greeting (05:00–11:59 / 12:00–16:59 / 17:00–19:59 / 20:00–04:59). */
+export function greetingLine() {
+  const h = new Date().getHours();
+  return h >= 5 && h < 12 ? t('সুপ্রভাত', 'Good morning')
+    : h >= 12 && h < 17 ? t('শুভ অপরাহ্ণ', 'Good afternoon')
+    : h >= 17 && h < 20 ? t('শুভ সন্ধ্যা', 'Good evening')
+    : t('শুভ রাত্রি', 'Good night');
+}
+
+function greetBox(name, orgName) {
+  const box = el('div', { class: 'greet' });
+  box.innerHTML = `<div class="greet-hi">${esc(greetingLine())}</div>
+    <div class="greet-sub">${esc(name ? name + ' — ' : '')}${esc(t(`ধ্রুব সংসদে আপনাকে স্বাগতম।`, `Welcome to ${orgName || 'Dhruva Sangsad'}.`))}</div>
+    <div class="greet-date">${icon('calendar')}${esc(fmtDate(todayISO()))} · ${esc(fmtTime(new Date().toISOString()))}</div>`;
+  return box;
+}
 
 /** Big gradient summary card: one number, one progress line. */
 function heroCard({ label, value, sub, target = 0, achieved = 0 }) {
@@ -24,19 +41,29 @@ function heroCard({ label, value, sub, target = 0, achieved = 0 }) {
   return box;
 }
 
-/** Icon tiles for the 3–4 things people do most. */
-function quickRow(items) {
-  const row = el('div', { class: 'hub-grid quick-grid' });
-  items.filter(Boolean).forEach(it => {
-    const b = el('button', { type: 'button', class: `hub-tile${it.tone ? ' ' + it.tone : ''}`, onclick: it.run });
-    b.innerHTML = `<span class="tic">${icon(it.ic)}</span>
-      <span class="tb"><span class="tt">${esc(it.label)}</span></span>`;
-    row.appendChild(b);
+/** Important notices (from the notification store) — max 3 rows, tap → bell. */
+async function noticesCard(session) {
+  let items = [];
+  try { items = (await visibleNotifications(session)).slice(0, 3); } catch { return null; }
+  if (!items.length) return null;
+  const box = el('div', { class: 'card notice-card' });
+  const head = el('div', { class: 'card-head' });
+  head.innerHTML = `<h3>${icon('bell')} ${esc(t('গুরুত্বপূর্ণ নোটিশ', 'Important notices'))}</h3><span class="spacer"></span>`;
+  head.appendChild(el('button', { type: 'button', class: 'link-btn', text: t('সব দেখুন ›', 'See all ›'), onclick: () => import('./misc.js').then(m => m.openNotifications(App.session)) }));
+  const body = el('div', { class: 'card-body tight' });
+  items.forEach(n => {
+    const row = el('div', { class: 'act' });
+    const tone = n.kind === 'due' || n.kind === 'reject' ? 'r' : n.kind === 'approve' ? 'g' : 'a';
+    row.innerHTML = `<span class="ai ${tone}">${icon(n.kind === 'due' ? 'due' : n.kind === 'approve' ? 'approve' : n.kind === 'reject' ? 'reject' : 'bell')}</span>
+      <span class="ab"><span class="at">${esc(n.title)}</span><span class="as">${esc(n.body || '')}</span></span>
+      <span class="aw">${esc(fmtDate(n.createdAt))}</span>`;
+    body.appendChild(row);
   });
-  return row;
+  box.append(head, body);
+  return box;
 }
 
-/** “Pending work” rows — tapping one jumps straight to that queue. */
+/** “Pending work” rows — status information for the approving role. */
 function pendingCard(rows) {
   const box = el('div', { class: 'card' });
   rows.forEach((r, i) => {
@@ -50,24 +77,12 @@ function pendingCard(rows) {
   return box;
 }
 
-function activityCard(logs) {
-  const box = el('div', { class: 'card' });
-  const body = el('div', { class: 'card-body' });
-  if (!logs.length) {
-    body.appendChild(el('div', { class: 'empty', html: `${icon('log')}${esc(t('এখনো কোনো কার্যক্রম নেই', 'No activity yet'))}` }));
-  } else {
-    logs.slice(0, 6).forEach(l => body.appendChild(actRow(l)));
-  }
-  box.appendChild(body);
-  return box;
-}
-
 const thisMonth = () => todayISO().slice(0, 7);
 
 /* ================= STAFF DASHBOARD ================= */
 async function staffHome(session) {
-  const [members, deposits, withdrawals, cfg, logs] = await Promise.all([
-    allMembers(), allDeposits(), allWithdrawals(), settings(), allLogs(),
+  const [members, deposits, withdrawals, cfg] = await Promise.all([
+    allMembers(), allDeposits(), allWithdrawals(), settings(),
   ]);
   const wrap = page('ড্যাশবোর্ড', 'Dashboard', 'dashboard');
 
@@ -82,7 +97,14 @@ async function staffHome(session) {
   const monthTotal = monthDeposits.reduce((s, d) => s + num(d.amount), 0);
   const target = num(cfg.monthlyTarget) || active.reduce((s, m) => s + num(m.installment), 0);
 
-  /* 1 — hero */
+  /* 0 — greeting */
+  wrap.appendChild(greetBox('', cfg.orgNameBn || cfg.orgNameEn));
+
+  /* 1 — notices (approvals & dues surface here, not as permanent banners) */
+  const notices = await noticesCard(session);
+  if (notices) wrap.appendChild(notices);
+
+  /* 2 — hero */
   wrap.appendChild(heroCard({
     label: t('মোট জমা', 'Total deposits'),
     value: taka(tot.totalDeposit),
@@ -90,15 +112,7 @@ async function staffHome(session) {
     target, achieved: monthTotal,
   }));
 
-  /* 2 — quick actions */
-  const quick = [];
-  if (session.role !== 'member') quick.push({ ic: 'member', label: t('সদস্য যোগ', 'Add member'), run: () => App.go('members', { tab: 'register' }) });
-  quick.push({ ic: 'deposit', label: t('জমা যোগ', 'Add deposit'), run: () => App.go('deposit', { tab: 'entry' }) });
-  if (session.role !== 'member') quick.push({ ic: 'approve', tone: 'warn', label: t('অনুমোদন', 'Approvals'), run: () => App.go('authorization') });
-  quick.push({ ic: 'report', tone: 'info', label: t('রিপোর্ট', 'Reports'), run: () => App.go('reports') });
-  wrap.appendChild(quickRow(quick));
-
-  /* 3 — stats (unchanged numbers, 2 columns on a phone) */
+  /* 3 — summary cards (2-column grid; an odd last card keeps its size) */
   const stats = el('div', { class: 'stats' });
   stats.append(
     statCard({ label: 'মোট সদস্য / Total Members', value: `${members.length}`, sub: `${active.length} active · ${pendingMembers.length} pending`, ic: 'members', tone: 'blue' }),
@@ -107,11 +121,10 @@ async function staffHome(session) {
     statCard({ label: 'নিট ব্যালান্স / Net Balance', value: taka(tot.balance), sub: 'জমা − উত্তোলন', ic: 'money', tone: 'blue' }),
     statCard({ label: 'মোট বকেয়া / Total Due', value: taka(tot.totalDue), sub: `${sums.filter(s => s.due > 0).length} member(s)`, ic: 'due', tone: 'red' }),
     statCard({ label: 'মোট অগ্রিম / Total Advance', value: taka(tot.totalAdvance), sub: `${sums.filter(s => s.advance > 0).length} member(s)`, ic: 'advance' }),
-    statCard({ label: 'অনুমোদন অপেক্ষমাণ / Pending', value: `${pendingMembers.length + pendingDeposits.length + pendingWithdrawals.length}`, sub: `${pendingMembers.length} member · ${pendingDeposits.length} deposit · ${pendingWithdrawals.length} withdrawal`, ic: 'pending', tone: 'amber' }),
   );
   wrap.appendChild(stats);
 
-  /* 4 — pending work */
+  /* 4 — current status: what is waiting for a decision */
   const canApprove = pendingMembers.length || pendingDeposits.length || pendingWithdrawals.length;
   if (canApprove) {
     const head = el('div', { class: 'sec-head' });
@@ -126,16 +139,6 @@ async function staffHome(session) {
     ]));
   }
 
-  /* 5 — recent activity */
-  const head2 = el('div', { class: 'sec-head' });
-  head2.innerHTML = `<h2>${esc(t('সাম্প্রতিক কার্যক্রম', 'Recent activity'))}</h2><span class="sp"></span>`;
-  head2.appendChild(el('button', {
-    type: 'button', class: 'link-btn', text: t('সব দেখুন ›', 'See all ›'),
-    onclick: () => App.go('settings', { tab: 'activity' }),
-  }));
-  wrap.appendChild(head2);
-  wrap.appendChild(activityCard(logs.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))));
-
   return wrap;
 }
 
@@ -144,35 +147,20 @@ async function memberHome(session) {
   const [deposits, withdrawals, cfg] = await Promise.all([allDeposits(), allWithdrawals(), settings()]);
   const m = await getMember(session.memberDocId);
   const wrap = page('আমার ড্যাশবোর্ড', 'My Dashboard', 'dashboard');
-  if (!m) { wrap.appendChild(banner('err', 'সদস্য তথ্য পাওয়া যায়নি / Member record not found')); return wrap; }
+  if (!m) { wrap.appendChild(el('div', { class: 'banner err', html: 'সদস্য তথ্য পাওয়া যায়নি / Member record not found' })); return wrap; }
 
   const s = memberSummary(m, deposits, summaryOpts(cfg, { withdrawals }));
   const bal = withdrawalBalance(m, deposits, withdrawals);
 
-  if (m.status === 'pending') {
-    wrap.appendChild(banner('warn', 'আপনার সদস্যপদ এখনো <b>অনুমোদনের অপেক্ষায়</b>। Maker/Admin অনুমোদনের পর নতুন জমা দাখিল করা যাবে।'));
-  } else if (m.status === 'active') {
-    wrap.appendChild(banner('ok', `আপনার সদস্য আইডি <b>${esc(m.memberId)}</b> <b>সক্রিয়</b> — আপনি এখনই জমা দাখিল করতে পারবেন।`));
-  } else if (m.status === 'rejected') {
-    wrap.appendChild(banner('err', `আপনার সদস্যপদ বাতিল করা হয়েছে।${m.rejectReason ? ' কারণ: ' + esc(m.rejectReason) : ''}`));
-  }
+  /* 0 — greeting (no permanent "your ID is active" banner — approval news
+        already arrives through Notifications) */
+  wrap.appendChild(greetBox(m.nameBn || m.nameEn, cfg.orgNameBn));
 
-  /* 0 — time-of-day greeting (Active-Plus style) */
-  const hNow = new Date().getHours();
-  const greet = hNow < 5 ? t('শুভ রাত্রি', 'Good night')
-    : hNow < 12 ? t('শুভ সকাল', 'Good morning')
-    : hNow < 17 ? t('শুভ দুপুর', 'Good afternoon')
-    : hNow < 20 ? t('শুভ সন্ধ্যা', 'Good evening')
-    : t('শুভ রাত্রি', 'Good night');
-  const dueLine = s.due > 0
-    ? `${t('বকেয়া', 'Due')} ${taka(s.due)}`
-    : t('বকেয়া নেই — সব ঠিক আছে', 'No due — all clear');
-  const greetBox = el('div', { class: 'greet' });
-  greetBox.innerHTML = `<div class="greet-hi">${esc(greet)}${m.nameBn ? ', ' + esc(m.nameBn) : ''}!</div>
-    <div class="greet-sub">${fmtDate(todayISO())} · ${esc(dueLine)}</div>`;
-  wrap.appendChild(greetBox);
+  /* 1 — notices */
+  const notices = await noticesCard(session);
+  if (notices) wrap.appendChild(notices);
 
-  /* 1 — hero */
+  /* 2 — hero: my savings + monthly progress */
   wrap.appendChild(heroCard({
     label: t('আমার মোট জমা', 'My total deposit'),
     value: taka(s.totalDeposit),
@@ -180,47 +168,36 @@ async function memberHome(session) {
     target: s.required, achieved: Math.min(s.installmentPaid, s.required),
   }));
 
-  /* 2 — quick actions */
-  const quick = [];
-  if (m.status === 'active') {
-    quick.push({ ic: 'deposit', label: t('জমা দাখিল', 'Submit deposit'), run: () => App.go('deposit') });
-    quick.push({ ic: 'withdraw', tone: 'danger', label: t('উত্তোলন', 'Withdrawal'), run: () => App.go('deposit', { tab: 'withdrawal' }) });
-  }
-  quick.push({ ic: 'report', tone: 'info', label: t('আমার স্টেটমেন্ট', 'My statement'), run: () => App.go('reports', { report: 'statement' }) });
-  quick.push({ ic: 'member', label: t('আমার প্রোফাইল', 'My profile'), run: () => App.go('member-panel') });
-  wrap.appendChild(quickRow(quick));
-
-  /* 3 — stats */
+  /* 3 — summary cards */
   const stats = el('div', { class: 'stats' });
   stats.append(
+    statCard({ label: 'মাসিক কিস্তি / Monthly', value: taka(m.installment), sub: t('নির্ধারিত হার', 'fixed rate'), ic: 'wallet' }),
     statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count} অনুমোদিত লেনদেন`, ic: 'money' }),
-    statCard({ label: 'মোট উত্তোলন / Total Withdrawal', value: taka(s.totalWithdrawal), sub: `${s.withdrawals.length} অনুমোদিত`, ic: 'withdraw', tone: 'red' }),
-    statCard({ label: 'উপলব্ধ ব্যালান্স / Available Balance', value: taka(bal.available), sub: 'উত্তোলনযোগ্য / withdrawable', ic: 'money', tone: 'blue' }),
-    statCard({ label: 'মোট বকেয়া / Total Due', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
-    statCard({ label: 'মোট অগ্রিম / Total Advance', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance' }),
-    statCard({ label: 'স্ট্যাটাস / Status', value: statusTag(m.status), sub: `সদস্য আইডি ${m.memberId}`, ic: 'member', tone: 'gray' }),
+    statCard({ label: 'উপলব্ধ ব্যালান্স / Available', value: taka(bal.available), sub: 'উত্তোলনযোগ্য / withdrawable', ic: 'money', tone: 'blue' }),
+    statCard({ label: 'মোট বকেয়া / Due', value: taka(s.due), sub: s.due > 0 ? t('অনুমোদনের অপেক্ষায় নেই — যত দ্রুত সম্ভব জমা দিন', 'pay at your earliest convenience') : t('সব ঠিক আছে', 'all clear'), ic: 'due', tone: s.due > 0 ? 'red' : '' }),
+    statCard({ label: 'মোট অগ্রিম / Advance', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance' }),
+    statCard({ label: 'সদস্যপদ / Membership', value: statusTag(m.status), sub: `${t('আইডি', 'ID')} ${m.memberId}`, ic: 'member', tone: 'gray' }),
   );
   wrap.appendChild(stats);
 
-  /* 4 — my pending / rejected deposits */
+  /* 4 — my pending / rejected deposits as current status (information only) */
   const mine = deposits.filter(d => (d.memberDocId === m.id || d.memberId === m.memberId) && d.status !== 'approved')
     .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   if (mine.length) {
     const head = el('div', { class: 'sec-head' });
-    head.innerHTML = `<h2>${esc(t('অপেক্ষমাণ ও বাতিল জমা', 'Pending & rejected'))}</h2><span class="sp"></span>`;
+    head.innerHTML = `<h2>${esc(t('আমার জমার অবস্থা', 'My deposit status'))}</h2><span class="sp"></span>`;
     wrap.appendChild(head);
-    wrap.appendChild(pendingCard(mine.slice(0, 5).map(d => ({
-      ic: d.status === 'pending' ? 'clock' : 'reject',
-      tone: d.status === 'pending' ? 'withdrawal' : '',
-      label: `${fmtDate(d.date)} · ${money(d.amount)}`,
-      sub: d.rejectReason || d.description || (d.status === 'pending' ? t('অনুমোদনের অপেক্ষায়', 'Waiting for approval') : t('বাতিল', 'Rejected')),
-      count: '',
-      run: () => App.go('deposit', { tab: 'transactions' }),
-    }))));
+    const box = el('div', { class: 'card' });
+    mine.slice(0, 4).forEach((d, i) => {
+      const row = el('div', { class: 'act' });
+      row.innerHTML = `<span class="ai ${d.status === 'pending' ? 'a' : 'r'}">${icon(d.status === 'pending' ? 'clock' : 'reject')}</span>
+        <span class="ab"><span class="at">${fmtDate(d.date)} · ${money(d.amount)}</span>
+        <span class="as">${esc(d.rejectReason || d.description || (d.status === 'pending' ? t('অনুমোদনের অপেক্ষায়', 'Waiting for approval') : t('বাতিল', 'Rejected')))}</span></span>
+        <span class="aw">${statusTag(d.status)}</span>`;
+      box.appendChild(row);
+    });
+    wrap.appendChild(box);
   }
-
-  /* The full activity log now lives on the profile page (collapsed row,
-     tap to expand) + the More sheet — it no longer takes space on the home. */
 
   return wrap;
 }

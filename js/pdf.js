@@ -39,6 +39,10 @@ export async function sheetToPdf(node, filename, { orientation = 'p' } = {}) {
   holder.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;z-index:-1;';
   const clone = node.cloneNode(true);
   clone.classList.add('pdf-render');
+  /* the on-screen preview may zoom the sheet to fit the phone — the PDF must
+     always render at true A4 size from the SAME node/data */
+  clone.style.zoom = '1';
+  clone.style.transform = 'none';
   clone.style.width = pw + 'mm';
   clone.style.margin = '0';
   clone.style.boxShadow = 'none';
