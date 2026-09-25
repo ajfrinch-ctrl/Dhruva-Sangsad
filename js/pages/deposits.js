@@ -73,8 +73,8 @@ export async function pageWithdrawal(session) {
   let member = null;
   if (!staff) {
     member = members.find(m => m.id === session.memberDocId) || null;
-    if (!member) { wrap.appendChild(banner('err', 'সদস্য প্রোফাইল পাওয়া যায়নি / Member profile not found.')); return wrap; }
-    if (member.status !== 'active') { wrap.appendChild(banner('warn', 'আপনার সদস্যপদ সক্রিয় নয়। / Your membership is not active yet.')); return wrap; }
+    if (!member) { wrap.appendChild(banner('err', 'সদস্য প্রোফাইল পাওয়া যায়নি।')); return wrap; }
+    if (member.status !== 'active') { wrap.appendChild(banner('warn', 'আপনার সদস্যপদ এখনো সক্রিয় নয়। উত্তোলনের জন্য সদস্যপদ সক্রিয় থাকতে হবে।')); return wrap; }
   }
   const activeMembers = members.filter(m => m.status === 'active');
   if (staff && !activeMembers.length) { wrap.appendChild(banner('warn', 'কোনো Active সদস্য নেই। / No active member yet.')); return wrap; }
@@ -110,6 +110,14 @@ export async function pageWithdrawal(session) {
   form.querySelector('.js-type').appendChild(typeSeg.root);
   form.querySelector('.js-method').appendChild(methodSeg.root);
 
+  /* The native date input renders in the device locale (often MM/DD/YYYY);
+     mirror the chosen date below it in the app's local format DD-MM-YYYY. */
+  const dateInp = form.elements.date;
+  const dateFmt = el('div', { class: 'dfmt', text: dateInp.value ? fmtDate(dateInp.value) : '' });
+  dateInp.insertAdjacentElement('afterend', dateFmt);
+  const syncDateFmt = () => { dateFmt.textContent = dateInp.value ? fmtDate(dateInp.value) : ''; };
+  dateInp.addEventListener('input', syncDateFmt);
+
   const paintInfo = async () => {
     infoHost.replaceChildren();
     /* During preselect construction the picker's hidden input is not in the
@@ -121,11 +129,11 @@ export async function pageWithdrawal(session) {
     const bal = withdrawalBalance(m, deposits, withdrawals);
     const stats = el('div', { class: 'stats' });
     stats.append(
-      statCard({ label: 'মোট জমা / Total Deposit', value: taka(bal.totalDeposit), sub: 'অনুমোদিত / approved', ic: 'deposit' }),
-      statCard({ label: 'মোট উত্তোলন / Total Withdrawal', value: taka(bal.totalWithdrawal), sub: 'অনুমোদিত / approved', ic: 'upload', tone: 'red' }),
-      statCard({ label: 'উপলব্ধ ব্যালান্স / Available Balance', value: taka(bal.available), sub: 'উত্তোলনযোগ্য / withdrawable', ic: 'money', tone: 'blue' }),
+      statCard({ label: 'মোট জমা / Total Deposit', value: taka(bal.totalDeposit), sub: 'অনুমোদিত জমা', ic: 'deposit' }),
+      statCard({ label: 'মোট উত্তোলন / Total Withdrawal', value: taka(bal.totalWithdrawal), sub: 'অনুমোদিত উত্তোলন', ic: 'upload', tone: 'red' }),
+      statCard({ label: 'উপলব্ধ ব্যালান্স / Available Balance', value: taka(bal.available), sub: 'উত্তোলনযোগ্য', ic: 'money', tone: 'blue' }),
     );
-    infoHost.appendChild(card('ব্যালান্স', `Balance — ${m.memberId} · ${m.nameBn}`, stats));
+    infoHost.appendChild(card(staff ? 'ব্যালান্স' : 'আমার ব্যালান্স', staff ? `Balance — ${m.memberId} · ${m.nameBn}` : `My Balance — ${m.memberId} · ${m.nameBn}`, stats));
   };
   if (staff) {
     picker = memberPicker({ members: activeMembers, onPick: () => paintInfo() });
@@ -138,6 +146,7 @@ export async function pageWithdrawal(session) {
     if (picker) picker.set('');
     typeSeg.reset(); methodSeg.reset();
     form.elements.date.value = todayISO();
+    syncDateFmt();
     paintInfo();
   }, 0));
 
@@ -157,7 +166,7 @@ export async function pageWithdrawal(session) {
     if (!v.memberDocId) { setErr('memberDocId', 'সদস্য নির্বাচন করুন'); bad = true; }
     if (!v.date) { setErr('date', 'তারিখ দিন'); bad = true; }
     if (!(num(v.amount) > 0)) { setErr('amount', 'উত্তোলনের পরিমাণ দিন'); bad = true; }
-    if (bad) { toast('ফর্মে ত্রুটি রয়েছে / Please fix the highlighted fields', 'error'); return; }
+    if (bad) { toast('ফর্মে ত্রুটি রয়েছে', 'error'); return; }
     const b = form.querySelector('button[type=submit]'); b.disabled = true;
     try {
       const rec = await submitWithdrawal(v, session);
@@ -248,7 +257,7 @@ export async function pageDeposit(session, params = {}) {
     member = members.find(m => m.id === session.memberDocId) || null;
     if (!member) { wrap.appendChild(banner('err', 'সদস্য প্রোফাইল পাওয়া যায়নি / Member profile not found.')); return wrap; }
     if (member.status !== 'active') {
-      wrap.appendChild(banner('warn', `আপনার সদস্যপদ এখনো ${statusTag(member.status)}। অনুমোদনের পূর্বে জমা দাখিল করা যাবে না। / Your membership is not active yet — deposits cannot be submitted.`));
+      wrap.appendChild(banner('warn', `আপনার সদস্যপদ এখনো ${statusTag(member.status)}। অনুমোদনের পূর্বে জমা দাখিল করা যাবে না।`));
       return wrap;
     }
   }
@@ -302,6 +311,14 @@ export async function pageDeposit(session, params = {}) {
   form.elements.type.addEventListener('change', syncDesc);
   syncDesc();
 
+  /* The native date input renders in the device locale (often MM/DD/YYYY);
+     mirror the chosen date below it in the app's local format DD-MM-YYYY. */
+  const dateInp = form.elements.date;
+  const dateFmt = el('div', { class: 'dfmt', text: dateInp.value ? fmtDate(dateInp.value) : '' });
+  dateInp.insertAdjacentElement('afterend', dateFmt);
+  const syncDateFmt = () => { dateFmt.textContent = dateInp.value ? fmtDate(dateInp.value) : ''; };
+  dateInp.addEventListener('input', syncDateFmt);
+
   const paintInfo = async () => {
     infoHost.replaceChildren();
     /* During preselect construction the picker's hidden input is not in the
@@ -318,7 +335,7 @@ export async function pageDeposit(session, params = {}) {
       statCard({ label: 'বকেয়া', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
       statCard({ label: 'অগ্রিম', value: taka(s.advance), sub: s.advance > 0 ? 'অতিরিক্ত জমা' : '—', ic: 'advance', tone: 'blue' }),
     );
-    infoHost.appendChild(card('সদস্য সারসংক্ষেপ', `Member Summary — ${m.memberId} · ${m.nameBn}`, stats));
+    infoHost.appendChild(card(staff ? 'সদস্য সারসংক্ষেপ' : 'আমার সারাংশ', staff ? `Member Summary — ${m.memberId} · ${m.nameBn}` : `My Summary — ${m.memberId} · ${m.nameBn}`, stats));
   };
   if (staff) {
     picker = memberPicker({ members: activeMembers, value: params.memberDocId || '', onPick: () => paintInfo() });
@@ -328,7 +345,7 @@ export async function pageDeposit(session, params = {}) {
   }
 
   wrap.appendChild(infoHost);
-  wrap.appendChild(banner('info', 'মাসের <b>১২ তারিখের</b> মধ্যে জমা না দিলে বকেয়া দেখাবে। / Due if unpaid after the 12th.'));
+  wrap.appendChild(banner('info', 'মাসের <b>১২ তারিখের</b> মধ্যে জমা না দিলে <b>বকেয়া</b> হিসেবে দেখাবে।'));
   const entryCard = card(staff ? 'জমা এন্ট্রি' : 'জমা দাখিল', staff ? 'Deposit Entry' : 'Submit Deposit', form);
   if (staff) entryCard.classList.add('overflow-visible');
   wrap.appendChild(entryCard);
@@ -339,6 +356,7 @@ export async function pageDeposit(session, params = {}) {
     if (picker) picker.set(params.memberDocId || '');
     typeSeg.reset(); methodSeg.reset();
     form.elements.date.value = todayISO();
+    syncDateFmt();
     syncDesc(); paintInfo();
   }, 0));
 
@@ -354,7 +372,7 @@ export async function pageDeposit(session, params = {}) {
     if (!(num(v.amount) > 0)) { setErr('amount', 'জমার পরিমাণ দিন'); bad = true; }
     if ((v.type === 'special' || v.type === 'other') && !String(v.description || '').trim()) { setErr('description', 'বিবরণ আবশ্যক'); bad = true; }
     if (session.role === 'maker' && v.date !== todayISO()) { setErr('date', 'Maker শুধুমাত্র আজকের তারিখ ব্যবহার করতে পারবেন'); bad = true; }
-    if (bad) { toast('ফর্মে ত্রুটি রয়েছে / Please fix the highlighted fields', 'error'); return; }
+    if (bad) { toast('ফর্মে ত্রুটি রয়েছে', 'error'); return; }
 
     const b = form.querySelector('button[type=submit]'); b.disabled = true;
     try {
@@ -507,7 +525,7 @@ export async function pageDepositHistory(session, params = {}) {
   };
 
   const exportRows = kind => {
-    if (!current.length) { toast('রপ্তানির জন্য কোনো তথ্য নেই / Nothing to export', 'warn'); return; }
+    if (!current.length) { toast('রপ্তানির জন্য কোনো তথ্য নেই', 'warn'); return; }
     const rows = [['SL', 'Date', 'Member ID', 'Member Name', 'Deposit Type', 'Payment Method', 'Amount', 'Description', 'Status']];
     current.forEach((d, i) => rows.push([i + 1, fmtDate(d.date), d.memberId, d.memberName, typeLabel(d.type).en, methodLabel(d.method).en, num(d.amount), d.description || '', d.status]));
     rows.push(['', '', '', '', '', 'Total', current.reduce((s, d) => s + num(d.amount), 0), '', '']);

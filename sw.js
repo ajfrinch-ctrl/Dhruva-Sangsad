@@ -40,6 +40,7 @@ const PRECACHE = [
   'js/store.js',
   'js/ui.js',
   'js/ui-auth.js',
+  'js/install-prompt.js',
   'js/util.js',
   'js/pages/account.js',
   'js/pages/admin.js',

@@ -1,5 +1,7 @@
 /* Guest screens: Login (default), Register, Forgot Password, Registration success.
-   Nothing else is rendered while unauthenticated. */
+   Nothing else is rendered while unauthenticated.
+   Modern mobile-first layout: gradient hero, icon inputs, live hints,
+   loading spinners, Bengali-first labels. Field names & validation unchanged. */
 import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
 import { logoSrc, APP_VERSION } from './brand.js';
 import { getLang, setLang } from './i18n.js';
@@ -19,20 +21,18 @@ export function renderAuth(root, onLoggedIn) {
     <div class="auth-brand">
       <div class="auth-logo"><img class="js-org-logo" src="${esc(logoSrc())}" alt="ধ্রুব সংসদ"></div>
       <h1>ধ্রুব সংসদ</h1>
-      <div class="sub">Dhruvo Sangsad</div>
+      <div class="sub">Dhruvo Sangsad · সদস্য ও জমা ব্যবস্থাপনা</div>
     </div>
     <div class="auth-tabs" id="authTabs">
-      <button type="button" data-m="login" class="${mode === 'login' ? 'on' : ''}">${t('লগইন', 'Login')}</button>
-      <button type="button" data-m="register" class="${mode === 'register' ? 'on' : ''}">${t('নিবন্ধন', 'Register')}</button>
+      <button type="button" data-m="login" class="${mode === 'login' ? 'on' : ''}">${icon('login')} ${t('লগইন', 'Login')}</button>
+      <button type="button" data-m="register" class="${mode === 'register' ? 'on' : ''}">${icon('register')} ${t('নিবন্ধন', 'Register')}</button>
     </div>
     <div id="authBody"></div>
     <div class="auth-lang">
       <button type="button" data-lang="bn" class="${getLang() === 'bn' ? 'on' : ''}">বাংলা</button>
       <button type="button" data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">English</button>
     </div>
-    <div class="auth-foot">
-      ${t('ধ্রুব সংসদ · সদস্য ও জমা ব্যবস্থাপনা', 'Dhruvo Sangsad · Member & Deposit Management')} · v${APP_VERSION}
-    </div>`;
+    <div class="auth-foot">v${APP_VERSION} · ${t('অফলাইনেও কাজ করে', 'Works offline')}</div>`;
   const themeBtn = el('button', { class: 'icon-btn auth-theme-btn', type: 'button' });
   const paint = () => {
     const dark = getTheme() === 'amoled';
@@ -76,24 +76,34 @@ function pwToggle(input) {
   return wrap;
 }
 
+/* Loading state: spinner + label, restorable. */
+const loadingBtn = (btn, label) => { btn.disabled = true; btn.classList.add('loading'); btn.innerHTML = `<span class="spin"></span> ${esc(label)}`; };
+const restoreBtn = (btn, html) => { btn.disabled = false; btn.classList.remove('loading'); btn.innerHTML = html; };
+
 /* ---------------- LOGIN ---------------- */
 function loginForm(body, root, onLoggedIn) {
   clear(body);
   const f = el('form', { class: 'grid', novalidate: true });
   f.innerHTML = `
+    <h2 class="auth-h">${t('লগইন', 'Login')}</h2>
     <div class="field">
-      <label>${t('ইউজারনেম বা মোবাইল', 'Username or mobile')} <span class="req">*</span></label>
+      <label>${t('ইউজারনেম অথবা মোবাইল নম্বর', 'Username or mobile number')} <span class="req">*</span></label>
       <input name="identifier" inputmode="text" autocomplete="username" placeholder="${t('ইউজারনেম বা 01XXXXXXXXX', 'Username or 01XXXXXXXXX')}" required>
+      <div class="hint">${t('সদস্য: মোবাইল নম্বর। Admin/Maker: নিজের ইউজারনেম।', 'Members: mobile number. Admin/Maker: own username.')}</div>
     </div>
     <div class="field">
       <label>${t('পাসওয়ার্ড', 'Password')} <span class="req">*</span></label>
       <input name="password" type="password" autocomplete="current-password" placeholder="••••••" required>
     </div>
-    <label class="check"><input type="checkbox" name="remember"> ${t('এই ডিভাইসে মনে রাখুন', 'Remember me')}</label>
-    <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('login')} ${t('লগইন', 'Login')}</button>
-    <div class="center"><button class="link-btn" type="button" id="toForgot">${t('পাসওয়ার্ড ভুলে গেছেন?', 'Forgot Password?')}</button></div>
-    <div class="err center" id="loginErr" style="min-height:12px"></div>`;
+    <div class="login-row">
+      <label class="check"><input type="checkbox" name="remember"> ${t('এই ডিভাইসে মনে রাখুন', 'Remember me')}</label>
+      <button class="link-btn" type="button" id="toForgot">${t('পাসওয়ার্ড ভুলে গেছেন?', 'Forgot Password?')}</button>
+    </div>
+    <button class="btn btn-primary btn-lg btn-block" type="submit"><span>${t('লগইন করুন', 'Login')}</span></button>
+    <div class="err center" id="loginErr"></div>
+    <div class="auth-foot-link">${t('অ্যাকাউন্ট নেই?', 'No account?')} <button type="button" class="link-btn" id="toRegister">${t('নিবন্ধন করুন', 'Register')}</button></div>`;
   body.appendChild(f);
+  f.querySelector('#toRegister').addEventListener('click', () => { mode = 'register'; renderAuth(root, onLoggedIn); });
   pwToggle(f.elements.password);
   /* Digits-only input gets the telephone keypad; usernames keep the text one. */
   f.elements.identifier.addEventListener('input', () => {
@@ -106,17 +116,18 @@ function loginForm(body, root, onLoggedIn) {
     const errBox = f.querySelector('#loginErr');
     errBox.textContent = '';
     const btn = f.querySelector('button[type=submit]');
+    const btnHtml = btn.innerHTML;
     const id = f.elements.identifier.value.trim();
     const pw = f.elements.password.value;
-    if (!id || !pw) { errBox.innerHTML = `<span class="form-err">${esc(t('ইউজারনেম বা পাসওয়ার্ড দিন', 'Enter username and password'))}</span>`; return; }
-    btn.disabled = true; btn.textContent = t('লগইন হচ্ছে…', 'Signing in…');
+    if (!id || !pw) { errBox.innerHTML = `<span class="form-err">${esc(t('ইউজারনেম ও পাসওয়ার্ড দিন', 'Enter username and password'))}</span>`; return; }
+    loadingBtn(btn, t('লগইন হচ্ছে…', 'Signing in…'));
     try {
       const s = await login(id, pw, { remember: f.elements.remember.checked });
       toast(`স্বাগতম, ${s.displayName}`, 'success');
       onLoggedIn(s);
     } catch (err) {
       errBox.innerHTML = `<span class="form-err">${esc(err.message)}</span>`;
-      btn.disabled = false; btn.innerHTML = `${icon('login')} ${t('লগইন', 'Login')}`;
+      restoreBtn(btn, btnHtml);
     }
   });
 }
@@ -141,13 +152,15 @@ function forgotForm(body, root, onLoggedIn) {
     holder.replaceChildren();
     const f = el('form', { class: 'grid', novalidate: true });
     f.innerHTML = `
-      <div class="auth-title">${t('পাসওয়ার্ড ভুলে গেছেন', 'Forgot Password')}</div>
-      <div class="banner info">${icon('info')}<span>${t('মোবাইল নম্বর দিন। সদস্য পাওয়া গেলে তথ্য দেখাবে।', 'Enter your mobile number. If found, your profile will be shown.')}</span></div>
+      <div class="step-head"><div class="sh-ic">${icon('key')}</div>
+        <div><h3>${t('পাসওয়ার্ড ভুলে গেছেন', 'Forgot Password')}</h3>
+        <div class="s">${t('মোবাইল দিয়ে সদস্য খুঁজুন, তারপর জন্ম তারিখে যাচাই', 'Find your membership by mobile, then verify with birth date')}</div></div></div>
       <div class="field"><label>${t('মোবাইল নম্বর', 'Mobile Number')} <span class="req">*</span></label>
-        <input name="mobile" inputmode="numeric" maxlength="11" required placeholder="01XXXXXXXXX"></div>
-      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('search')} ${t('সদস্য খুঁজুন', 'Search member')}</button>
-      <div class="center"><button class="link-btn" type="button" data-back="1">← ${t('লগইনে ফিরুন', 'Back to Login')}</button></div>
-      <div class="err center js-err" style="min-height:12px"></div>`;
+        <div class="in-ic">${icon('phone')}
+        <input name="mobile" inputmode="numeric" maxlength="11" required placeholder="01XXXXXXXXX" autocomplete="tel"></div>
+        <div class="err js-err" style="min-height:0"></div></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('search')}<span>${t('সদস্য খুঁজুন', 'Search member')}</span></button>
+      <div class="center"><button class="link-btn" type="button" data-back="1">${icon('back')} ${t('লগইনে ফিরুন', 'Back to Login')}</button></div>`;
     holder.appendChild(f);
     f.querySelector('[data-back]').addEventListener('click', () => { mode = 'login'; renderAuth(root, onLoggedIn); });
     f.elements.mobile.addEventListener('input', () => { f.elements.mobile.value = f.elements.mobile.value.replace(/\D/g, '').slice(0, 11); });
@@ -158,14 +171,14 @@ function forgotForm(body, root, onLoggedIn) {
       if (!isValidMobile(mob)) { errBox.innerHTML = errHtml(t('সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন', 'Enter a valid 11-digit mobile number')); return; }
       const btn = f.querySelector('button[type=submit]');
       const btnHtml = btn.innerHTML;
-      btn.disabled = true; btn.textContent = t('খুঁজছি…', 'Searching…');
+      loadingBtn(btn, t('খুঁজছি…', 'Searching…'));
       try {
         found = await findMemberForRecovery(mob);
-        if (!found) { errBox.innerHTML = errHtml(t('এই মোবাইলে কোনো সদস্য পাওয়া যায়নি', 'No member found for this mobile number')); btn.disabled = false; btn.innerHTML = btnHtml; return; }
+        if (!found) { errBox.innerHTML = errHtml(t('এই মোবাইলে কোনো সদস্য পাওয়া যায়নি', 'No member found for this mobile number')); restoreBtn(btn, btnHtml); return; }
         step2();
       } catch (err) {
         errBox.innerHTML = errHtml(err.message);
-        btn.disabled = false; btn.innerHTML = btnHtml;
+        restoreBtn(btn, btnHtml);
       }
     });
   }
@@ -174,14 +187,15 @@ function forgotForm(body, root, onLoggedIn) {
     holder.replaceChildren();
     const box = el('div', { class: 'grid' });
     box.innerHTML = `
-      <div class="auth-title">${t('সদস্য পাওয়া গেছে', 'Member found')}</div>
+      <div class="step-head"><div class="sh-ic">${icon('approve')}</div>
+        <div><h3>${t('সদস্য পাওয়া গেছে', 'Member found')}</h3>
+        <div class="s">${t('নিশ্চিত হতে জন্ম তারিখ দিন', 'Verify with your date of birth')}</div></div></div>
       <div class="kv">
-        <div>${t('সদস্য ID', 'Member ID')}</div><div><b>${esc(found.memberId)}</b></div>
+        <div>${t('সদস্য আইডি', 'Member ID')}</div><div><b>${esc(found.memberId)}</b></div>
         <div>${t('নাম', 'Name')}</div><div>${esc(found.nameBn || found.nameEn)}</div>
         <div>${t('মোবাইল', 'Mobile')}</div><div>${esc(found.mobile)}</div>
         <div>${t('স্ট্যাটাস', 'Status')}</div><div>${esc(t({ active: 'সক্রিয়', pending: 'অপেক্ষমাণ', rejected: 'বাতিল' }[found.status] || found.status || '—', found.status || '—'))}</div>
-      </div>
-      <div class="banner info">${icon('info')}<span>${t('এখন জন্ম তারিখ (দিন) ও মাস দিয়ে যাচাই করুন।', 'Now verify with your date of birth (day) and month.')}</span></div>`;
+      </div>`;
     const f = el('form', { class: 'grid', novalidate: true });
     f.innerHTML = `
       <div class="grid g2">
@@ -193,9 +207,9 @@ function forgotForm(body, root, onLoggedIn) {
             ${months.map(([n, l]) => `<option value="${n}">${l}</option>`).join('')}
           </select></div>
       </div>
-      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('check')} ${t('যাচাই করুন', 'Verify')}</button>
-      <div class="center"><button class="link-btn" type="button" data-back="2">← ${t('ফিরুন', 'Back')}</button></div>
-      <div class="err center js-err" style="min-height:12px"></div>`;
+      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('check')}<span>${t('যাচাই করুন', 'Verify')}</span></button>
+      <div class="center"><button class="link-btn" type="button" data-back="2">${icon('back')} ${t('ফিরুন', 'Back')}</button></div>
+      <div class="err center js-err" style="min-height:0"></div>`;
     box.appendChild(f);
     holder.appendChild(box);
     f.querySelector('[data-back]').addEventListener('click', step1);
@@ -209,13 +223,13 @@ function forgotForm(body, root, onLoggedIn) {
       }
       const btn = f.querySelector('button[type=submit]');
       const btnHtml = btn.innerHTML;
-      btn.disabled = true; btn.textContent = t('যাচাই হচ্ছে…', 'Verifying…');
+      loadingBtn(btn, t('যাচাই হচ্ছে…', 'Verifying…'));
       try {
         await verifyRecoveryDob(found.identifier, day, month);
         step3(day, month);
       } catch (err) {
         errBox.innerHTML = errHtml(err.message);
-        btn.disabled = false; btn.innerHTML = btnHtml;
+        restoreBtn(btn, btnHtml);
       }
     });
   }
@@ -224,13 +238,14 @@ function forgotForm(body, root, onLoggedIn) {
     holder.replaceChildren();
     const f = el('form', { class: 'grid', novalidate: true });
     f.innerHTML = `
-      <div class="auth-title">${t('নতুন পাসওয়ার্ড', 'New Password')}</div>
-      <div class="banner ok">${icon('check')}<span>${t('যাচাই সফল। এখন নতুন পাসওয়ার্ড দিন।', 'Verified. Set a new password.')}</span></div>
+      <div class="step-head"><div class="sh-ic">${icon('lock')}</div>
+        <div><h3>${t('নতুন পাসওয়ার্ড', 'New Password')}</h3>
+        <div class="s">${t('যাচাই সফল — এখন নতুন পাসওয়ার্ড দিন', 'Verified — set a new password')}</div></div></div>
       <div class="field"><label>${t('নতুন পাসওয়ার্ড', 'New Password')} <span class="req">*</span></label><input name="pw1" type="password" required minlength="6" autocomplete="new-password"></div>
       <div class="field"><label>${t('পাসওয়ার্ড নিশ্চিত', 'Confirm Password')} <span class="req">*</span></label><input name="pw2" type="password" required minlength="6" autocomplete="new-password"></div>
-      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('key')} ${t('পাসওয়ার্ড পরিবর্তন', 'Change Password')}</button>
-      <div class="center"><button class="link-btn" type="button" data-back="3">← ${t('ফিরুন', 'Back')}</button></div>
-      <div class="err center js-err" style="min-height:12px"></div>`;
+      <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('key')}<span>${t('পাসওয়ার্ড পরিবর্তন', 'Change Password')}</span></button>
+      <div class="center"><button class="link-btn" type="button" data-back="3">${icon('back')} ${t('ফিরুন', 'Back')}</button></div>
+      <div class="err center js-err" style="min-height:0"></div>`;
     holder.appendChild(f);
     pwToggle(f.elements.pw1);
     pwToggle(f.elements.pw2);
@@ -241,14 +256,14 @@ function forgotForm(body, root, onLoggedIn) {
       if (f.elements.pw1.value !== f.elements.pw2.value) { errBox.innerHTML = errHtml(t('পাসওয়ার্ড মেলেনি', 'Passwords do not match')); return; }
       const btn = f.querySelector('button[type=submit]');
       const btnHtml = btn.innerHTML;
-      btn.disabled = true; btn.textContent = t('পরিবর্তন হচ্ছে…', 'Changing…');
+      loadingBtn(btn, t('পরিবর্তন হচ্ছে…', 'Changing…'));
       try {
         await recoverPassword({ identifier: found.identifier, dobDay, dobMonth, newPassword: f.elements.pw1.value });
         await alertBox(t('পাসওয়ার্ড পরিবর্তন সফল হয়েছে। নতুন পাসওয়ার্ড দিয়ে লগইন করুন।', 'Password changed. Please log in.'), t('সফল', 'Success'));
         mode = 'login'; renderAuth(root, onLoggedIn);
       } catch (err) {
         errBox.innerHTML = errHtml(err.message);
-        btn.disabled = false; btn.innerHTML = btnHtml;
+        restoreBtn(btn, btnHtml);
       }
     });
   }
@@ -277,53 +292,77 @@ async function registerForm(body, root, onLoggedIn) {
   let step = 0;
   const f = el('form', { class: 'grid', novalidate: true });
   const indicator = el('div', { class: 'wsteps', 'aria-hidden': 'true' });
+  /* Each step: icon header + a tight, purposeful group of fields.
+     Field names are load-bearing — keep them exactly as is. */
   f.innerHTML = `
+    <div class="auth-h">
+      ${t('নতুন সদস্য নিবন্ধন', 'New member registration')}
+      <div class="s">${t('অ্যাকাউন্ট তৈরি করতে তথ্য দিন', 'Enter your details to create an account')}</div>
+    </div>
+    <div class="auth-info">${t('নিজের তথ্য দিয়ে সদস্য অ্যাকাউন্ট তৈরি করুন। Maker/Admin অনুমোদনের পর অ্যাপের সব ফিচার ব্যবহার করা যাবে।', 'Create your member account with your own details. All features become available after Maker/Admin approval.')}</div>
     <div class="wstep" data-step="0">
-      <div class="banner info sm">${icon('info')}<span>${t('সদস্য ID মোবাইলের শেষ ৬ সংখ্যা দিয়ে স্বয়ংক্রিয় হবে।', 'Your member ID is the last 6 digits of your mobile.')}</span></div>
+      <div class="step-head"><div class="sh-num">০১</div>
+        <div><h3>${t('যোগাযোগ', 'Contact')}</h3>
+        <div class="s">${t('মোবাইল শেষ ৬ সংখ্যা হবে আপনার সদস্য আইডি', 'The last 6 digits of your mobile become your member ID')}</div></div></div>
       <div class="field"><label>${t('মোবাইল নম্বর', 'Mobile number')} <span class="req">*</span></label>
-        <input name="mobile" inputmode="numeric" maxlength="11" required placeholder="01712345678" autocomplete="tel">
-        <div class="hint" id="midHint">${t('সদস্য ID: —', 'Member ID: —')}</div><div class="err" data-err="mobile"></div></div>
+        <div class="in-ic">${icon('phone')}
+        <input name="mobile" inputmode="numeric" maxlength="11" required placeholder="01712345678" autocomplete="tel"></div>
+        <div class="mid-pill" id="midPill" hidden>${icon('register')}<span>${t('সদস্য আইডি', 'Member ID')}: <b class="js-mid">—</b></span></div>
+        <div class="err" data-err="mobile"></div></div>
       <div class="field"><label>${t('WhatsApp নম্বর', 'WhatsApp number')} <span class="req">*</span></label>
-        <input name="whatsapp" inputmode="numeric" maxlength="11" required placeholder="01712345678" autocomplete="tel">
-        <label class="check" style="margin-top:3px"><input type="checkbox" name="sameWa" checked> ${t('মোবাইল নম্বরের মতোই', 'Same as mobile')}</label>
+        <div class="in-ic">${icon('whatsapp')}
+        <input name="whatsapp" inputmode="numeric" maxlength="11" required placeholder="01712345678" autocomplete="tel" readonly></div>
+        <label class="check wa-same"><input type="checkbox" name="sameWa" checked> ${t('মোবাইল নম্বরের মতোই', 'Same as mobile')}</label>
         <div class="err" data-err="whatsapp"></div></div>
     </div>
     <div class="wstep" data-step="1">
-      <div class="field"><label>${t('নাম (বাংলা)', 'Name (Bangla)')} <span class="req">*</span></label>
-        <input name="nameBn" required placeholder="মোঃ করিম" autocomplete="off"><div class="err" data-err="nameBn"></div></div>
-      <div class="field"><label>${t('নাম (ইংরেজি)', 'Name (English)')} <span class="req">*</span></label>
-        <input name="nameEn" required placeholder="Md. Karim" autocomplete="off"><div class="err" data-err="nameEn"></div></div>
+      <div class="step-head"><div class="sh-num">০২</div>
+        <div><h3>${t('পরিচয়', 'Identity')}</h3>
+        <div class="s">${t('আসল নাম লিখুন — এটিই রিপোর্টে দেখাবে', 'Use your real name — this appears on reports')}</div></div></div>
+      <div class="grid g2">
+        <div class="field"><label>${t('নাম (বাংলা)', 'Name (Bangla)')} <span class="req">*</span></label>
+          <input name="nameBn" required placeholder="মোঃ করিম" autocomplete="off"><div class="err" data-err="nameBn"></div></div>
+        <div class="field"><label>${t('নাম (ইংরেজি)', 'Name (English)')} <span class="req">*</span></label>
+          <input name="nameEn" required placeholder="Md. Karim" autocomplete="off"><div class="err" data-err="nameEn"></div></div>
+      </div>
       <details class="acc">
-        <summary>${t('আরও তথ্য (ঐচ্ছিক)', 'More info (optional)')}</summary>
-        <div class="grid">
+        <summary>${icon('edit')} ${t('আরও তথ্য (ঐচ্ছিক)', 'More info (optional)')}</summary>
+        <div class="grid g2">
           <div class="field"><label>${t('পিতার নাম (বাংলা)', "Father's name (Bangla)")}</label><input name="fatherBn" autocomplete="off"></div>
           <div class="field"><label>${t('পিতার নাম (ইংরেজি)', "Father's name (English)")}</label><input name="fatherEn" autocomplete="off"></div>
           <div class="field"><label>${t('মাতার নাম (বাংলা)', "Mother's name (Bangla)")}</label><input name="motherBn" autocomplete="off"></div>
           <div class="field"><label>${t('মাতার নাম (ইংরেজি)', "Mother's name (English)")}</label><input name="motherEn" autocomplete="off"></div>
           <div class="field"><label>${t('ইমেইল', 'Email')}</label><input name="email" type="email" placeholder="name@mail.com" autocomplete="off"><div class="err" data-err="email"></div></div>
-          <div class="field"><label>${t('NID', 'NID')}</label><input name="nid" inputmode="numeric" autocomplete="off"></div>
-          <div class="field"><label>${t('জন্মতারিখ', 'Date of birth')}</label><input name="dob" type="date"></div>
+          <div class="field"><label>${t('এনআইডি', 'NID')}</label><input name="nid" inputmode="numeric" autocomplete="off"></div>
+          <div class="field"><label>${t('জন্ম তারিখ', 'Date of birth')}</label><input name="dob" type="date"></div>
           <div class="field"><label>${t('পেশা', 'Profession')}</label><input name="profession" autocomplete="off"></div>
-          <div class="field"><label>${t('ঠিকানা', 'Address')}</label><textarea name="address" rows="2"></textarea></div>
+          <div class="field" style="grid-column:1/-1"><label>${t('ঠিকানা', 'Address')}</label><textarea name="address" rows="2"></textarea></div>
         </div>
       </details>
     </div>
     <div class="wstep" data-step="2">
+      <div class="step-head"><div class="sh-num">০৩</div>
+        <div><h3>${t('অ্যাকাউন্ট', 'Account')}</h3>
+        <div class="s">${t('মাসিক কিস্তি ও লগইন পাসওয়ার্ড', 'Monthly installment & login password')}</div></div></div>
       <div class="field"><label>${t('মাসিক কিস্তি (৳)', 'Monthly installment (৳)')} <span class="req">*</span></label>
-        <input name="installment" type="number" min="1" step="1" value="${cfg.defaultInstallment || 1000}" required inputmode="numeric"><div class="err" data-err="installment"></div></div>
+        <div class="in-ic">${icon('money')}
+        <input name="installment" type="number" min="1" step="1" value="${cfg.defaultInstallment || 1000}" required inputmode="numeric"></div>
+        <div class="err" data-err="installment"></div></div>
       <div class="field"><label>${t('পাসওয়ার্ড', 'Password')} <span class="req">*</span></label>
-        <input name="pw1" type="password" required minlength="6" autocomplete="new-password"><div class="err" data-err="password"></div></div>
+        <input name="pw1" type="password" required minlength="6" autocomplete="new-password">
+        <div class="hint">${t('কমপক্ষে ৬ অক্ষর', 'At least 6 characters')}</div>
+        <div class="err" data-err="password"></div></div>
       <div class="field"><label>${t('পাসওয়ার্ড (আবার)', 'Password (again)')} <span class="req">*</span></label>
         <input name="pw2" type="password" required minlength="6" autocomplete="new-password"></div>
-      <div class="banner warn sm">${icon('pending')}<span>${t('নিবন্ধনের পর Admin/Maker অনুমোদন লাগবে।', 'Admin/Maker approval is needed after registration.')}</span></div>
+      <div class="banner warn sm">${icon('pending')}<span>${t('নিবন্ধনের পর Admin/Maker অনুমোদন দিলেই সদস্যপদ সক্রিয় হবে।', 'Your membership activates after Admin/Maker approval.')}</span></div>
     </div>
     <div class="form-sticky">
-      <button class="btn btn-ghost wiz-back" type="button">${icon('back')}<span>${t('ফিরে যান', 'Back')}</span></button>
-      <button class="btn btn-primary btn-lg wiz-next" type="button"><span>${t('পরের ধাপ', 'Next')}</span>${icon('chevron')}</button>
-      <button class="btn btn-primary btn-lg wiz-submit" type="submit">${icon('register')}<span>${t('নিবন্ধন করুন', 'Register')}</span></button>
+      <button class="btn btn-ghost wiz-back" type="button">${icon('back')}<span>${t('আগের অংশ', 'Previous')}</span></button>
+      <button class="btn btn-primary btn-lg wiz-next" type="button"><span>${t('পরের অংশ', 'Next')}</span>${icon('chevron')}</button>
+      <button class="btn btn-primary btn-lg wiz-submit" type="submit"><span>${t('রেজিস্ট্রেশন সম্পন্ন করুন', 'Complete registration')}</span></button>
     </div>
-    <div class="center"><button class="link-btn" type="button" id="backLogin2">← ${t('লগইনে ফিরুন', 'Back to Login')}</button></div>`;
-  f.prepend(indicator);
+    <div class="center"><button class="link-btn" type="button" id="backLogin2">${t('আগে থেকেই অ্যাকাউন্ট আছে? লগইন করুন', 'Already have an account? Log in')}</button></div>`;
+  f.querySelector('.auth-h').after(indicator);
   body.appendChild(f);
   f.querySelector('#backLogin2').addEventListener('click', () => { mode = 'login'; renderAuth(root, onLoggedIn); });
   pwToggle(f.elements.pw1);
@@ -344,16 +383,17 @@ async function registerForm(body, root, onLoggedIn) {
   };
   const toTop = () => { try { window.scrollTo(0, 0); } catch { /* ignore */ } };
 
-  const midHint = f.querySelector('#midHint');
+  const midPill = f.querySelector('#midPill');
+  const midVal = f.querySelector('.js-mid');
   const syncWa = () => { if (f.elements.sameWa.checked) f.elements.whatsapp.value = f.elements.mobile.value; };
   f.elements.mobile.addEventListener('input', () => {
     f.elements.mobile.value = f.elements.mobile.value.replace(/\D/g, '').slice(0, 11);
     const mid = memberIdFromMobile(f.elements.mobile.value);
-    midHint.innerHTML = mid ? `${esc(t('সদস্য ID', 'Member ID'))}: <b style="color:var(--green-dark)">${mid}</b>` : esc(t('সদস্য ID: —', 'Member ID: —'));
+    if (mid) { midPill.hidden = false; midVal.textContent = mid; }
+    else midPill.hidden = true;
     syncWa();
   });
   f.elements.sameWa.addEventListener('change', () => { syncWa(); f.elements.whatsapp.readOnly = f.elements.sameWa.checked; });
-  f.elements.whatsapp.readOnly = true;
   f.elements.whatsapp.addEventListener('input', () => { f.elements.whatsapp.value = f.elements.whatsapp.value.replace(/\D/g, '').slice(0, 11); });
 
   const setErr = (name, msg) => {
@@ -404,7 +444,9 @@ async function registerForm(body, root, onLoggedIn) {
       }
     }
     const v = Object.fromEntries(new FormData(f).entries());
-    const btn = submitBtn; btn.disabled = true; btn.textContent = t('নিবন্ধন হচ্ছে…', 'Submitting…');
+    const btn = submitBtn;
+    const btnHtml = btn.innerHTML;
+    loadingBtn(btn, t('নিবন্ধন হচ্ছে…', 'Submitting…'));
     try {
       const m = await registerMember({ ...v, password: v.pw1 });
       showSuccess(root, m, onLoggedIn);
@@ -415,7 +457,7 @@ async function registerForm(body, root, onLoggedIn) {
         step = AUTH_REG_FIELD_STEP[first] ?? 0;
         paint(); focusFirstBad();
       } else toast(err.message, 'error');
-      btn.disabled = false; btn.innerHTML = `${icon('register')}<span>${t('নিবন্ধন করুন', 'Register')}</span>`;
+      restoreBtn(btn, btnHtml);
     }
   });
 
@@ -426,20 +468,21 @@ function showSuccess(root, member, onLoggedIn) {
   clear(root);
   const card = el('div', { class: 'auth-card' });
   card.innerHTML = `
-    <div class="success-pop">
-      <div class="tick">${icon('check')}</div>
-      <h4>${t('নিবন্ধন সফল!', 'Registration successful!')}</h4>
+    <div class="auth-success">
+      <div class="as-ic">${icon('check')}</div>
+      <h1>${t('নিবন্ধন সফল হয়েছে', 'Registration successful')}</h1>
+      <div class="sub">${t('তথ্য জমা হয়েছে — Maker/Admin অনুমোদনের অপেক্ষায়', 'Submitted — awaiting Maker/Admin approval')}</div>
     </div>
-    <div class="kv" style="margin-bottom:10px">
-      <div>${t('সদস্য ID', 'Member ID')}</div><div><b style="font-size:11px;color:var(--green-dark)">${esc(member.memberId)}</b></div>
+    <div class="kv" style="margin:14px 0">
+      <div>${t('সদস্য আইডি', 'Member ID')}</div><div><b style="color:var(--green-dark)">${esc(member.memberId)}</b></div>
       <div>${t('নাম', 'Name')}</div><div>${esc(member.nameBn)} — ${esc(member.nameEn)}</div>
       <div>${t('মোবাইল', 'Mobile')}</div><div>${esc(member.mobile)}</div>
       <div>${t('মাসিক কিস্তি', 'Monthly installment')}</div><div>৳${esc(member.installment)}</div>
       <div>${t('স্ট্যাটাস', 'Status')}</div><div><span class="tag pending">${t('অনুমোদনের অপেক্ষায়', 'Pending approval')}</span></div>
     </div>
-    <div class="banner ok">${icon('info')}<span>${t('Maker/Admin অনুমোদন দিলে আপনার সদস্য ID সক্রিয় হবে।', 'Your member ID will activate after Maker/Admin approval.')}</span></div>
+    <div class="banner ok">${icon('info')}<span>${t('Maker/Admin অনুমোদন দিলে আপনার সদস্য আইডি সক্রিয় হবে।', 'Your member ID will activate after Maker/Admin approval.')}</span></div>
     <div class="banner info">${icon('login')}<span>${t('লগইন করুন — ইউজারনেম:', 'Log in — username:')} <b>${esc(member.mobile)}</b> ${t('এবং আপনার পাসওয়ার্ড দিয়ে।', 'with your password.')}</span></div>
-    <button class="btn btn-primary btn-lg btn-block" id="goLogin" type="button">${icon('login')} ${t('লগইনে ফিরুন', 'Back to Login')}</button>`;
+    <button class="btn btn-primary btn-lg btn-block" id="goLogin" type="button">${icon('login')}<span>${t('লগইন পেইজে ফিরে যান', 'Back to Login page')}</span></button>`;
   root.appendChild(card);
   card.querySelector('#goLogin').addEventListener('click', () => { mode = 'login'; renderAuth(root, onLoggedIn); });
 }

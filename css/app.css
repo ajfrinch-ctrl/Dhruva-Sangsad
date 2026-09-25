@@ -384,6 +384,13 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   .btn{padding:7px 10px}
   .modal-foot .btn{flex:1}
   .topbar{padding:0 8px}
+  /* dashboard fit on small phones */
+  .hero-card .hc-val{font-size:21px}
+  .hero-card .hc-lbl{flex-wrap:wrap;gap:2px 10px}
+  .stat .val{font-size:16px;overflow-wrap:anywhere}
+  .stat .lbl{font-size:10px;letter-spacing:.2px}
+  .stat .sub{font-size:10.5px}
+  .sec-head h2{font-size:11px}
 }
 
 .auth-theme-btn{position:fixed;top:12px;right:12px;z-index:80}
@@ -451,7 +458,8 @@ html[data-theme="amoled"] .chip,html[data-theme="dark"] .chip,
 html[data-theme="amoled"] .auth-tabs,html[data-theme="dark"] .auth-tabs{background:#000;border-color:#333;color:var(--text)}
 html[data-theme="amoled"] .icon-btn:hover,html[data-theme="dark"] .icon-btn:hover,
 html[data-theme="amoled"] .btn-ghost:hover,html[data-theme="dark"] .btn-ghost:hover,
-html[data-theme="amoled"] .nav-tab:hover,html[data-theme="dark"] .nav-tab:hover{background:#111}
+html[data-theme="amoled"] .nav-tab:hover,html[data-theme="dark"] .nav-tab:hover,
+html[data-theme="amoled"] .log-toggle:hover,html[data-theme="dark"] .log-toggle:hover{background:#111}
 html[data-theme="amoled"] input,html[data-theme="dark"] input,
 html[data-theme="amoled"] select,html[data-theme="dark"] select,
 html[data-theme="amoled"] textarea,html[data-theme="dark"] textarea{background:#000;color:var(--text);border-color:#333}
@@ -535,7 +543,7 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   .hub-tile .tt{font-size:13px}
   .hub-tile .tic{width:34px;height:34px}
 }
-@media (max-width:360px){.hub-grid{grid-template-columns:1fr}}
+@media (max-width:360px){.hub-grid{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}}
 
 /* ===================== APPROVAL INBOX ===================== */
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
@@ -740,6 +748,11 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 }
 
 /* ===================== DASHBOARD (mobile-first) ===================== */
+/* member home: time-of-day greeting */
+.greet{margin:2px 2px 12px}
+.greet-hi{font-size:16.5px;font-weight:800;line-height:1.3}
+.greet-sub{font-size:12px;color:var(--muted);margin-top:2px}
+@media (max-width:430px){.greet{margin:2px 2px 10px}.greet-hi{font-size:15.5px}}
 .hero-card{background:linear-gradient(140deg,#16a34a,#15803d);color:#fff;border-radius:var(--r);
   padding:14px 16px 13px;margin-bottom:12px;box-shadow:0 8px 22px rgba(22,163,74,.22)}
 .hero-card .hc-lbl{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;opacity:.9}
@@ -766,10 +779,32 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 .act .at{font-size:13px;font-weight:700;line-height:1.35}
 .act .as{font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .act .aw{font-size:10.5px;color:var(--faint);white-space:nowrap;flex:none;text-align:right;line-height:1.35}
+
+/* ---- collapsible “কার্যক্রম লগ” (member profile) ---- */
+.log-card{padding:0}
+.log-toggle{display:flex;align-items:center;gap:11px;width:100%;min-height:52px;padding:12px 14px;
+  border:0;background:transparent;font:inherit;cursor:pointer;text-align:left;border-radius:var(--r)}
+.log-toggle:hover{background:#f9fafb}
+.log-toggle .lt-ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:none;
+  background:var(--green-soft);color:var(--green-dark);font-size:18px}
+.log-toggle .lt-ic .icon{width:19px;height:19px}
+.log-toggle .lt-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.log-toggle .lt-t{font-size:14px;font-weight:700;line-height:1.3}
+.log-toggle .lt-s{font-size:11.5px;color:var(--faint);line-height:1.3}
+.log-toggle .go{color:var(--faint);flex:none;transition:transform .18s ease}
+.log-toggle .go .icon{width:16px;height:16px}
+.log-toggle[aria-expanded="true"] .go{transform:rotate(180deg)}
+.log-body{display:none;padding:0 12px 12px}
+.log-body.open{display:block}
+.log-body .act-list{margin-top:2px}
+.log-foot{display:flex;justify-content:flex-end;margin-top:10px}
+
+/* date mirror under the native date input (always DD-MM-YYYY) */
+.dfmt{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+
 @media (max-width:640px){
   .hero-card .hc-val{font-size:23px}
-  .quick-grid{grid-template-columns:repeat(4,1fr)}
-  .quick-grid .hub-tile .tic{width:40px;height:40px}
+  .quick-grid .hub-tile .tic{width:38px;height:38px}
 }
 
 /* ===================== STATES: skeleton · empty · error · offline ===================== */
@@ -1069,3 +1104,90 @@ details.acc .grid{padding:2px 12px 12px}
   .auth-card input:not([type=checkbox]),.auth-card select{min-height:48px}
   .auth-card .pw-wrap input{padding-right:54px}
 }
+
+/* ============ Auth modern — clean card, icon inputs, step heads, spinners ============ */
+/* Section heading inside the auth card */
+.auth-card .auth-h{font-size:16px;text-align:center;line-height:1.35}
+.auth-card .auth-h .s{font-size:12px;font-weight:400;color:var(--muted);margin-top:3px}
+/* Success screen header (plain, big green check) */
+.auth-success{text-align:center;margin-bottom:14px}
+.as-ic{width:64px;height:64px;border-radius:50%;background:var(--green-soft);color:var(--green-dark);
+  display:grid;place-items:center;margin:0 auto 10px;border:1px solid var(--green-line)}
+.as-ic .icon{width:32px;height:32px}
+.auth-success h1{font-size:19px}
+.auth-success .sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+/* Footer switch link (login → register) */
+.auth-card .auth-foot-link{text-align:center;font-size:13px;color:var(--muted);font-weight:600}
+.auth-card .auth-foot-link .link-btn{text-decoration:none;font-weight:700}
+/* Tabs: icon + label, 44px touch target */
+.auth-tabs{display:flex;gap:5px;background:#f3f4f6;border-radius:11px;padding:4px;margin-bottom:16px}
+.auth-tabs button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border:0;background:transparent;padding:10px 6px;border-radius:8px;font:inherit;font-size:13.5px;
+  font-weight:700;color:var(--muted);cursor:pointer;transition:.15s;min-height:44px}
+.auth-tabs button .icon{width:16px;height:16px}
+.auth-tabs button.on{background:#fff;color:var(--green-dark);box-shadow:var(--shadow)}
+/* Inputs with a leading icon */
+.auth-card .in-ic{position:relative;display:flex;align-items:stretch}
+.auth-card .in-ic > .icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);
+  width:18px;height:18px;color:var(--faint);pointer-events:none;z-index:1}
+.auth-card .in-ic input{flex:1;min-width:0;padding-left:41px}
+.auth-card .in-ic .pw-wrap{flex:1;min-width:0;display:flex}
+.auth-card .in-ic .pw-wrap input{flex:1;min-width:0}
+/* Login row: remember (left) + forgot (right) */
+.auth-card .login-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.auth-card .login-row .check{min-height:44px;font-size:12.5px}
+.auth-card .link-btn{display:inline-flex;align-items:center;gap:5px;min-height:44px;padding:8px 6px;font-size:12.5px}
+.auth-card .link-btn .icon{width:14px;height:14px}
+/* Live member-ID pill (register step 1) */
+.auth-card .mid-pill{display:flex;align-items:center;gap:8px;margin-top:6px;background:var(--green-soft);
+  border:1.5px dashed var(--green-line);color:var(--green-dark);font-size:12.5px;font-weight:700;
+  border-radius:9px;padding:9px 11px;line-height:1.35}
+.auth-card .mid-pill[hidden]{display:none}
+.auth-card .mid-pill .icon{width:17px;height:17px;flex:none}
+.auth-card .mid-pill b{font-size:13.5px;letter-spacing:.4px}
+/* Step header (register: big number; forgot: icon chip) */
+.auth-card .step-head{display:flex;gap:11px;align-items:flex-start;margin-bottom:2px}
+.auth-card .sh-ic{width:40px;height:40px;border-radius:12px;background:var(--green-soft);
+  color:var(--green-dark);display:grid;place-items:center;flex:none}
+.auth-card .sh-ic .icon{width:20px;height:20px}
+.auth-card .sh-num{font-size:27px;font-weight:800;color:var(--green);line-height:1.15;flex:none;min-width:30px}
+.auth-card .step-head h3{font-size:15.5px;line-height:1.3}
+.auth-card .step-head .s{font-size:11.5px;color:var(--muted);line-height:1.4;margin-top:1px}
+/* Soft info box (register intro) */
+.auth-card .auth-info{background:var(--green-soft);border:1px solid var(--green-line);color:var(--green-dark);
+  border-radius:var(--r-sm);padding:10px 12px;font-size:12px;line-height:1.55;font-weight:600}
+/* Password field hint */
+.auth-card .field .hint{margin-top:1px}
+/* Loading spinner on buttons */
+.auth-card .btn.loading{pointer-events:none;opacity:.9}
+.spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;
+  display:inline-block;animation:sp-rot .7s linear infinite;flex:none}
+@keyframes sp-rot{to{transform:rotate(360deg)}}
+/* Error line as a soft red box */
+.auth-card .form-err{display:block;background:var(--red-soft);border:1px solid var(--red-line);
+  color:var(--red-dark);font-weight:700;font-size:12.5px;text-align:center;line-height:1.5;
+  border-radius:var(--r-sm);padding:10px 12px}
+/* WhatsApp "same as mobile" checkbox sits tight under its field */
+.auth-card .wa-same{margin-top:4px;font-size:12.5px;min-height:36px}
+/* Success screen keeps the same hero rhythm */
+.auth-card .kv{margin-bottom:4px}
+
+/* ============ PWA install pill — floating, cancellable (Active-Plus style) ============ */
+.install-bar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  transform:translate(-50%,14px);opacity:0;z-index:190;pointer-events:none;
+  display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:18px;box-shadow:0 14px 40px rgba(16,24,40,.24);
+  padding:10px 8px 10px 12px;max-width:480px;width:calc(100% - 28px);
+  transition:transform .3s cubic-bezier(.2,.8,.3,1),opacity .3s}
+.install-bar.on{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+.install-bar .ib-logo{width:42px;height:42px;border-radius:11px;overflow:hidden;flex:none;
+  background:var(--green-soft);display:grid;place-items:center}
+.install-bar .ib-logo img{width:100%;height:100%;object-fit:contain}
+.install-bar .ib-txt{flex:1;min-width:0;line-height:1.3}
+.install-bar .ib-txt b{display:block;font-size:13.5px;color:var(--text)}
+.install-bar .ib-txt span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.install-bar .ib-install{flex:none;min-height:42px}
+.install-bar .ib-close{flex:none;width:36px;height:36px;min-height:0;border:0;background:none;
+  border-radius:10px;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+.install-bar .ib-close:hover{background:var(--bg-2);color:var(--text)}
+html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{background:#000;border-color:#333}
