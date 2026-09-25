@@ -66,9 +66,11 @@ SETTINGS
 * **Icon 2-column grids** everywhere options are selectable: জমার ধরন,
   পরিশোধ পদ্ধতি, withdrawal type/method, hub section menus, home tiles.
   Odd final item keeps normal card size (CSS grid auto-placement — never stretched).
-* **Greeting** replaces the permanent “your ID is active” banner:
-  সুপ্রভাত (05–11:59) · শুভ অপরাহ্ণ (12–16:59) · শুভ সন্ধ্যা (17–19:59) · শুভ রাত্রি (20–04:59),
-  plus “ধ্রুব সংসদে আপনাকে স্বাগতম।”. Approval news arrives via Notifications.
+* **Greeting** replaces the permanent “your ID is active” banner — ONE salutation
+  for ONE moment, never repeated: Good morning (05–11:59) · Good afternoon
+  (12–16:59) · Good evening (17–23:59) · Good night (00–04:59), then the name,
+  `Member ID … · <organisation>` and the date/time. Approval news arrives via
+  Notifications.
 * **Monthly contribution is fixed** — type=মাসিক shows
   `মাসিক চাঁদা ৳<installment>` (read-only; store layer re-derives the amount
   from the member’s configured installment regardless of client input).

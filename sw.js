@@ -9,7 +9,7 @@
  *    and statements must work offline; the Excel engine is NOT precached — it
  *    is only fetched if an export is actually used (and then cached).
  */
-const VERSION = 'ds-v7.2.1';
+const VERSION = 'ds-v7.3.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -76,6 +76,7 @@ const PRECACHE = [
   'js/util.js',
   'js/icons.js',
   'js/pdf.js',
+  'js/wa.js',
   'js/sheet.js',
   'js/preview.js',
   'js/picker.js',

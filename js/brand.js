@@ -19,7 +19,7 @@
 
 /* Single source of truth for the app version. Keep in step with the `?v=`
    cache buster on index.html and the service-worker cache name. */
-export const APP_VERSION = '7.2.1';
+export const APP_VERSION = '7.3.0';
 
 /** The one small logo used everywhere in the UI (favicon, manifest icon 192,
  *  topbar, login, footer, install prompt and print/PDF sheets). */
