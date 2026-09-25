@@ -1005,3 +1005,15 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
 .fsheet-actions .btn{flex:1;min-height:48px}
 /* export icon buttons in summary card head */
 .card-head .icon-btn{width:32px;height:32px;font-size:15px}
+/* ============ Phase GHA — reports: tiles + inline results + export bar ============ */
+.hub-tile.pick .tb{align-self:center}
+.hub-tile.on{border-color:var(--green);box-shadow:0 0 0 2px var(--green-line);background:#fafffb}
+.report-out{display:flex;flex-direction:column;gap:10px}
+.report-out:empty{display:none}
+.gen-row{margin:12px 0}
+.gen-row .btn{min-height:48px;font-size:15px}
+.export-bar{position:sticky;bottom:0;display:flex;gap:10px;justify-content:center;z-index:5;
+  padding:10px 8px calc(12px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg,transparent,var(--bg) 45%)}
+.export-bar .icon-btn{width:46px;height:46px;font-size:19px;box-shadow:var(--shadow)}
+@media(max-width:640px){.export-bar{gap:12px}}

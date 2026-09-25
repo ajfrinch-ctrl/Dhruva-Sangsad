@@ -195,6 +195,20 @@ export async function withSkeleton(host, render, opts = {}) {
   }
 }
 
+/** Sticky icon-only export bar: PDF / Excel / CSV / Print (≥44px touch targets). Omit any handler to hide that button. */
+export function exportBar({ pdf, excel, csv, print } = {}) {
+  const bar = el('div', { class: 'export-bar no-print', role: 'toolbar', 'aria-label': t('রিপোর্ট এক্সপোর্ট', 'Export report') });
+  const add = (ic, label, fn) => {
+    if (!fn) return;
+    bar.appendChild(el('button', { type: 'button', class: 'icon-btn', html: icon(ic), title: label, 'aria-label': label, onclick: fn }));
+  };
+  add('pdf', t('PDF ডাউনলোড', 'Download PDF'), pdf);
+  add('excel', t('Excel ডাউনলোড', 'Download Excel'), excel);
+  add('csv', t('CSV ডাউনলোড', 'Download CSV'), csv);
+  add('print', t('প্রিন্ট', 'Print'), print);
+  return bar;
+}
+
 /** Mobile bottom sheet (used by the “More” menu). Returns { close }. */
 export function bottomSheet({ title, items = [], body = null } = {}) {
   const back = el('div', { class: 'sheet-backdrop' });

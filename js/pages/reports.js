@@ -2,11 +2,12 @@
    Payment Method, Date Range, Member-wise — with PDF / Excel / CSV export. */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, monthKey, monthLabel,
-  typeLabel, methodLabel, PAY_METHODS, waNumber, modal, t,
+  typeLabel, methodLabel, PAY_METHODS, waNumber, t,
 } from '../util.js';
 import { logoSrc } from '../brand.js';
 import { icon } from '../icons.js';
-import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
+import { page, card, tableWrap, banner, btn, statCard, exportBar } from '../ui.js';
+import { memberPicker } from '../picker.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals,
   statementRows, approvedOf, DEFAULT_SETTINGS, withdrawalTypeLabel, summaryOpts,
@@ -98,17 +99,17 @@ function sechead(text) { return el('div', { class: 'ps-sechead', text }); }
 
 /* ---------------- report registry ---------------- */
 const REPORTS = [
-  { id: 'statement', bn: 'সদস্য স্টেটমেন্ট', en: 'Member Statement', roles: ['admin', 'maker', 'member'] },
-  { id: 'overall', bn: 'সার্বিক প্রতিবেদন', en: 'Overall Report', roles: ['admin', 'maker'] },
-  { id: 'daily', bn: 'দৈনিক প্রতিবেদন', en: 'Daily Report', roles: ['admin', 'maker'] },
-  { id: 'monthly', bn: 'মাসিক প্রতিবেদন', en: 'Monthly Report', roles: ['admin', 'maker'] },
-  { id: 'due', bn: 'বকেয়া প্রতিবেদন', en: 'Due Report', roles: ['admin', 'maker'] },
-  { id: 'advance', bn: 'অগ্রিম প্রতিবেদন', en: 'Advance Report', roles: ['admin', 'maker'] },
-  { id: 'collection', bn: 'আদায় প্রতিবেদন', en: 'Collection Report', roles: ['admin', 'maker'] },
-  { id: 'method', bn: 'পরিশোধ পদ্ধতি প্রতিবেদন', en: 'Payment Method Report', roles: ['admin', 'maker'] },
-  { id: 'range', bn: 'তারিখ অনুযায়ী প্রতিবেদন', en: 'Date Range Report', roles: ['admin', 'maker', 'member'] },
-  { id: 'memberwise', bn: 'সদস্যভিত্তিক প্রতিবেদন', en: 'Member-wise Report', roles: ['admin', 'maker'] },
-  { id: 'withdrawal', bn: 'উত্তোলন প্রতিবেদন', en: 'Withdrawal Report', roles: ['admin', 'maker', 'member'] },
+  { id: 'statement', bn: 'সদস্য স্টেটমেন্ট', en: 'Member Statement', ic: 'report', roles: ['admin', 'maker', 'member'] },
+  { id: 'overall', bn: 'সার্বিক প্রতিবেদন', en: 'Overall Report', ic: 'dashboard', roles: ['admin', 'maker'] },
+  { id: 'daily', bn: 'দৈনিক প্রতিবেদন', en: 'Daily Report', ic: 'calendar', roles: ['admin', 'maker'] },
+  { id: 'monthly', bn: 'মাসিক প্রতিবেদন', en: 'Monthly Report', ic: 'chart', roles: ['admin', 'maker'] },
+  { id: 'due', bn: 'বকেয়া প্রতিবেদন', en: 'Due Report', ic: 'due', roles: ['admin', 'maker'] },
+  { id: 'advance', bn: 'অগ্রিম প্রতিবেদন', en: 'Advance Report', ic: 'advance', roles: ['admin', 'maker'] },
+  { id: 'collection', bn: 'আদায় প্রতিবেদন', en: 'Collection Report', ic: 'money', roles: ['admin', 'maker'] },
+  { id: 'method', bn: 'পরিশোধ পদ্ধতি প্রতিবেদন', en: 'Payment Method Report', ic: 'deposit', roles: ['admin', 'maker'] },
+  { id: 'range', bn: 'তারিখ অনুযায়ী প্রতিবেদন', en: 'Date Range Report', ic: 'clock', roles: ['admin', 'maker', 'member'] },
+  { id: 'memberwise', bn: 'সদস্যভিত্তিক প্রতিবেদন', en: 'Member-wise Report', ic: 'members', roles: ['admin', 'maker'] },
+  { id: 'withdrawal', bn: 'উত্তোলন প্রতিবেদন', en: 'Withdrawal Report', ic: 'withdraw', roles: ['admin', 'maker', 'member'] },
 ];
 
 export async function pageReports(session, params = {}) {
@@ -117,21 +118,36 @@ export async function pageReports(session, params = {}) {
   const wrap = page('প্রতিবেদন', 'Reports', 'report');
   const list = REPORTS.filter(r => r.roles.includes(session.role));
 
-  const picker = el('select', { name: 'report' });
-  list.forEach(r => picker.appendChild(el('option', { value: r.id }, [t(r.bn, r.en)])));
-  if (params.report && list.some(r => r.id === params.report)) picker.value = params.report;
+  /* --- report type tiles (single-select; role-filtered) --- */
+  let selected = params.report && list.some(r => r.id === params.report) ? params.report : list[0].id;
+  const grid = el('div', { class: 'hub-grid', role: 'radiogroup', 'aria-label': t('প্রতিবেদনের ধরন', 'Report type') });
+  const paintTiles = () => {
+    [...grid.children].forEach(b => {
+      const on = b.dataset.id === selected;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  };
+  list.forEach(r => {
+    const b = el('button', {
+      type: 'button', class: 'hub-tile pick', role: 'radio', 'aria-checked': 'false',
+      html: `<span class="tic">${icon(r.ic)}</span><span class="tb"><span class="tt">${esc(t(r.bn, r.en))}</span></span>`,
+    });
+    b.dataset.id = r.id;
+    b.addEventListener('click', () => { if (selected === r.id) return; selected = r.id; paintTiles(); build(); });
+    grid.appendChild(b);
+  });
+  paintTiles();
+  wrap.appendChild(card('প্রতিবেদনের ধরন', 'Report Type', grid));
 
-  const pf = el('div', { class: 'field', style: 'flex:1 1 240px' });
-  pf.appendChild(el('label', { text: t('প্রতিবেদন নির্বাচন', 'Select Report') }));
-  pf.appendChild(picker);
+  /* --- context filters for the selected report --- */
+  const filterHost = el('div', { class: 'toolbar' });
+  const filterCard = card('ফিল্টার', 'Filters', filterHost);
+  filterCard.classList.add('overflow-visible');
+  wrap.appendChild(filterCard);
 
-  const filterHost = el('div', { class: 'toolbar', style: 'flex:1 1 100%' });
-  const top = el('div', { class: 'toolbar' });
-  top.append(pf, filterHost);
-  wrap.appendChild(card('প্রতিবেদন নির্বাচন ও ফিল্টার', 'Report Selection & Filters', top));
-
-  const out = el('div');
-  wrap.appendChild(out);
+  /* Results render inline here (appended after the generate button below). */
+  const out = el('div', { class: 'report-out' });
 
   const ctx = { session, members, deposits, withdrawals: [], cfg, out, filterHost, render: null };
   ctx.withdrawals = await allWithdrawals().catch(() => []);
@@ -140,12 +156,13 @@ export async function pageReports(session, params = {}) {
     filterHost.replaceChildren();
     out.replaceChildren();
     ctx.render = null;
-    const r = REPORTS.find(x => x.id === picker.value) || list[0];
+    const r = REPORTS.find(x => x.id === selected) || list[0];
+    selected = r.id; paintTiles();
     BUILDERS[r.id](ctx, r);
   };
 
   // "Generate Report" button — the report is rendered only on click, using fresh data.
-  const genRow = el('div', { class: 'btn-row', style: 'margin-bottom:10px' });
+  const genRow = el('div', { class: 'gen-row' });
   genRow.appendChild(btn(t('রিপোর্ট তৈরি করুন', 'Generate Report'), 'report', 'primary', async () => {
     const [m2, d2, c2] = await Promise.all([allMembers(), allDeposits(), settings()]);
     ctx.members = m2; ctx.deposits = d2; ctx.cfg = c2; WA_TPL = c2.waTemplate || WA_TPL;
@@ -153,13 +170,13 @@ export async function pageReports(session, params = {}) {
     if (!ctx.render) {
       build(); // (re)initialise the builder with fresh data (e.g. members now exist)
     }
-    if (!ctx.render) { toast('প্রতিবেদন নির্বাচন করুন / Select a report first', 'warn'); return; }
+    if (!ctx.render) { toast('প্রতিবেদন নির্বাচন করুন', 'warn'); return; }
     try { await ctx.render(); }
     catch (err) { toast(err.message || String(err), 'error'); }
-  }));
+  }, { block: true }));
   wrap.appendChild(genRow);
+  wrap.appendChild(out);
 
-  picker.addEventListener('change', build);
   build();
   if (session.role === 'member' && ctx.render) {
     Promise.resolve().then(() => ctx.render()).catch(err => toast(err.message || String(err), 'error'));
@@ -167,17 +184,17 @@ export async function pageReports(session, params = {}) {
   return wrap;
 }
 
-/* ---------------- shared output shell (report opens in a modal) ---------------- */
+/* ---------------- shared output shell (inline results + sticky export bar) ---------------- */
 function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase, orientation = 'p', criteria = '' }) {
   ctx.out.replaceChildren();
 
-  const body = el('div');
+  const box = el('div');
   if (criteria) {
-    body.appendChild(el('div', { class: 'banner info', html: `${icon('filter')}<span>${esc(criteria)}</span>` }));
+    box.appendChild(el('div', { class: 'banner info', html: `${icon('filter')}<span>${esc(criteria)}</span>` }));
   }
-  if (screen) { screen.classList.add('no-print'); body.appendChild(screen); }
+  if (screen) { screen.classList.add('no-print'); box.appendChild(card(titleBn, titleEn, screen)); }
   sheet.classList.add('sheet-offscreen');
-  body.appendChild(sheet);
+  box.appendChild(sheet);
 
   const doPdf = async () => {
     toast('PDF তৈরি হচ্ছে… / Generating PDF…', 'info', 1600);
@@ -212,18 +229,10 @@ function outputCard(ctx, { titleBn, titleEn, sheet, screen, excelRows, fileBase,
     window.print();
   };
 
-  return modal({
-    title: `${titleBn} / ${titleEn}`,
-    body,
-    width: 960,
-    actions: [
-      { label: 'Download PDF', kind: 'softred', value: null, onClick: () => { doPdf(); return false; } },
-      { label: 'Download Excel', kind: 'soft', value: null, onClick: () => { doExcel(); return false; } },
-      { label: 'Download CSV', kind: 'ghost', value: null, onClick: () => { doCsv(); return false; } },
-      { label: 'Print', kind: 'ghost', value: null, onClick: () => { doPrint(); return false; } },
-      { label: 'Close', kind: 'primary', value: true },
-    ],
-  });
+  box.appendChild(exportBar({ pdf: doPdf, excel: doExcel, csv: doCsv, print: doPrint }));
+  ctx.out.replaceChildren(box);
+  /* Bring the results into view (no-op under test DOMs without scrolling). */
+  try { if (box.scrollIntoView) box.scrollIntoView({ block: 'start' }); } catch { /* ignore */ }
 }
 
 function mkField(label, node, w = '140px') {
@@ -231,15 +240,6 @@ function mkField(label, node, w = '140px') {
   f.appendChild(el('label', { text: label }));
   f.appendChild(node);
   return f;
-}
-function memberSelect(members, { includeAll = false, value = '' } = {}) {
-  const s = el('select');
-  if (includeAll) s.appendChild(el('option', { value: '' }, ['সকল সদস্য / All Members']));
-  else s.appendChild(el('option', { value: '' }, ['— সদস্য নির্বাচন / Select member —']));
-  members.slice().sort((a, b) => a.memberId.localeCompare(b.memberId)).forEach(m => {
-    s.appendChild(el('option', { value: m.id, ...(value === m.id ? { selected: true } : {}) }, [`${m.memberId} — ${m.nameBn || m.nameEn}`]));
-  });
-  return s;
 }
 const cfgOf = ctx => summaryOpts(ctx.cfg);
 
@@ -250,15 +250,28 @@ function rStatement(ctx, meta) {
   const pool = () => own ? ctx.members.filter(m => m.id === session.memberDocId) : ctx.members;
   if (!pool().length) { ctx.out.appendChild(banner('info', 'কোনো সদস্য পাওয়া যায়নি / No member found')); return; }
 
-  const sel = memberSelect(pool(), { value: own ? session.memberDocId : (pool()[0] && pool()[0].id) });
-  if (own) sel.disabled = true;
+  /* Staff search by ID/name/mobile; members see only themselves (read-only). */
+  let getMemberId;
+  if (own) {
+    const m0 = pool()[0];
+    const hidden = el('input', { type: 'hidden', value: m0 ? m0.id : '' });
+    const ro = el('input', { value: m0 ? `${m0.memberId} — ${m0.nameBn || m0.nameEn}` : '', readonly: true });
+    const f = mkField('সদস্য', ro, '220px');
+    f.appendChild(hidden);
+    ctx.filterHost.append(f);
+    getMemberId = () => hidden.value || session.memberDocId;
+  } else {
+    const pick = memberPicker({ members: pool(), value: (pool()[0] && pool()[0].id) || '' });
+    ctx.filterHost.append(mkField('সদস্য', pick.root, '220px'));
+    getMemberId = () => pick.value;
+  }
   const from = el('input', { type: 'date' });
   const to = el('input', { type: 'date' });
-  ctx.filterHost.append(mkField('সদস্য / Member', sel, '220px'), mkField('হইতে / From', from, '130px'), mkField('পর্যন্ত / To', to, '130px'));
+  ctx.filterHost.append(mkField('শুরু', from, '130px'), mkField('শেষ', to, '130px'));
 
   function render() {
     const currentPool = pool();
-    const m = currentPool.find(x => x.id === (sel.value || (own ? session.memberDocId : ''))) || currentPool[0];
+    const m = currentPool.find(x => x.id === getMemberId()) || currentPool[0];
     if (!m) { toast('সদস্য নির্বাচন করুন / Select a member', 'warn'); return; }
     const s = memberSummary(m, ctx.deposits, cfgOf(ctx));
     let rows = statementRows(s);
@@ -290,10 +303,10 @@ function rStatement(ctx, meta) {
 
     const stats = el('div', { class: 'stats' });
     stats.append(
-      statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count} approved`, ic: 'money' }),
+      statCard({ label: 'মোট জমা / Total Deposit', value: taka(s.totalDeposit), sub: `${s.count}টি অনুমোদিত`, ic: 'money' }),
       statCard({ label: 'বকেয়া / Due', value: taka(s.due), sub: `প্রয়োজন ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
       statCard({ label: 'অগ্রিম / Advance', value: taka(s.advance), sub: `${s.months} মাস`, ic: 'advance', tone: 'blue' }),
-      statCard({ label: 'এই সময়কালে / In period', value: taka(periodTotal), sub: `${rows.length} entry`, ic: 'calendar', tone: 'gray' }),
+      statCard({ label: 'এই সময়কালে / In period', value: taka(periodTotal), sub: `${rows.length}টি এন্ট্রি`, ic: 'calendar', tone: 'gray' }),
     );
 
     outputCard(ctx, {
@@ -320,8 +333,8 @@ function rStatement(ctx, meta) {
 /* ================= 2. Overall Report ================= */
 async function rOverall(ctx, meta) {
   const stSel = el('select');
-  [['active', 'শুধু Active'], ['', 'সব সদস্য / All'], ['pending', 'Pending']].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
-  ctx.filterHost.append(mkField('সদস্য স্ট্যাটাস / Status', stSel, '160px'));
+  [['active', 'শুধু সক্রিয়'], ['', 'সব সদস্য'], ['pending', 'অপেক্ষমাণ']].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
+  ctx.filterHost.append(mkField('সদস্য স্ট্যাটাস', stSel, '160px'));
 
   function render() {
     const pool = ctx.members.filter(m => (stSel.value ? m.status === stSel.value : m.status !== 'rejected'));
@@ -347,7 +360,7 @@ async function rOverall(ctx, meta) {
     sheet.appendChild(sheetFoot(ctx.cfg, `${sums.length} member(s)`));
 
     const screen = tableWrap(
-      [{ label: 'Member Name' }, { label: 'Monthly Installment', cls: 'num' }, { label: 'Total Deposit', cls: 'num' }, { label: 'Total Due', cls: 'num' }],
+      [{ label: 'সদস্য' }, { label: 'মাসিক কিস্তি', cls: 'num' }, { label: 'মোট জমা', cls: 'num' }, { label: 'বকেয়া', cls: 'num' }],
       sums.map(s => [
         `${esc(s.member.nameBn)}<br><span class="faint fs8">${esc(s.member.memberId)}</span>`,
         { text: money(s.member.installment), cls: 'num' },
@@ -355,7 +368,7 @@ async function rOverall(ctx, meta) {
         { html: s.due > 0 ? `<span class="due-amt">${money(s.due)}</span>` : '0', cls: 'num' },
       ]),
       {
-        footer: [{ html: '<b>Total Collection / Total Due</b>' }, { html: '' },
+        footer: [{ html: '<b>সর্বমোট</b>' }, { html: '' },
           { html: `<b>${money(tot.totalDeposit)}</b>`, cls: 'num' }, { html: `<b>${money(tot.totalDue)}</b>`, cls: 'num' }],
       },
     );
@@ -382,9 +395,9 @@ function periodReport(ctx, meta, mode) {
   const mInput = el('input', { type: 'month', value: monthKey(todayISO()) });
   const from = el('input', { type: 'date', value: monthKey(todayISO()) + '-01' });
   const to = el('input', { type: 'date', value: todayISO() });
-  if (mode === 'daily') ctx.filterHost.append(mkField('তারিখ / Date', dInput, '150px'));
-  else if (mode === 'monthly') ctx.filterHost.append(mkField('মাস / Month', mInput, '150px'));
-  else ctx.filterHost.append(mkField('হইতে / From', from, '140px'), mkField('পর্যন্ত / To', to, '140px'));
+  if (mode === 'daily') ctx.filterHost.append(mkField('তারিখ', dInput, '150px'));
+  else if (mode === 'monthly') ctx.filterHost.append(mkField('মাস', mInput, '150px'));
+  else ctx.filterHost.append(mkField('শুরু', from, '140px'), mkField('শেষ', to, '140px'));
 
   function render() {
     let rows, label, fileBase;
@@ -472,9 +485,9 @@ function rDueAdvance(ctx, meta, kind) {
     sheet.appendChild(sheetFoot(ctx.cfg, `${sums.length} member(s)`));
 
     const screen = tableWrap(
-      [{ label: 'SL', cls: 'num' }, { label: 'ID' }, { label: 'নাম / Name' }, { label: 'Mobile' },
+      [{ label: 'ক্রম', cls: 'num' }, { label: 'ID' }, { label: 'নাম' }, { label: 'মোবাইল' },
        { label: 'কিস্তি', cls: 'num' }, { label: 'জমা', cls: 'num' }, { label: kind === 'due' ? 'বকেয়া' : 'অগ্রিম', cls: 'num' },
-       ...(kind === 'due' && can(session, 'whatsapp') ? [{ label: 'Reminder', cls: 'nowrap' }] : [])],
+       ...(kind === 'due' && can(session, 'whatsapp') ? [{ label: 'রিমাইন্ডার', cls: 'nowrap' }] : [])],
       sums.map((s, i) => {
         const cells = [
           { text: String(i + 1), cls: 'num' }, `<b>${esc(s.member.memberId)}</b>`, esc(s.member.nameBn),
@@ -488,9 +501,9 @@ function rDueAdvance(ctx, meta, kind) {
         return cells;
       }),
       {
-        empty: kind === 'due' ? 'কোনো বকেয়া সদস্য নেই / No member with due' : 'কোনো অগ্রিম জমা নেই / No advance found',
+        empty: kind === 'due' ? 'কোনো বকেয়া সদস্য নেই' : 'কোনো অগ্রিম জমা নেই',
         emptyIcon: kind === 'due' ? 'due' : 'advance',
-        footer: sums.length ? [{ html: '' }, { html: '' }, { html: `<b>${sums.length} member(s)</b>` }, { html: '' }, { html: '' }, { html: '<b>Total</b>', cls: 'num' },
+        footer: sums.length ? [{ html: '' }, { html: '' }, { html: `<b>${sums.length} জন</b>` }, { html: '' }, { html: '' }, { html: '<b>সর্বমোট</b>', cls: 'num' },
           { html: `<b>${money(total)}</b>`, cls: 'num' }, ...(kind === 'due' && can(session, 'whatsapp') ? [{ html: '' }] : [])] : null,
       },
     );
@@ -526,7 +539,7 @@ function rCollection(ctx, meta) {
   const yr = el('select');
   const years = Array.from(new Set(approvedOf(ctx.deposits).map(d => String(d.date).slice(0, 4)).concat([String(new Date().getFullYear())]))).sort();
   years.forEach(y => yr.appendChild(el('option', { value: y, ...(y === String(new Date().getFullYear()) ? { selected: true } : {}) }, [y])));
-  ctx.filterHost.append(mkField('বছর / Year', yr, '120px'));
+  ctx.filterHost.append(mkField('বছর', yr, '120px'));
 
   function render() {
     const y = yr.value;
@@ -561,7 +574,7 @@ function rCollection(ctx, meta) {
 
     outputCard(ctx, {
       titleBn: meta.bn, titleEn: `${meta.en} — ${y}`, sheet, screen: chart,
-      criteria: `বছর / Year: ${y}`,
+      criteria: `বছর: ${y}`,
       fileBase: `Dhruvo_Sangsad_Collection_Report_${y}`,
       excelRows: () => {
         const out = [['Month', 'Transactions', 'Cash', 'Mobile Banking', 'Bank', 'Total Collection']];
@@ -578,7 +591,7 @@ function rCollection(ctx, meta) {
 function rMethod(ctx, meta) {
   const from = el('input', { type: 'date', value: monthKey(todayISO()) + '-01' });
   const to = el('input', { type: 'date', value: todayISO() });
-  ctx.filterHost.append(mkField('হইতে / From', from, '140px'), mkField('পর্যন্ত / To', to, '140px'));
+  ctx.filterHost.append(mkField('শুরু', from, '140px'), mkField('শেষ', to, '140px'));
 
   function render() {
     const rows = approvedOf(ctx.deposits).filter(d => {
@@ -636,13 +649,14 @@ function rMethod(ctx, meta) {
 
 /* ================= 10. Member-wise report ================= */
 function rMemberWise(ctx, meta) {
-  const sel = memberSelect(ctx.members, { includeAll: true });
+  /* Empty picker = all members; picking one narrows the report to them. */
+  const pick = memberPicker({ members: ctx.members, placeholder: 'খালি রাখলে সকল সদস্য…' });
   const from = el('input', { type: 'date' });
   const to = el('input', { type: 'date' });
-  ctx.filterHost.append(mkField('সদস্য / Member', sel, '220px'), mkField('হইতে / From', from, '130px'), mkField('পর্যন্ত / To', to, '130px'));
+  ctx.filterHost.append(mkField('সদস্য', pick.root, '220px'), mkField('শুরু', from, '130px'), mkField('শেষ', to, '130px'));
 
   function render() {
-    const pool = sel.value ? ctx.members.filter(m => m.id === sel.value) : ctx.members.filter(m => m.status !== 'rejected');
+    const pool = pick.value ? ctx.members.filter(m => m.id === pick.value) : ctx.members.filter(m => m.status !== 'rejected');
     const inRange = d => {
       const x = String(d.date).slice(0, 10);
       return (!from.value || x >= from.value) && (!to.value || x <= to.value);
@@ -685,7 +699,7 @@ function rMemberWise(ctx, meta) {
     sheet.appendChild(sheetFoot(ctx.cfg, `${data.length} member(s)`));
 
     const screen = tableWrap(
-      [{ label: 'ID' }, { label: 'নাম / Name' }, { label: 'কিস্তি', cls: 'num' }, { label: 'এন্ট্রি', cls: 'num' },
+      [{ label: 'ID' }, { label: 'নাম' }, { label: 'কিস্তি', cls: 'num' }, { label: 'এন্ট্রি', cls: 'num' },
        { label: 'সময়কালীন জমা', cls: 'num' }, { label: 'মোট জমা', cls: 'num' }, { label: 'বকেয়া', cls: 'num' }, { label: 'অগ্রিম', cls: 'num' }],
       data.map(r => [
         `<b>${esc(r.m.memberId)}</b>`, esc(r.m.nameBn), { text: money(r.m.installment), cls: 'num' },
@@ -694,7 +708,7 @@ function rMemberWise(ctx, meta) {
         { html: r.s.due > 0 ? `<span class="due-amt">${money(r.s.due)}</span>` : '0', cls: 'num' },
         { html: r.s.advance > 0 ? `<span class="adv-amt">${money(r.s.advance)}</span>` : '0', cls: 'num' },
       ]),
-      { footer: [{ html: '<b>Total</b>' }, { html: '' }, { html: '' }, { html: '' }, { html: `<b>${money(gTotal)}</b>`, cls: 'num' },
+      { footer: [{ html: '<b>সর্বমোট</b>' }, { html: '' }, { html: '' }, { html: '' }, { html: `<b>${money(gTotal)}</b>`, cls: 'num' },
         { html: `<b>${money(data.reduce((s, r) => s + r.s.totalDeposit, 0))}</b>`, cls: 'num' },
         { html: `<b>${money(data.reduce((s, r) => s + r.s.due, 0))}</b>`, cls: 'num' },
         { html: `<b>${money(data.reduce((s, r) => s + r.s.advance, 0))}</b>`, cls: 'num' }] },
@@ -703,7 +717,7 @@ function rMemberWise(ctx, meta) {
     outputCard(ctx, {
       titleBn: meta.bn, titleEn: meta.en, sheet, screen, orientation: 'l',
       criteria: period,
-      fileBase: sel.value ? `Dhruvo_Sangsad_Member_${data[0].m.memberId}_Report` : `Dhruvo_Sangsad_Member_wise_Report_${fmtDate(todayISO())}`,
+      fileBase: pick.value ? `Dhruvo_Sangsad_Member_${data[0].m.memberId}_Report` : `Dhruvo_Sangsad_Member_wise_Report_${fmtDate(todayISO())}`,
       excelRows: () => {
         const out = [['SL', 'Member ID', 'Member Name', 'Mobile', 'Monthly Installment', 'Entries', 'Period Deposit', 'Total Deposit', 'Total Due', 'Total Advance', 'Status']];
         data.forEach((r, i) => out.push([i + 1, r.m.memberId, r.m.nameEn || r.m.nameBn, r.m.mobile, num(r.m.installment), r.list.length, r.periodTotal, r.s.totalDeposit, r.s.due, r.s.advance, r.m.status]));
@@ -721,7 +735,7 @@ function rWithdrawal(ctx, meta) {
   const own = session.role === 'member';
   const from = el('input', { type: 'date' });
   const to = el('input', { type: 'date' });
-  ctx.filterHost.append(mkField('হইতে / From', from, '140px'), mkField('পর্যন্ত / To', to, '140px'));
+  ctx.filterHost.append(mkField('শুরু', from, '140px'), mkField('শেষ', to, '140px'));
 
   function render() {
     let rows = (own ? ctx.withdrawals.filter(w => w.memberDocId === session.memberDocId || w.memberId === session.memberId) : ctx.withdrawals)
@@ -745,7 +759,7 @@ function rWithdrawal(ctx, meta) {
     sheet.appendChild(sheetFoot(ctx.cfg, `${rows.length} withdrawal(s)`));
 
     const screen = tableWrap(
-      [{ label: 'Date' }, { label: 'Member' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }],
+      [{ label: 'তারিখ' }, { label: 'সদস্য' }, { label: 'ধরন' }, { label: 'পদ্ধতি' }, { label: 'পরিমাণ', cls: 'num' }],
       rows.map(w => [
         esc(fmtDate(w.date)),
         `${esc(w.memberName)}<br><span class="faint fs8">${esc(w.memberId)}</span>`,
@@ -753,8 +767,8 @@ function rWithdrawal(ctx, meta) {
         { text: money(w.amount), cls: 'num' },
       ]),
       {
-        empty: 'কোনো উত্তোলন পাওয়া যায়নি / No withdrawals found', emptyIcon: 'withdraw',
-        footer: rows.length ? [{ html: '' }, { html: '<b>Total</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }] : null,
+        empty: 'কোনো উত্তোলন পাওয়া যায়নি', emptyIcon: 'withdraw',
+        footer: rows.length ? [{ html: '' }, { html: '<b>সর্বমোট</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }] : null,
       },
     );
 
