@@ -2,8 +2,8 @@
    Nothing else is rendered while unauthenticated.
    Modern mobile-first layout: gradient hero, icon inputs, live hints,
    loading spinners, Bengali-first labels. Field names & validation unchanged. */
-import { el, clear, $, toast, alertBox, esc, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
-import { logoSrc, APP_VERSION } from './brand.js';
+import { el, clear, $, toast, alertBox, esc, tx, auto, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
+import { logoSrc } from './brand.js';
 import { getLang, setLang } from './i18n.js';
 import { icon } from './icons.js';
 import { login, recoverPassword, findMemberForRecovery, verifyRecoveryDob } from './auth.js';
@@ -19,9 +19,9 @@ export function renderAuth(root, onLoggedIn) {
   const card = el('div', { class: 'auth-card' });
   card.innerHTML = `
     <div class="auth-brand">
-      <div class="auth-logo"><img class="js-org-logo" src="${esc(logoSrc())}" alt="ধ্রুব সংসদ"></div>
-      <h1>ধ্রুব সংসদ</h1>
-      <div class="sub">Dhruvo Sangsad · সদস্য ও জমা ব্যবস্থাপনা</div>
+      <div class="auth-logo"><img class="js-org-logo" src="${esc(logoSrc())}" alt="ধ্রুব সংসদ" width="96" height="96" decoding="async" fetchpriority="high"></div>
+      <h1>${t('ধ্রুব সংসদ', 'Dhruvo Sangsad')}</h1>
+      <div class="auth-welcome">${t('স্বাগতম', 'Welcome')}</div>
     </div>
     <div class="auth-tabs" id="authTabs">
       <button type="button" data-m="login" class="${mode === 'login' ? 'on' : ''}">${icon('login')} ${t('লগইন', 'Login')}</button>
@@ -32,12 +32,12 @@ export function renderAuth(root, onLoggedIn) {
       <button type="button" data-lang="bn" class="${getLang() === 'bn' ? 'on' : ''}">বাংলা</button>
       <button type="button" data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">English</button>
     </div>
-    <div class="auth-foot">v${APP_VERSION} · ${t('অফলাইনেও কাজ করে', 'Works offline')}</div>`;
+`;
   const themeBtn = el('button', { class: 'icon-btn auth-theme-btn', type: 'button' });
   const paint = () => {
     const dark = getTheme() === 'amoled';
     themeBtn.innerHTML = icon(dark ? 'sun' : 'moon');
-    themeBtn.title = dark ? 'লাইট মোড / Light' : 'হার্ড ডার্ক / Hard dark';
+    themeBtn.title = dark ? t('লাইট মোড', 'Light mode') : t('হার্ড ডার্ক', 'Hard dark');
   };
   paint();
   themeBtn.addEventListener('click', () => { toggleTheme(); paint(); });
@@ -87,9 +87,9 @@ function loginForm(body, root, onLoggedIn) {
   f.innerHTML = `
     <h2 class="auth-h">${t('লগইন', 'Login')}</h2>
     <div class="field">
-      <label>${t('ইউজারনেম অথবা মোবাইল নম্বর', 'Username or mobile number')} <span class="req">*</span></label>
-      <input name="identifier" inputmode="text" autocomplete="username" placeholder="${t('ইউজারনেম বা 01XXXXXXXXX', 'Username or 01XXXXXXXXX')}" required>
-      <div class="hint">${t('সদস্য: মোবাইল নম্বর। Admin/Maker: নিজের ইউজারনেম।', 'Members: mobile number. Admin/Maker: own username.')}</div>
+      <label>${t('সদস্য আইডি / মোবাইল নম্বর', 'Member ID / mobile number')} <span class="req">*</span></label>
+      <input name="identifier" inputmode="text" autocomplete="username" placeholder="${t('সদস্য আইডি বা 01XXXXXXXXX', 'Member ID or 01XXXXXXXXX')}" required>
+      <div class="hint">${t('সদস্য মোবাইল নম্বর দিয়ে লগইন করবেন, Admin/Maker নিজের ইউজারনেম দিয়ে।', 'Members sign in with their mobile number; Admin/Maker with their username.')}</div>
     </div>
     <div class="field">
       <label>${t('পাসওয়ার্ড', 'Password')} <span class="req">*</span></label>
@@ -99,11 +99,9 @@ function loginForm(body, root, onLoggedIn) {
       <label class="check"><input type="checkbox" name="remember"> ${t('এই ডিভাইসে মনে রাখুন', 'Remember me')}</label>
       <button class="link-btn" type="button" id="toForgot">${t('পাসওয়ার্ড ভুলে গেছেন?', 'Forgot Password?')}</button>
     </div>
-    <button class="btn btn-primary btn-lg btn-block" type="submit"><span>${t('লগইন করুন', 'Login')}</span></button>
-    <div class="err center" id="loginErr"></div>
-    <div class="auth-foot-link">${t('অ্যাকাউন্ট নেই?', 'No account?')} <button type="button" class="link-btn" id="toRegister">${t('নিবন্ধন করুন', 'Register')}</button></div>`;
+    <button class="btn btn-primary btn-lg btn-block" type="submit"><span>${t('লগইন', 'Login')}</span></button>
+    <div class="err center" id="loginErr"></div>`;
   body.appendChild(f);
-  f.querySelector('#toRegister').addEventListener('click', () => { mode = 'register'; renderAuth(root, onLoggedIn); });
   pwToggle(f.elements.password);
   /* Digits-only input gets the telephone keypad; usernames keep the text one. */
   f.elements.identifier.addEventListener('input', () => {
@@ -139,7 +137,8 @@ function forgotForm(body, root, onLoggedIn) {
   body.appendChild(holder);
   let found = null;
 
-  const errHtml = msg => `<span class="form-err">${esc(msg)}</span>`;
+  /* legacy 'বাংলা / English' messages are split to the active language */
+  const errHtml = msg => `<span class="form-err">${esc(auto(msg))}</span>`;
   const months = [
     [1, 'জানুয়ারি / January'], [2, 'ফেব্রুয়ারি / February'], [3, 'মার্চ / March'],
     [4, 'এপ্রিল / April'], [5, 'মে / May'], [6, 'জুন / June'],
@@ -204,7 +203,7 @@ function forgotForm(body, root, onLoggedIn) {
         <div class="field"><label>${t('জন্ম মাস', 'Birth month')} <span class="req">*</span></label>
           <select name="dobMonth" required>
             <option value="">— ${t('মাস', 'Month')} —</option>
-            ${months.map(([n, l]) => `<option value="${n}">${l}</option>`).join('')}
+            ${months.map(([n, l]) => `<option value="${n}">${esc(tx(l))}</option>`).join('')}
           </select></div>
       </div>
       <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('check')}<span>${t('যাচাই করুন', 'Verify')}</span></button>
@@ -398,7 +397,7 @@ async function registerForm(body, root, onLoggedIn) {
 
   const setErr = (name, msg) => {
     const box = f.querySelector(`[data-err="${name}"]`);
-    if (box) { box.textContent = msg; box.closest('.field').classList.add('bad'); }
+    if (box) { box.textContent = auto(msg); box.closest('.field').classList.add('bad'); }
   };
   const clearErrs = () => {
     f.querySelectorAll('.err').forEach(x => x.textContent = '');

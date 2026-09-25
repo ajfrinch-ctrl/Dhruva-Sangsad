@@ -1,149 +1,238 @@
 /* Statements — the ONE authoritative statement implementation.
-   Members: their own passbook. Staff: pick a member.
-   Flow: context → period → [View Statement] → popup preview (exact PDF) →
-   Download PDF only. No duplicate statement page in Reports/Profile. */
+ *
+ *   STATEMENT = what happened to this member's account, over time.
+ *   Columns  = Date · Description · Deposit · Payment · Balance
+ *              (no serial number, no transaction-id column)
+ *   Output   = ALWAYS English: the on-screen preview and the downloaded PDF
+ *              are the same sheet node, so they cannot disagree — and the PDF
+ *              stays English even when the UI language is বাংলা.
+ *
+ * Staff choose a member here; a member automatically gets their own account and
+ * is never shown a member filter.
+ */
 import {
-  el, esc, toast, taka, money, num, fmtDate, todayISO, typeLabel, methodLabel, t,
+  el, esc, toast, taka, num, fmtDate, fmtDateEn, todayISO, t, tx,
+  typeLabel, methodLabel,
 } from '../util.js';
-import { page, card, tableWrap, banner, btn, statCard } from '../ui.js';
+import { page, card, statementTable, banner, btn, statCard, kv, sectionHead } from '../ui.js';
 import { memberPicker } from '../picker.js';
-import { allMembers, allDeposits, allWithdrawals, settings, memberSummary, summaryOpts, statementRows, withdrawalBalance } from '../store.js';
+import {
+  allMembers, allDeposits, allWithdrawals, settings, memberSummary, summaryOpts, statementRows,
+  withdrawalBalance, withdrawalTypeLabel,
+} from '../store.js';
 import { buildSheet, psInfo, psTable, sechead } from '../sheet.js';
 import { previewReport, reportFileName } from '../preview.js';
 
+const isStaff = session => session.role === 'admin' || session.role === 'maker';
+const monthStart = () => todayISO().slice(0, 7) + '-01';
+const prevMonth = () => {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  const p = n => String(n).padStart(2, '0');
+  return { from: `${d.getFullYear()}-${p(d.getMonth() + 1)}-01`, to: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())}` };
+};
+
+/** English description used by the printable sheet (matches the PDF). */
+export function statementDescription(row) {
+  const label = row.kind === 'deposit' ? typeLabel(row.type).en : withdrawalTypeLabel(row.type).en;
+  const method = methodLabel(row.method).en;
+  const extra = row.description ? ` — ${row.description}` : '';
+  return `${label} · ${method}${extra}`;
+}
+
 export async function pageStatements(session, params = {}) {
-  const [members, deposits, withdrawals, cfg] = await Promise.all([allMembers(), allDeposits(), allWithdrawals(), settings()]);
-  const own = session.role === 'member';
-  const wrap = page('স্টেটমেন্ট', 'Statements', 'report');
+  const staff = isStaff(session);
+  const [members, deposits, withdrawals, cfg] = await Promise.all([
+    allMembers(), allDeposits(), allWithdrawals(), settings(),
+  ]);
+  const wrap = page(t('স্টেটমেন্ট', 'Statement'), 'Member Statement', 'report');
 
-  /* ---- member selection ---- */
-  let memberId = '';
-  const pool = () => own ? members.filter(m => m.id === session.memberDocId) : members;
-  if (!pool().length) { wrap.appendChild(banner('err', t('কোনো সদস্য পাওয়া যায়নি / No member found', 'No member found'))); return wrap; }
-
-  const from = el('input', { type: 'date' });
-  const to = el('input', { type: 'date' });
-  let pick = null;
-  const filterHost = el('div', { class: 'toolbar' });
-  if (own) {
-    const m0 = pool()[0];
-    const ro = el('input', { value: m0 ? `${m0.memberId} — ${m0.nameBn || m0.nameEn}` : '', readonly: true });
-    memberId = m0 ? m0.id : '';
-    const f = el('div', { class: 'field', style: 'flex:1 1 220px' });
+  /* ---- member context: members get their own, staff pick one ---- */
+  let memberDocId = '';
+  let picker = null;
+  if (staff) {
+    const pool = members.filter(m => m.status !== 'rejected');
+    if (!pool.length) { wrap.appendChild(banner('err', esc(t('কোনো সদস্য পাওয়া যায়নি।', 'No member found.')))); return wrap; }
+    const host = el('div', { class: 'toolbar' });
+    picker = memberPicker({
+      members: pool,
+      value: params.memberDocId || '',
+      placeholder: t('সদস্য খুঁজুন (নাম / আইডি / মোবাইল)…', 'Find a member (name / ID / mobile)…'),
+      onPick: () => paint(),
+    });
+    const f = el('div', { class: 'field' });
     f.appendChild(el('label', { text: t('সদস্য', 'Member') }));
-    f.appendChild(ro);
-    filterHost.appendChild(f);
+    f.appendChild(picker.root);
+    host.appendChild(f);
+    const pickerCard = card(t('সদস্য নির্বাচন', 'Choose member'), 'Statement', host);
+    pickerCard.classList.add('overflow-visible');
+    wrap.appendChild(pickerCard);
+    memberDocId = picker.value || '';
   } else {
-    pick = memberPicker({ members: pool(), value: params.memberDocId || '' });
-    const f = el('div', { class: 'field', style: 'flex:1 1 220px' });
-    f.appendChild(el('label', { text: t('সদস্য', 'Member') }));
-    f.appendChild(pick.root);
-    filterHost.appendChild(f);
-    const fc = card(t('সদস্য নির্বাচন', 'Choose member'), '', filterHost);
-    fc.classList.add('overflow-visible');
-    wrap.appendChild(fc);
-    memberId = pick.value || '';
+    memberDocId = session.memberDocId || '';
   }
-  if (own) {
-    const fc = card(t('সময়কাল (ঐচ্ছিক)', 'Period (optional)'), '', filterHost);
-    wrap.appendChild(fc);
-  }
+
+  /* ---- period: optional; the user decides, nothing is hard-coded ---- */
+  const fromEl = el('input', { type: 'date', value: params.from || '' });
+  const toEl = el('input', { type: 'date', value: params.to || '' });
+  const periodHost = el('div', { class: 'toolbar' });
   const mkDate = (label, node) => {
-    const f = el('div', { class: 'field', style: 'flex:0 1 150px' });
+    const f = el('div', { class: 'field', style: 'flex:1 1 150px' });
     f.appendChild(el('label', { text: label }));
     f.appendChild(node);
     return f;
   };
-  filterHost.append(mkDate(t('শুরু', 'From'), from), mkDate(t('শেষ', 'To'), to));
+  periodHost.append(mkDate(t('শুরু', 'From'), fromEl), mkDate(t('শেষ', 'To'), toEl));
+  const quick = el('div', { class: 'seg' });
+  [
+    { id: 'all', label: t('সব সময়', 'All time') },
+    { id: 'month', label: t('এই মাস', 'This month') },
+    { id: 'last', label: t('গত মাস', 'Last month') },
+  ].forEach(q => {
+    const b = el('button', { type: 'button', class: 'seg-chip', text: q.label });
+    b.addEventListener('click', () => {
+      if (q.id === 'all') { fromEl.value = ''; toEl.value = ''; }
+      else if (q.id === 'month') { fromEl.value = monthStart(); toEl.value = todayISO(); }
+      else { const p = prevMonth(); fromEl.value = p.from; toEl.value = p.to; }
+      [...quick.children].forEach(c => c.classList.toggle('on', c === b));
+      paint();
+    });
+    quick.appendChild(b);
+  });
+  quick.firstChild.classList.add('on');
+  const periodCard = card(t('সময়কাল (ঐচ্ছিক)', 'Period (optional)'), 'Statement period', el('div', {}, [quick, periodHost]));
+  wrap.appendChild(periodCard);
 
-  /* live summary of the selected member (current status) */
   const infoHost = el('div');
+  const bodyHost = el('div');
   wrap.appendChild(infoHost);
-  const paintInfo = () => {
+  wrap.appendChild(bodyHost);
+
+  /* ---- render the statement on screen immediately (no PDF needed) ---- */
+  let current = null;
+
+  function paint() {
     infoHost.replaceChildren();
-    const id = own ? memberId : (pick ? pick.value : '');
-    if (!id) return;
+    bodyHost.replaceChildren();
+    const id = staff ? (picker ? picker.value : '') : memberDocId;
+    if (!id) {
+      bodyHost.appendChild(banner('info', esc(t('স্টেটমেন্ট দেখতে একজন সদস্য নির্বাচন করুন।', 'Choose a member to see their statement.'))));
+      return;
+    }
     const m = members.find(x => x.id === id);
-    if (!m) return;
-    const s = memberSummary(m, deposits, summaryOpts(cfg, { withdrawals }));
+    if (!m) { bodyHost.appendChild(banner('err', esc(t('সদস্য পাওয়া যায়নি।', 'Member not found.')))); return; }
+
+    const summary = memberSummary(m, deposits, summaryOpts(cfg, { withdrawals }));
+    const rows = statementRows(summary, { from: fromEl.value, to: toEl.value });
     const bal = withdrawalBalance(m, deposits, withdrawals);
+    const totalDeposit = rows.reduce((a, r) => a + r.deposit, 0);
+    const totalPayment = rows.reduce((a, r) => a + r.payment, 0);
+    current = { m, summary, rows, cfg, totalDeposit, totalPayment, closing: rows.length ? rows[rows.length - 1].balance : 0 };
+
     const stats = el('div', { class: 'stats' });
     stats.append(
-      statCard({ label: t('মোট জমা', 'Total Deposit'), value: taka(s.totalDeposit), sub: `${s.count} ${t('টি অনুমোদিত', 'approved')}`, ic: 'money' }),
-      statCard({ label: t('বকেয়া', 'Due'), value: taka(s.due), sub: `${t('প্রয়োজন', 'required')} ${taka(s.required)}`, ic: 'due', tone: s.due > 0 ? 'red' : '' }),
-      statCard({ label: t('অগ্রিম', 'Advance'), value: taka(s.advance), sub: `${s.months} ${t('মাস', 'months')}`, ic: 'advance', tone: 'blue' }),
-      statCard({ label: t('উপলব্ধ ব্যালান্স', 'Available'), value: taka(bal.available), sub: t('উত্তোলনযোগ্য', 'withdrawable'), ic: 'wallet' }),
+      statCard({ label: t('মোট জমা', 'Total deposit'), value: taka(totalDeposit), sub: `${rows.filter(r => r.kind === 'deposit').length} ${t('টি এন্ট্রি', 'entries')}`, ic: 'deposit' }),
+      statCard({ label: t('মোট পরিশোধ', 'Total payment'), value: taka(totalPayment), sub: `${rows.filter(r => r.kind === 'withdrawal').length} ${t('টি এন্ট্রি', 'entries')}`, ic: 'withdraw', tone: 'red' }),
+      statCard({ label: t('বর্তমান ব্যালেন্স', 'Closing balance'), value: taka(current.closing), sub: t('সব অনুমোদিত লেনদেন', 'all approved activity'), ic: 'money', tone: 'blue' }),
+      statCard({ label: t('বকেয়া', 'Due'), value: taka(summary.due), sub: t('অনুমোদিত জমার ভিত্তিতে', 'based on approved deposits'), ic: 'due', tone: summary.due > 0 ? 'red' : '' }),
     );
-    infoHost.appendChild(stats);
-  };
-  paintInfo();
+    infoHost.appendChild(statCardShell(m, stats));
 
-  /* ---- generate ---- */
-  const gen = btn(t('স্টেটমেন্ট দেখুন', 'View Statement'), 'report', 'primary', async () => {
-    const [m2, d2, w2, c2] = await Promise.all([allMembers(), allDeposits(), allWithdrawals(), settings()]);
-    const id = own ? memberId : (pick ? pick.value : '');
-    const m = m2.find(x => x.id === id) || m2.find(x => x.id === session.memberDocId);
-    if (!m) { toast(t('সদস্য নির্বাচন করুন', 'Select a member'), 'warn'); return; }
-    const s = memberSummary(m, d2, summaryOpts(c2, { withdrawals: w2 }));
-    let rows = statementRows(s);
-    if (from.value) rows = rows.filter(r => String(r.deposit.date).slice(0, 10) >= from.value);
-    if (to.value) rows = rows.filter(r => String(r.deposit.date).slice(0, 10) <= to.value);
-    const periodTotal = rows.reduce((a, r) => a + num(r.deposit.amount), 0);
-    const sub = (from.value || to.value)
-      ? `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}`
-      : '';
+    bodyHost.appendChild(sectionHead(t('লেনদেনের বিবরণ', 'Statement details'), 'Statement'));
+    bodyHost.appendChild(statementTable(
+      rows.map(r => ({
+        date: r.date,
+        description: r.kind === 'deposit' ? tx(typeLabel(r.type).bn) : tx(withdrawalTypeLabel(r.type).bn),
+        deposit: r.deposit, payment: r.payment, balance: r.balance,
+      })),
+    ));
 
-    const sheet = buildSheet({
-      cfg: c2, titleEn: 'Member Statement', subEn: sub, titleBn: t('সদস্য স্টেটমেন্ট', 'Member Statement'),
+    const actions = el('div', { class: 'statement-actions' });
+    actions.appendChild(btn(t('প্রিভিউ ও পিডিএফ', 'Preview & PDF'), 'pdf', 'primary', openPreview, { block: true }));
+    bodyHost.appendChild(actions);
+  }
+
+  function statCardShell(m, stats) {
+    const c = card(t('সদস্য', 'Member'), 'Statement', el('div', {}, [
+      kv([
+        [t('নাম', 'Name'), esc(m.nameBn || m.nameEn || '')],
+        [t('সদস্য আইডি', 'Member ID'), `<b>${esc(m.memberId)}</b>`],
+        [t('মাসিক কিস্তি', 'Monthly installment'), taka(m.installment)],
+      ]),
+      stats,
+    ]));
+    return c;
+  }
+
+  /** The printable sheet — English, identical to the downloaded PDF. */
+  function buildStatementSheet() {
+    const { m, rows, cfg: c } = current;
+    const period = (fromEl.value || toEl.value)
+      ? `Period: ${fromEl.value ? fmtDateEn(fromEl.value) : 'Beginning'} to ${toEl.value ? fmtDateEn(toEl.value) : fmtDateEn(todayISO())}`
+      : `Period: Beginning to ${fmtDateEn(todayISO())}`;
+    return buildSheet({
+      cfg: c,
+      titleEn: 'Member Statement',
+      titleBn: 'Dhruva Sangsad',
+      subEn: period,
       parts: [
         psInfo([
-          ['Member ID', m.memberId], ['Status', (m.status || '').toUpperCase()],
-          ['Name (Bangla)', m.nameBn], ['Name (English)', m.nameEn],
-          ['Join Date', fmtDate(m.joinDate)], ['Mobile', m.mobile],
-          ["Father's Name", m.fatherBn || m.fatherEn || '-'], ['Address', m.address || '-'],
-          ['Monthly Installment', money(m.installment) + ' Tk'], ['Statement Date', fmtDate(todayISO())],
+          ['Member ID', m.memberId], ['Status', String(m.status || '').toUpperCase()],
+          ['Name (English)', m.nameEn], ['Name (Bangla)', m.nameBn],
+          ['Mobile', m.mobile], ['Joined', fmtDateEn(m.joinDate)],
+          ['Monthly Installment', `${taka(m.installment)}`], ['Statement Date', fmtDateEn(todayISO())],
+          ['Opening Balance', taka(0)], ['Closing Balance', taka(current.closing)],
+          ['Total Deposit', taka(current.totalDeposit)], ['Total Payment', taka(current.totalPayment)],
         ]),
-        sechead('Deposit Statement'),
+        sechead('Account Activity'),
         psTable(
-          [{ label: 'SL', cls: 'c' }, { label: 'Txn ID', cls: 'c' }, { label: 'Date', cls: 'c' }, { label: 'Deposit Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }, { label: 'Cumulative Amount', cls: 'num' }],
+          [
+            { label: 'Date', cls: 'c' }, { label: 'Description' },
+            { label: 'Deposit', cls: 'num' }, { label: 'Payment', cls: 'num' }, { label: 'Balance', cls: 'num' },
+          ],
           rows.map(r => [
-            { text: r.sl, cls: 'c' }, { text: r.deposit.txnId || '—', cls: 'c' }, { text: fmtDate(r.deposit.date), cls: 'c' },
-            typeLabel(r.deposit.type).en, methodLabel(r.deposit.method).en,
-            { text: money(r.deposit.amount), cls: 'num' }, { text: money(r.cumulative), cls: 'num' },
+            { text: fmtDateEn(r.date), cls: 'c' },
+            statementDescription(r),
+            { text: r.deposit ? taka(r.deposit) : '—', cls: 'num' },
+            { text: r.payment ? taka(r.payment) : '—', cls: 'num' },
+            { text: taka(r.balance), cls: 'num' },
           ]),
-          [[{ text: 'Total', span: 5 }, { text: money(periodTotal), cls: 'num' }, { text: money(rows.length ? rows[rows.length - 1].cumulative : 0), cls: 'num' }]],
+          [[
+            { text: 'Total', span: 2 },
+            { text: taka(current.totalDeposit), cls: 'num' },
+            { text: taka(current.totalPayment), cls: 'num' },
+            { text: taka(current.closing), cls: 'num' },
+          ]],
         ),
+        sechead('Summary'),
+        psInfo([
+          ['Total Deposits', String(rows.filter(r => r.kind === 'deposit').length)],
+          ['Total Payments', String(rows.filter(r => r.kind === 'withdrawal').length)],
+          ['Due (approved basis)', taka(current.summary.due)],
+          ['Advance', taka(current.summary.advance)],
+          ['Available Balance', taka(withdrawalBalance(m, deposits, withdrawals).available)],
+        ]),
       ],
     });
-
-    await previewReport({
-      title: t('স্টেটমেন্ট প্রিভিউ', 'Statement Preview'),
-      sheet,
-      fileName: reportFileName({ memberName: m.nameEn || m.nameBn, reportType: 'Statement', orgName: c2.orgNameEn }),
-    });
-
-    /* after closing the preview, keep an on-screen copy for the current session */
-    showOnScreen(sheet, rows, m, periodTotal);
-  }, { block: true });
-  gen.style.minHeight = '48px'; gen.style.fontSize = '15px'; gen.style.marginTop = '4px';
-  wrap.appendChild(gen);
-
-  const outHost = el('div');
-  wrap.appendChild(outHost);
-
-  function showOnScreen(_sheet, rows, m, total) {
-    outHost.replaceChildren();
-    if (!rows.length) { outHost.appendChild(el('div', { class: 'empty', html: `${'' }${esc(t('এই সময়কালে কোনো জমা নেই', 'No deposits in this period'))}` })); return; }
-    outHost.appendChild(card(`${t('স্টেটমেন্ট', 'Statement')} — ${m.memberId}`, '', tableWrap(
-      [{ label: 'Txn ID' }, { label: 'তারিখ / Date' }, { label: 'ধরন / Type' }, { label: 'পদ্ধতি / Method' }, { label: 'পরিমাণ', cls: 'num' }, { label: 'ক্রমপুঞ্জিত', cls: 'num' }],
-      rows.map(r => [
-        `<code class="txn-id">${esc(r.deposit.txnId || '—')}</code>`,
-        esc(fmtDate(r.deposit.date)),
-        esc(typeLabel(r.deposit.type).bn), esc(methodLabel(r.deposit.method).bn),
-        { text: money(r.deposit.amount), cls: 'num' }, { text: money(r.cumulative), cls: 'num' },
-      ]),
-      { footer: [{ html: '<b>সর্বমোট / Total</b>' }, { html: '' }, { html: '' }, { html: `<b>${money(total)}</b>`, cls: 'num' }, { html: '' }, { html: '' }] },
-    )));
   }
+
+  async function openPreview() {
+    if (!current) { toast(t('সদস্য নির্বাচন করুন', 'Select a member'), 'warn'); return; }
+    const { m, cfg: c } = current;
+    await previewReport({
+      title: t('স্টেটমেন্ট প্রিভিউ', 'Statement preview'),
+      sheet: buildStatementSheet(),
+      fileName: reportFileName({ memberName: m.nameEn || m.nameBn, reportType: 'Statement', orgName: c.orgNameEn }),
+    });
+  }
+
+  fromEl.addEventListener('change', paint);
+  toEl.addEventListener('change', paint);
+  paint();
   return wrap;
 }
+
+/* legacy export name kept for older imports */
+export const pageStatementsLegacy = pageStatements;
+export { num };

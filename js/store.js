@@ -135,10 +135,10 @@ export async function checkUnique({ memberId, mobile, whatsapp, email }, exclude
   const mob = normalizeMobile(mobile), wa = normalizeMobile(whatsapp), em = (email || '').trim().toLowerCase();
   for (const m of members) {
     if (excludeId && m.id === excludeId) continue;
-    if (memberId && m.memberId === memberId) errs.push({ field: 'memberId', msg: 'এই Member ID ইতোমধ্যে ব্যবহৃত হয়েছে। / This Member ID already exists.' });
+    if (memberId && m.memberId === memberId) errs.push({ field: 'memberId', msg: 'এই সদস্য আইডি ইতোমধ্যে ব্যবহৃত হয়েছে। / This Member ID already exists.' });
     if (mob && normalizeMobile(m.mobile) === mob) errs.push({ field: 'mobile', msg: 'এই মোবাইল নম্বর ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
     if (wa && normalizeMobile(m.whatsapp) === wa) errs.push({ field: 'whatsapp', msg: 'এই WhatsApp নম্বর ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
-    if (em && (m.email || '').trim().toLowerCase() === em) errs.push({ field: 'email', msg: 'এই Email ID ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
+    if (em && (m.email || '').trim().toLowerCase() === em) errs.push({ field: 'email', msg: 'এই ইমেইল আইডি ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
   }
   // de-dup by field
   const seen = new Set();
@@ -355,6 +355,16 @@ const monthlyAmountOf = (member, form) => {
   return (form && form.type === 'monthly' && inst > 0) ? inst : num(form && form.amount);
 };
 
+/** Non-rejected MONTHLY deposits already recorded for a member in the month of
+ *  `date` (used to warn about a duplicate monthly installment before saving). */
+export async function monthlyDepositsInMonth(memberDocId, date, { excludeId = '' } = {}) {
+  const mk = monthKey(date);
+  if (!memberDocId || !mk) return [];
+  const rows = await allDeposits();
+  return rows.filter(d => d.memberDocId === memberDocId && d.type === 'monthly'
+    && d.status !== 'rejected' && d.id !== excludeId && monthKey(d.date) === mk);
+}
+
 export async function submitDeposit(form, actor) {
   const member = await dbGet('members', form.memberDocId);
   if (!member) throw new Error('Member not found');
@@ -425,7 +435,7 @@ export function canModifyDeposit(deposit, session) {
   if (session.role === 'admin') return { ok: true };
   if (session.role === 'maker') {
     if (String(deposit.date).slice(0, 10) !== todayISO()) {
-      return { ok: false, msg: 'Maker শুধুমাত্র আজকের তারিখের জমা Edit/Delete করতে পারবেন। / Maker can edit or delete only today\'s deposits.' };
+      return { ok: false, msg: 'Maker শুধুমাত্র আজকের তারিখের জমা সম্পাদনা বা মুছতে পারবেন। / Maker can edit or delete only today\'s deposits.' };
     }
     return { ok: true };
   }
@@ -668,10 +678,37 @@ export async function syncDueNotifications() {
   return changed;
 }
 
-export function statementRows(summary) {
-  const rows = summary.deposits.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.submittedAt).localeCompare(String(b.submittedAt)));
-  let cum = 0;
-  return rows.map((d, i) => { cum += num(d.amount); return { sl: i + 1, deposit: d, cumulative: cum }; });
+/**
+ * Statement rows — the chronological account activity of one member.
+ * Only APPROVED records are included, deposits and withdrawals are merged into
+ * a single timeline, and every row carries its own running BALANCE so the
+ * statement reads like a passbook:
+ *
+ *   date · description · deposit · payment · balance
+ *
+ * (No serial number and no transaction id: neither belongs on a statement.)
+ */
+export function statementRows(summary, { from = '', to = '' } = {}) {
+  const inRange = d => {
+    const dt = String(d.date || '').slice(0, 10);
+    if (from && dt < from) return false;
+    if (to && dt > to) return false;
+    return true;
+  };
+  const rows = [];
+  for (const d of (summary.deposits || [])) {
+    if (!inRange(d)) continue;
+    rows.push({ kind: 'deposit', date: d.date, type: d.type, method: d.method, ref: d, deposit: num(d.amount), payment: 0, description: d.description || '' });
+  }
+  for (const w of (summary.withdrawals || [])) {
+    if (!inRange(w)) continue;
+    rows.push({ kind: 'withdrawal', date: w.date, type: w.type, method: w.method, ref: w, deposit: 0, payment: num(w.amount), description: w.description || '' });
+  }
+  rows.sort((a, b) => String(a.date).localeCompare(String(b.date))
+    || String((a.ref && a.ref.submittedAt) || '').localeCompare(String((b.ref && b.ref.submittedAt) || '')));
+  let balance = 0;
+  rows.forEach(r => { balance += r.deposit - r.payment; r.balance = balance; });
+  return rows;
 }
 
 export function orgTotals(summaries) {

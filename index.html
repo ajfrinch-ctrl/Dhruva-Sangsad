@@ -1,98 +1,153 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="bn" data-lang="bn">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#16a34a">
-<meta name="description" content="ধ্রুব সংসদ — Offline-first member, deposit, due, advance and reporting management system">
+<meta name="description" content="ধ্রুব সংসদ — Member, deposit, statement and reporting management system (offline-first PWA)">
+<meta name="color-scheme" content="light dark">
 <title>ধ্রুব সংসদ | Dhruva Sangsad</title>
-<script>
-(function () {
-  var p = location.pathname || '/';
-  if (p && !/\/$/.test(p) && !/\.[a-z0-9]+$/i.test(p)) {
-    location.replace(p + '/' + (location.search || '') + (location.hash || ''));
-    return;
-  }
-  if (navigator.serviceWorker) {
-    navigator.serviceWorker.getRegistrations().then(function (rs) {
-      rs.forEach(function (r) { r.unregister(); });
-    });
-  }
-  if (window.caches) {
-    caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
-  }
-})();
-</script>
-<link rel="manifest" href="./manifest.webmanifest?v=6.6.0">
-<link rel="icon" href="./icons/icon-192.png">
+<link rel="manifest" href="./manifest.webmanifest?v=7">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch.png">
-<link rel="stylesheet" href="./css/app.css?v=6.6.0">
-<script src="./vendor/firebase-app-compat.js" defer></script>
-<script src="./vendor/firebase-auth-compat.js" defer></script>
-<script src="./vendor/firebase-database-compat.js" defer></script>
-<script src="./vendor/jspdf.umd.min.js" defer></script>
-<script src="./vendor/jspdf.plugin.autotable.min.js" defer></script>
-<script src="./vendor/html2canvas.min.js" defer></script>
-<script src="./vendor/xlsx.full.min.js" defer></script>
+<!-- ONE logo asset, ~5 KB: starts downloading with the document and is reused
+     by every screen (topbar, login, footer, print sheets) from the response cache. -->
+<link rel="preload" as="image" href="./icons/icon-192.png" fetchpriority="high">
+<link rel="stylesheet" href="./css/app.css?v=7.0.0">
+<style>
+/* Critical first-paint styles — the same shell geometry as css/app.css, inlined
+   so the app chrome and the login card appear before any stylesheet/JS lands.
+   If everything else fails, the user still sees a usable, branded screen. */
+:root{--green:#16a34a;--green-dark:#15803d;--bg:#f5f6f8;--line:#e2e5e9;--text:#1f2937;--muted:#5b6472;--faint:#8a93a2;--r:10px;--header-h:56px;--bignav-h:60px}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Noto Sans Bengali',Arial,system-ui,sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+#boot{position:fixed;inset:0;z-index:120;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(160deg,#f0fdf4,#fff 46%,#fff1f2)}
+#boot.off{display:none}
+#boot img{width:76px;height:76px;object-fit:contain}
+#boot .bname{font-size:19px;font-weight:700}
+#boot .bmsg{font-size:13px;color:var(--muted);min-height:18px}
+#boot .bbar{width:132px;height:4px;border-radius:3px;background:#e6e9ee;overflow:hidden}
+#boot .bbar i{display:block;height:100%;width:40%;border-radius:3px;background:var(--green);animation:bootslide 1.05s ease-in-out infinite}
+@keyframes bootslide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+#boot .bretry{display:none;margin-top:4px}
+#boot.err .bbar{display:none}
+#boot.err .bretry{display:inline-flex}
+.sk{background:linear-gradient(90deg,#eceff3 25%,#f6f8fa 37%,#eceff3 63%);background-size:400% 100%;animation:skp 1.3s ease-in-out infinite;border-radius:8px}
+@keyframes skp{0%{background-position:100% 50%}100%{background-position:0 50%}}
+</style>
 </head>
 <body>
 
-<div id="authScreen" class="auth-wrap">
-  <div class="auth-card">
-    <div class="auth-brand">
-      <div class="auth-logo"><img src="./icons/logo.png" alt="ধ্রুব সংসদ"></div>
-      <h1>ধ্রুব সংসদ</h1>
-      <div class="sub">Dhruva Sangsad</div>
-    </div>
-    <p class="auth-title" id="bootMsg">লোড হচ্ছে… / Loading…</p>
-    <p class="auth-foot">v6.6.0</p>
-  </div>
+<!-- ============================================================
+     1 · BOOT SCREEN — painted by the browser immediately, no JS.
+     Replaced by the login card or the app shell within milliseconds.
+     ============================================================ -->
+<div id="boot">
+  <img src="./icons/icon-192.png" width="76" height="76" alt="ধ্রুব সংসদ" fetchpriority="high">
+  <div class="bname">ধ্রুব সংসদ</div>
+  <div class="bbar"><i></i></div>
+  <div class="bmsg" id="bootMsg">লোড হচ্ছে… / Loading…</div>
+  <button class="btn bretry" id="bootRetry" type="button">আবার চেষ্টা করুন / Retry</button>
 </div>
 
+<!-- ============================================================
+     2 · APP SHELL — static markup. Role visibility is pure CSS
+     (html[data-role]) so the correct navigation appears on first paint.
+     ============================================================ -->
 <div id="app" aria-hidden="true">
-  <!-- Clean app top bar: [Back] · Title · [Bell] — everything else lives in its section -->
-  <header class="topbar">
-    <div class="top-left">
-      <button class="icon-btn" id="btnBack" type="button" aria-label="Back" hidden></button>
-    </div>
+  <header class="topbar" id="topbar">
+    <button class="icon-btn" id="btnBack" type="button" aria-label="Back" hidden></button>
     <div class="brand">
-      <div class="brand-logo" id="brandLogo"><img src="./icons/logo.png" alt=""></div>
-      <div class="brand-txt">
-        <div class="n">ধ্রুব সংসদ</div>
-        <div class="r" id="brandRole">—</div>
-      </div>
+      <span class="brand-logo"><img data-logo src="./icons/icon-192.png" width="192" height="192" alt="" decoding="async"></span>
+      <span class="brand-txt">
+        <span class="n" id="brandName">ধ্রুব সংসদ</span>
+        <span class="r" id="brandRole">—</span>
+      </span>
     </div>
     <div class="top-right">
       <button class="icon-btn" id="btnNotif" type="button" aria-label="Notifications"></button>
     </div>
   </header>
-  <nav class="topnav" id="topnav" aria-label="Primary navigation" hidden></nav>
-  <aside class="rail" id="rail" hidden aria-label="Side navigation"></aside>
-  <main class="main" id="view"></main>
-  <nav class="bottom-nav" id="bottomnav" hidden aria-label="Primary mobile navigation"></nav>
-  <footer class="app-footer" id="appFooter">
-    <div class="app-footer-org" id="appFooterOrg"></div>
-  </footer>
+
+  <aside class="rail" id="rail" aria-label="Side navigation" hidden></aside>
+
+  <main class="main" id="view" tabindex="-1">
+    <div class="page-skeleton">
+      <div class="sk" style="height:26px;width:44%;margin-bottom:14px"></div>
+      <div class="skgrid">
+        <div class="sk" style="height:76px"></div><div class="sk" style="height:76px"></div>
+      </div>
+      <div class="sk" style="height:112px;margin-top:12px"></div>
+      <div class="sk" style="height:64px;margin-top:12px"></div>
+      <div class="sk" style="height:64px;margin-top:10px"></div>
+    </div>
+  </main>
+
+  <nav class="bottom-nav" id="bottomnav" aria-label="Primary navigation">
+    <!-- Native anchors: navigation works even before the module loads, and the
+         browser history (back button / Android back) stays authoritative.
+         Labels carry both languages; CSS shows the active one (html[data-lang]). -->
+    <a class="nav-item" data-roles="staff member" data-route="home" href="#home" data-ic="home"><span class="ni-lbl"><span class="i-bn">হোম</span><span class="i-en">Home</span></span></a>
+    <a class="nav-item" data-roles="staff" data-route="members" href="#members" data-ic="members"><span class="ni-lbl"><span class="i-bn">সদস্য</span><span class="i-en">Members</span></span></a>
+    <a class="nav-item" data-roles="staff member" data-route="deposits" href="#deposits" data-ic="deposit"><span class="ni-lbl"><span class="i-bn">জমা</span><span class="i-en">Deposits</span></span></a>
+    <a class="nav-item" data-roles="member" data-route="transactions" href="#transactions" data-ic="receipt"><span class="ni-lbl"><span class="i-bn">লেনদেন</span><span class="i-en">Transactions</span></span></a>
+    <button class="nav-item" id="navMore" type="button" data-ic="menu"><span class="ni-lbl"><span class="i-bn">আরও</span><span class="i-en">More</span></span></button>
+  </nav>
 </div>
 
-<noscript><p style="padding:20px;font-family:sans-serif">This application requires JavaScript.</p></noscript>
-<script type="module" src="./js/app.js?v=6.6.0"></script>
+<!-- ============================================================
+     3 · AUTH HOST — full-screen (no topbar/nav) for login/register/forgot.
+     ============================================================ -->
+<div id="auth" class="auth-wrap" hidden aria-live="polite"></div>
+
+<noscript>
+  <div style="padding:24px;font-family:sans-serif">
+    <h2>JavaScript প্রয়োজন / JavaScript is required</h2>
+    <p>ধ্রুব সংসদ চালাতে ব্রাউজারে JavaScript চালু করুন। / Please enable JavaScript to run Dhruva Sangsad.</p>
+  </div>
+</noscript>
+
 <script>
-window.addEventListener('error', function (e) {
-  var el = document.getElementById('bootMsg');
-  if (el) el.textContent = 'লোড ব্যর্থ: ' + (e.message || 'script error');
-});
-window.addEventListener('unhandledrejection', function (e) {
-  var el = document.getElementById('bootMsg');
-  if (el) el.textContent = 'লোড ব্যর্থ: ' + ((e.reason && e.reason.message) || e.reason || 'promise');
-});
-setTimeout(function () {
-  var app = document.getElementById('app');
-  var el = document.getElementById('bootMsg');
-  if (el && app && !app.classList.contains('on') && /লোড হচ্ছে/.test(el.textContent || '')) {
-    el.textContent = 'লগইন লোড হচ্ছে না। পেজ রিফ্রেশ করুন অথবা ইনকগনিটোতে খুলুন।';
-  }
-}, 10000);
+/* ------------------------------------------------------------------
+   Inline pre-boot: runs before any module, before the first paint.
+   Decides which "world" the visitor is in (signed-in shell vs login) and
+   applies the stored language/theme — so there is never a wrong-looking
+   flash and no full-screen spinner while JavaScript starts up.
+   ------------------------------------------------------------------ */
+(function () {
+  var root = document.documentElement;
+  try {
+    var lang = localStorage.getItem('ds_lang') === 'en' ? 'en' : 'bn';
+    root.setAttribute('data-lang', lang);
+    root.setAttribute('lang', lang);
+    root.setAttribute('data-theme', localStorage.getItem('ds_theme') === 'amoled' ? 'amoled' : 'light');
+  } catch (e) { /* private mode — defaults are fine */ }
+  var session = null;
+  try {
+    session = JSON.parse(sessionStorage.getItem('ds_session') || localStorage.getItem('ds_session') || 'null');
+  } catch (e) { session = null; }
+  root.setAttribute('data-session', session && session.id ? '1' : '0');
+  root.setAttribute('data-role', (session && session.role) || 'guest');
+  window.__DS_SESSION_BOOT = session;
+  /* Never let the boot screen linger: if the module has not taken over in
+     12 s the visitor gets an explanation and a retry button, not a spinner. */
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var b = document.getElementById('boot');
+      var m = document.getElementById('bootMsg');
+      if (b && !b.classList.contains('off')) {
+        b.classList.add('err');
+        if (m) m.textContent = 'অ্যাপ চালু হতে দেরি হচ্ছে — ইন্টারনেট বা ব্রাউজার ক্যাশ মুছে আবার চেষ্টা করুন। / Startup is taking too long — check your connection and retry.';
+      }
+    }, 12000);
+  });
+  document.getElementById('bootRetry').onclick = function () {
+    location.reload();
+  };
+})();
 </script>
+
+<script type="module" src="./js/app.js?v=7.0.0"></script>
 </body>
 </html>

@@ -31,7 +31,7 @@ export function initInstallPrompt() {
     if (ua.includes('android')) {
       return `${t('Chrome মেনু (ডান-উপরের', 'Open the Chrome menu (top-right ')} ⋮ ${t(') চাপুন, তারপর', '), then tap')} <b>${t('“হোম স্ক্রিনে যোগ করুন”', '“Add to Home Screen”')}</b>${t('।', '.')}`;
     }
-    return `${t('ব্রাউজার মেনু থেকে', 'From the browser menu, choose')} <b>${t('“হোম স্ক্রিনে যোগ করুন / Install”', '“Add to Home Screen / Install”')}</b>${t('।', '.')}`;
+    return `${t('ব্রাউজার মেনু থেকে', 'From the browser menu, choose')} <b>${t('“হোম স্ক্রিনে যোগ করুন”', '“Add to Home Screen / Install”')}</b>${t('।', '.')}`;
   };
 
   const show = () => {
