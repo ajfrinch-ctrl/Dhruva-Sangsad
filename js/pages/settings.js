@@ -91,8 +91,9 @@ export async function pageSettings(session, params = {}) {
     menu.style.display = 'none';
     const sec = SECTIONS.find(s => s.id === active);
     if (!sec) { active = ''; return paint(); }
+    /* The top-bar back button already returns to the Settings menu, so this is a
+       section HEADER only — no second back control (requirement: one back). */
     const bar = el('div', { class: 'sec-bar' });
-    bar.appendChild(el('button', { type: 'button', class: 'sec-back', html: `${icon('back')}<span>${esc(t('সেটিংস', 'Settings'))}</span>`, onclick: home }));
     bar.appendChild(el('div', { class: 'sec-bar-t', html: `${icon(sec.ic)}<b>${esc(t(sec.bn, sec.en))}</b>` }));
     const pane = el('div');
     host.append(bar, pane);

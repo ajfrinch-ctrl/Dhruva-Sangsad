@@ -132,6 +132,7 @@ async function pendingMemberItems(session, deposits, cfg) {
       sub: `${m.memberId} · ${m.mobile}`,
       name: m.nameBn || m.nameEn || '',
       memberId: m.memberId,
+      extra: m.mobile || '',
       dateLabel: fmtDate(m.createdAt || m.joinDate),
       dateCaption: t('আবেদনের তারিখ', 'Applied on'),
       meta: `${t('মাসিক কিস্তি', 'Monthly installment')} ${money(m.installment)} · ${m.mobile || ''}`,
@@ -238,7 +239,7 @@ function approvalRow(item) {
   head.innerHTML = `<span class="ac-ic">${icon(item.ic)}</span>
     <span class="ac-tt">
       <b class="ac-name">${esc(item.name || item.title || '')}</b>
-      <span class="ac-sub"><span class="ac-mid">${esc(item.memberId || '')}</span>${item.sub && item.sub.includes('·') ? '' : ''}</span>
+      <span class="ac-sub"><span class="ac-mid">${esc(item.memberId || '')}</span>${item.extra ? `<span class="ac-extra">${esc(item.extra)}</span>` : ''}</span>
     </span>
     <span class="ac-kind">${esc(KIND[item.kind] || item.kind)}</span>`;
   row.appendChild(head);

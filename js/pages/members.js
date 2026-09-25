@@ -11,7 +11,7 @@
  */
 import {
   el, esc, toast, taka, money, num, fmtDate, todayISO, memberIdFromMobile, isValidMobile,
-  isValidEmail, normalizeMobile, debounce, confirmBox, waNumber, modal, alertBox, t, tx,
+  isValidEmail, normalizeMobile, debounce, confirmBox, waNumber, modal, alertBox, t,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, banner, btn, kv, statCard, sectionHead, listRow, emptyState, statusTag, segChips } from '../ui.js';
@@ -72,16 +72,18 @@ export async function memberListScreen(session, params = {}) {
     type: 'search', class: 'search-in', value: q,
     placeholder: t('নাম / সদস্য আইডি / মোবাইল খুঁজুন…', 'Search name / member ID / mobile…'),
   });
+  /* segChips(name, {value,bn,en}[], value, {onChange}) → object with .root */
   const chips = segChips('mstatus', [
-    { id: 'all', label: t('সব', 'All'), n: counts.total },
-    { id: 'active', label: t('সক্রিয়', 'Active'), n: counts.active },
-    { id: 'pending', label: t('অপেক্ষমাণ', 'Pending'), n: counts.pending },
-    { id: 'rejected', label: t('বাতিল', 'Rejected'), n: counts.rejected },
+    { value: 'all', bn: `সব (${counts.total})`, en: `All (${counts.total})` },
+    { value: 'active', bn: `সক্রিয় (${counts.active})`, en: `Active (${counts.active})` },
+    { value: 'pending', bn: `অপেক্ষমাণ (${counts.pending})`, en: `Pending (${counts.pending})` },
+    { value: 'rejected', bn: `বাতিল (${counts.rejected})`, en: `Rejected (${counts.rejected})` },
   ], status, { onChange: v => { status = v; paint(); } });
+  chips.root.classList.add('chips-bar');
 
   const tools = el('div', { class: 'list-tools' });
   const searchBox = el('div', { class: 'search-box' }, [el('span', { class: 'sb-ic', html: icon('search') }), search]);
-  tools.append(searchBox, chips);
+  tools.append(searchBox, chips.root);
   wrap.appendChild(tools);
 
   const countPill = el('span', { class: 'count-pill' });
@@ -228,9 +230,6 @@ export async function newMemberScreen(session) {
   const cfg = await settings();
   const wrap = page(t('নতুন সদস্য', 'New member'), 'Add member', 'plus');
 
-  const head = el('div', { class: 'crumb' });
-  head.appendChild(btn(t('তালিকায় ফিরুন', 'Back to list'), 'back', 'ghost', () => App.go('members')));
-  wrap.appendChild(head);
   wrap.appendChild(banner('info', t(
     'সদস্য নিজেও লগইন পেজ থেকে নিবন্ধন করতে পারেন। এখানে আপনি সদস্যের পক্ষে নিবন্ধন করছেন — নিবন্ধনের পর স্ট্যাটাস <b>অনুমোদনের অপেক্ষায়</b> থাকবে।',
     'Members can also register from the login page. Here you register on their behalf — the status stays <b>pending approval</b> afterwards.',
@@ -382,10 +381,6 @@ export async function editMemberScreen(session, params = {}) {
     allMembers(), allDeposits(), allWithdrawals(), settings(),
   ]);
   const wrap = page(t('সদস্য সম্পাদনা', 'Edit member'), 'Edit member', 'edit');
-  const head = el('div', { class: 'crumb' });
-  head.appendChild(btn(t('তালিকায় ফিরুন', 'Back to list'), 'back', 'ghost', () => App.go('members')));
-  wrap.appendChild(head);
-
   if (!members.length) { wrap.appendChild(emptyState({ ic: 'member', title: t('এখনো কোনো সদস্য নেই', 'No members yet'), hint: t('প্রথমে একজন সদস্য যোগ করুন।', 'Add a member first.'), actionLabel: t('নতুন সদস্য', 'Add member'), onAction: () => App.go('members', { section: 'new' }) })); return wrap; }
 
   const host = el('div');

@@ -1616,3 +1616,8 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .acard .ac-acts .btn{flex:1 1 120px;justify-content:center}
 .acard .ac-acts.secondary .btn{flex:0 1 auto;font-weight:600}
 @media (max-width:359px){ .acard .ac-acts .btn{flex:1 1 100%} }
+
+/* small additions: member picker wrapper + approval card sub line */
+.mpick-box{position:relative;display:flex;align-items:center}
+.ac-sub{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}
+.ac-extra{font-weight:600;color:var(--faint)}
