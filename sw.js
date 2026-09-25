@@ -44,6 +44,9 @@ const PRECACHE = [
   'icons/ai/backup.png',
   'icons/ai/info.png',
   'icons/ai/sync.png',
+  'icons/ai/moon.png',
+  'icons/ai/sun.png',
+  'icons/ai/logout.png',
   /* fonts */
   'vendor/fonts/noto-sans-bengali-bengali-400-normal.woff2',
   'vendor/fonts/noto-sans-bengali-bengali-700-normal.woff2',
