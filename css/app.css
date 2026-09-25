@@ -1560,3 +1560,30 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
   .auth-brand{margin-bottom:10px}
   .auth-card{padding:18px 16px 16px}
 }
+
+/* =====================================================================
+   v7 REPORTS — the filter card must visibly drive the output.
+   The period control (quick ranges + From/To) and the live result counter
+   are full-width and stack on narrow phones.
+   ===================================================================== */
+.period-pick{display:flex;flex-direction:column;gap:9px;width:100%}
+.period-chips{flex-wrap:wrap}
+.period-dates{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.period-pick .field{margin:0}
+.period-status{margin-top:2px}
+.filter-live{
+  display:block;margin:2px 0 10px;padding:9px 12px;border-radius:var(--r-sm);
+  background:var(--green-soft);border:1px solid var(--green-line);color:var(--green-dark);
+  font-size:12.5px;font-weight:700;
+}
+.filter-live:empty{display:none}
+.rep-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+.rep-filters > .field{flex:1 1 190px;min-width:0}
+@media (max-width:560px){
+  /* the filter fields carry an inline flex-basis, so override it explicitly */
+  .rep-filters > .field{flex:1 1 100% !important;width:100%}
+}
+@media (max-width:359px){
+  .period-dates{grid-template-columns:1fr}
+  .period-chips .seg-chip{font-size:12px;padding:7px 11px}
+}

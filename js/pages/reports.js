@@ -4,10 +4,10 @@
    Excel / CSV / Image / JSON downloads are gone; the member statement lives
    on its own Statements page (not duplicated here). */
 import {
-  el, esc, toast, taka, money, num, fmtDate, todayISO, monthKey, monthLabel,
-  typeLabel, methodLabel, PAY_METHODS, waNumber, t,
+  el, toast, taka, money, num, fmtDate, todayISO, monthKey, monthLabel,
+  typeLabel, methodLabel, PAY_METHODS, waNumber, t, tx,
 } from '../util.js';
-import { page, card, btn, statCard } from '../ui.js';
+import { page, card, btn, statCard, segChips, sectionHead } from '../ui.js';
 import { memberPicker } from '../picker.js';
 import {
   allMembers, allDeposits, allWithdrawals, settings, memberSummary, summariesFor, orgTotals,
@@ -75,7 +75,7 @@ export async function pageReports(session, params = {}) {
       statCard({ label: t('মোট amount', 'Total Amount'), value: taka(s ? s.totalDeposit : 0), sub: `${t('উত্তোলন', 'Withdrawal')} ${taka(s ? s.totalWithdrawal : 0)}`, ic: 'money' }),
     );
   }
-  wrap.appendChild(el('div', { class: 'sec-head', html: `<h2>${esc(t('সারসংক্ষেপ', 'Summary'))}</h2><span class="sp"></span>` }));
+  wrap.appendChild(sectionHead(t('সারসংক্ষেপ', 'Summary'), 'Summary'));
   wrap.appendChild(stats);
 
   /* ============ 2 — Report type (a dropdown, NOT tiles) ============ */
@@ -86,23 +86,39 @@ export async function pageReports(session, params = {}) {
   wrap.appendChild(card(t('রিপোর্টের ধরন', 'Report Type'), '', el('div', {}, [typeSel])));
 
   /* ============ 3 — Filters (contextual) ============ */
-  const filterHost = el('div', { class: 'toolbar' });
+  const filterHost = el('div', { class: 'toolbar rep-filters' });
   const filterCard = card(t('ফিল্টার', 'Filters'), '', filterHost);
   filterCard.classList.add('overflow-visible');
   wrap.appendChild(filterCard);
 
   /* ============ 4 — Generate (filters exist BEFORE it) ============ */
-  const ctx = { session, members, deposits, withdrawals: withdrawals || [], cfg, filterHost };
-  /* the selected builder wires its filter widgets once, and returns build() */
+  /* Live count of what the CURRENT filters would produce — the filters visibly
+     drive the output instead of being decorative. */
+  const liveLine = el('div', { class: 'filter-live', 'aria-live': 'polite' });
+  /* the selected builder wires its filter widgets once and returns build() */
   let buildFn = null;
+  const ctx = {
+    session, members, deposits, withdrawals: withdrawals || [], cfg, filterHost,
+    live: () => {
+      if (!buildFn || !buildFn.preview) { liveLine.textContent = ''; return; }
+      try { liveLine.textContent = buildFn.preview(); }
+      catch { liveLine.textContent = ''; }
+    },
+  };
   const setup = () => {
     filterHost.replaceChildren();
     const meta = REPORTS.find(x => x.id === typeSel.value) || list[0];
     try { buildFn = BUILDERS[meta.id](ctx, meta); }
     catch (err) { buildFn = null; toast(err.message || String(err), 'error'); }
+    ctx.live();
   };
   typeSel.addEventListener('change', setup);
+  /* any widget inside the filter card (chip, date, picker, select) refreshes the count */
+  filterHost.addEventListener('change', () => ctx.live());
+  filterHost.addEventListener('input', () => ctx.live());
   setup();
+
+  wrap.appendChild(liveLine);
 
   const gen = btn(t('রিপোর্ট তৈরি করুন', 'Generate Report'), 'report', 'primary', async () => {
     /* fresh data at click time — the same values feed preview AND pdf */
@@ -137,40 +153,119 @@ const txnCol = { label: 'Txn ID', cls: 'c' };
 const txnCell = r => ({ text: r.txnId || '—', cls: 'c' });
 
 /* ================= 1/3. Period + range collection reports ================= */
+
+const monthStartISO = (iso = todayISO()) => String(iso).slice(0, 7) + '-01';
+function lastMonthRange() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  const p = n => String(n).padStart(2, '0');
+  const y = d.getFullYear(), m = d.getMonth();
+  return { from: `${y}-${p(m + 1)}-01`, to: `${y}-${p(m + 1)}-${p(new Date(y, m + 1, 0).getDate())}` };
+}
+
+/**
+ * ONE period control for every report that has a date dimension.
+ * [এই মাস] [গত মাস] [সব সময়] + always-visible From/To (Custom is always
+ * available — typing a date simply switches the selection to Custom).
+ * Returns { node, from, to, label(), preset } and calls onChange() whenever the
+ * window changes, so the caller can refresh its live preview.
+ */
+function periodPicker({ mode = 'range', onChange = null } = {}) {
+  const last = lastMonthRange();
+  const PRESETS = {
+    today: { bn: 'আজ', en: 'Today', from: todayISO(), to: todayISO() },
+    month: { bn: 'এই মাস', en: 'This month', from: monthStartISO(), to: todayISO() },
+    last: { bn: 'গত মাস', en: 'Last month', from: last.from, to: last.to },
+    all: { bn: 'সব সময়', en: 'All time', from: '', to: '' },
+  };
+  const order = mode === 'day' ? ['today', 'month', 'last'] : ['month', 'last', 'all'];
+  const initial = mode === 'day' ? 'today' : 'month';
+
+  const chips = el('div', { class: 'seg period-chips' });
+  const from = el('input', { type: 'date', value: PRESETS[initial].from });
+  const to = el('input', { type: 'date', value: PRESETS[initial].to });
+  let preset = initial;
+
+  const paintChips = () => [...chips.children].forEach(b => b.classList.toggle('on', b.dataset.p === preset));
+
+  order.forEach(id => {
+    const b = el('button', { type: 'button', class: 'seg-chip', dataset: { p: id }, text: tx(t(PRESETS[id].bn, PRESETS[id].en)) });
+    b.addEventListener('click', () => {
+      preset = id;
+      from.value = PRESETS[id].from;
+      to.value = PRESETS[id].to;
+      paintChips();
+      if (onChange) onChange();
+    });
+    chips.appendChild(b);
+  });
+  paintChips();
+
+  const dates = el('div', { class: 'period-dates' });
+  const mk = (lbl, node) => {
+    const f = el('div', { class: 'field' });
+    f.appendChild(el('label', { text: lbl }));
+    f.appendChild(node);
+    return f;
+  };
+  dates.append(mk(t('শুরু', 'From'), from), mk(t('শেষ', 'To'), to));
+  const node = el('div', { class: 'period-pick' }, [chips, dates]);
+
+  const custom = () => { preset = 'custom'; paintChips(); if (onChange) onChange(); };
+  from.addEventListener('change', custom);
+  to.addEventListener('change', custom);
+
+  return {
+    node, from, to,
+    get preset() { return preset; },
+    range: () => ({ from: from.value, to: to.value }),
+    inRange: d => {
+      const x = String(d.date || '').slice(0, 10);
+      return (!from.value || x >= from.value) && (!to.value || x <= to.value);
+    },
+    label: () => (from.value || to.value)
+      ? `${fmtDate(from.value) || t('শুরু থেকে', 'beginning')} – ${fmtDate(to.value) || fmtDate(todayISO())}`
+      : t('সব সময়', 'all time'),
+  };
+}
+
+/** Status selector shared by the deposit-based reports (approved/pending/all). */
+function statusPicker({ onChange = null } = {}) {
+  const chips = segChips('repstatus', [
+    { value: 'approved', bn: 'অনুমোদিত', en: 'Approved' },
+    { value: 'pending', bn: 'অপেক্ষমাণ', en: 'Pending' },
+    { value: 'all', bn: 'সব', en: 'All' },
+  ], 'approved', { onChange: () => onChange && onChange() });
+  chips.root.classList.add('period-status');
+  return chips;
+}
+const depositsByStatus = (deposits, st) => st === 'approved' ? approvedOf(deposits)
+  : st === 'pending' ? deposits.filter(d => d.status === 'pending')
+  : deposits;
+
 function periodReport(ctx, meta, mode) {
   const { session } = ctx;
   const own = session.role === 'member';
-  const dInput = el('input', { type: 'date', value: todayISO() });
-  const mInput = el('input', { type: 'month', value: monthKey(todayISO()) });
-  const from = el('input', { type: 'date', value: monthKey(todayISO()) + '-01' });
-  const to = el('input', { type: 'date', value: todayISO() });
+  const picker = periodPicker({ mode: mode === 'daily' ? 'day' : 'range', onChange: () => ctx.live && ctx.live() });
+  const status = statusPicker({ onChange: () => ctx.live && ctx.live() });
   const memPick = !own ? memberPicker({ members: ctx.members, placeholder: t('খালি = সব সদস্য…', 'empty = all members…') }) : null;
-  if (mode === 'daily') ctx_filter(ctx, mkField(t('তারিখ', 'Date'), dInput, '150px'));
-  else if (mode === 'monthly') ctx_filter(ctx, mkField(t('মাস', 'Month'), mInput, '150px'));
-  else { ctx_filter(ctx, mkField(t('শুরু', 'From'), from, '140px')); ctx_filter(ctx, mkField(t('শেষ', 'To'), to, '140px')); }
+  ctx_filter(ctx, mkField(t('সময়কাল', 'Period'), picker.node, '260px'));
+  ctx_filter(ctx, mkField(t('স্ট্যাটাস', 'Status'), status.root, '200px'));
   if (memPick) { ctx_filter(ctx, mkField(t('সদস্য', 'Member'), memPick.root, '220px')); ctx.filterHost.closest('.card')?.classList.add('overflow-visible'); }
 
-  function build() {
-    let rows;
-    let sub;
-    if (mode === 'daily') {
-      rows = approvedOf(ctx.deposits).filter(d => String(d.date).slice(0, 10) === dInput.value);
-      sub = `Date: ${fmtDate(dInput.value)}`;
-    } else if (mode === 'monthly') {
-      rows = approvedOf(ctx.deposits).filter(d => monthKey(d.date) === mInput.value);
-      sub = `Month: ${monthLabel(mInput.value)}`;
-    } else {
-      if (from.value && to.value && from.value > to.value) throw new Error(t('তারিখের ক্রম সঠিক নয় / From date must be before To date', 'From date must be before To date'));
-      rows = approvedOf(ctx.deposits).filter(d => {
-        const x = String(d.date).slice(0, 10);
-        return (!from.value || x >= from.value) && (!to.value || x <= to.value);
-      });
-      sub = `Period: ${fmtDate(from.value)} to ${fmtDate(to.value)}`;
-    }
+  const scoped = () => {
+    let rows = depositsByStatus(ctx.deposits, status.value);
     if (own) rows = rows.filter(d => d.memberDocId === session.memberDocId);
     else if (memPick && memPick.value) rows = rows.filter(d => d.memberDocId === memPick.value);
-    rows = rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.memberId).localeCompare(String(b.memberId)));
+    return rows.filter(picker.inRange);
+  };
+
+  function build() {
+    const rows = scoped().slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.memberId).localeCompare(String(b.memberId)));
     const total = rows.reduce((s, d) => s + num(d.amount), 0);
+    const sub = `${mode === 'daily' ? 'Date' : 'Period'}: ${picker.label()}`
+      + (status.value === 'approved' ? '' : ` · ${status.value.toUpperCase()}`);
 
     const sheet = buildSheet({
       cfg: ctx.cfg, titleEn: meta.en, subEn: sub, titleBn: t(meta.bn, meta.en),
@@ -190,6 +285,11 @@ function periodReport(ctx, meta, mode) {
     const sole = rows.length && rows.every(d => d.memberDocId === rows[0].memberDocId) ? rows[0].memberName : '';
     return { sheet, memberName: own ? (ctx.members.find(m => m.id === session.memberDocId)?.nameEn || ctx.members.find(m => m.id === session.memberDocId)?.nameBn || '') : (memPick && memPick.value ? rows[0]?.memberName : sole) };
   }
+  /* live counter — proves the filters really drive the output */
+  build.preview = () => {
+    const rows = scoped();
+    return `${rows.length} ${t('টি এন্ট্রি', 'entries')} · ${taka(rows.reduce((s, d) => s + num(d.amount), 0))}`;
+  };
   return build;
 }
 function ctx_filter(ctx, ...nodes) { nodes.forEach(n => ctx.filterHost.appendChild(n)); }
@@ -199,11 +299,14 @@ function rOverall(ctx, meta) {
   const stSel = el('select');
   [['active', t('শুধু সক্রিয়', 'Active only')], ['', t('সব সদস্য (বাতিল বাদে)', 'All except rejected')], ['pending', t('অপেক্ষমাণ', 'Pending')]].forEach(([v, l]) => stSel.appendChild(el('option', { value: v }, [l])));
   ctx_filter(ctx, mkField(t('সদস্য স্ট্যাটাস', 'Member status'), stSel, '160px'));
+  stSel.addEventListener('change', () => ctx.live && ctx.live());
 
-  return () => {
-    const pool = ctx.members.filter(m => (stSel.value ? m.status === stSel.value : m.status !== 'rejected'));
-    const sums = pool.map(m => memberSummary(m, ctx.deposits, cfgOf(ctx)))
-      .sort((a, b) => (a.member.memberId || '').localeCompare(b.member.memberId || ''));
+  const sumsOf = () => ctx.members.filter(m => (stSel.value ? m.status === stSel.value : m.status !== 'rejected'))
+    .map(m => memberSummary(m, ctx.deposits, cfgOf(ctx)))
+    .sort((a, b) => (a.member.memberId || '').localeCompare(b.member.memberId || ''));
+
+  const build = () => {
+    const sums = sumsOf();
     const tot = orgTotals(sums);
     const sheet = buildSheet({
       cfg: ctx.cfg, titleEn: 'Member Report', subEn: `As on ${fmtDate(todayISO())}${stSel.value ? ' · ' + stSel.value.toUpperCase() + ' members' : ''}`, titleBn: t(meta.bn, meta.en),
@@ -223,19 +326,30 @@ function rOverall(ctx, meta) {
     });
     return { sheet };
   };
+  build.preview = () => {
+    const sums = sumsOf();
+    return `${sums.length} ${t('জন সদস্য', 'members')} · ${taka(orgTotals(sums).totalDeposit)}`;
+  };
+  return build;
 }
 
 /* ================= Due & Advance ================= */
 function rDueAdvance(ctx, meta, kind) {
   const minInput = el('input', { type: 'number', min: '0', step: '1', value: '1', placeholder: '0' });
   ctx_filter(ctx, mkField(kind === 'due' ? t('ন্যূনতম বকেয়া (৳)', 'Min due (৳)') : t('ন্যূনতম অগ্রিম (৳)', 'Min advance (৳)'), minInput, '150px'));
+  minInput.addEventListener('input', () => ctx.live && ctx.live());
 
-  return () => {
+  const sumsOf = () => {
     const min = num(minInput.value);
-    const sums = ctx.members.filter(m => m.status === 'active' || m.status === 'pending')
+    return ctx.members.filter(m => m.status === 'active' || m.status === 'pending')
       .map(m => memberSummary(m, ctx.deposits, cfgOf(ctx)))
       .filter(s => (kind === 'due' ? s.due : s.advance) >= Math.max(min, 0.01))
       .sort((a, b) => (kind === 'due' ? b.due - a.due : b.advance - a.advance));
+  };
+
+  const build = () => {
+    const sums = sumsOf();
+    const min = num(minInput.value);
     const total = sums.reduce((s, x) => s + (kind === 'due' ? x.due : x.advance), 0);
     const sheet = buildSheet({
       cfg: ctx.cfg, titleEn: meta.en, subEn: `As on ${fmtDate(todayISO())} · min ৳${min}`, titleBn: t(meta.bn, meta.en),
@@ -252,6 +366,11 @@ function rDueAdvance(ctx, meta, kind) {
     });
     return { sheet };
   };
+  build.preview = () => {
+    const sums = sumsOf();
+    return `${sums.length} ${t('জন সদস্য', 'members')} · ${taka(sums.reduce((s, x) => s + (kind === 'due' ? x.due : x.advance), 0))}`;
+  };
+  return build;
 }
 
 /* ================= Collection (yearly) ================= */
@@ -260,10 +379,13 @@ function rCollection(ctx, meta) {
   const years = Array.from(new Set(approvedOf(ctx.deposits).map(d => String(d.date).slice(0, 4)).concat([String(new Date().getFullYear())]))).sort();
   years.forEach(y => yr.appendChild(el('option', { value: y, ...(y === String(new Date().getFullYear()) ? { selected: true } : {}) }, [y])));
   ctx_filter(ctx, mkField(t('বছর', 'Year'), yr, '120px'));
+  yr.addEventListener('change', () => ctx.live && ctx.live());
 
-  return () => {
+  const apprOf = () => approvedOf(ctx.deposits).filter(d => String(d.date).slice(0, 4) === yr.value);
+
+  const build = () => {
     const y = yr.value;
-    const appr = approvedOf(ctx.deposits).filter(d => String(d.date).slice(0, 4) === y);
+    const appr = apprOf();
     const months = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
     const rows = months.map(mk => {
       const list = appr.filter(d => monthKey(d.date) === mk);
@@ -283,19 +405,21 @@ function rCollection(ctx, meta) {
     });
     return { sheet };
   };
+  build.preview = () => {
+    const appr = apprOf();
+    return `${appr.length} ${t('টি এন্ট্রি', 'entries')} · ${taka(appr.reduce((s, d) => s + num(d.amount), 0))}`;
+  };
+  return build;
 }
 
 /* ================= Payment method ================= */
 function rMethod(ctx, meta) {
-  const from = el('input', { type: 'date', value: monthKey(todayISO()) + '-01' });
-  const to = el('input', { type: 'date', value: todayISO() });
-  ctx_filter(ctx, mkField(t('শুরু', 'From'), from, '140px'), mkField(t('শেষ', 'To'), to, '140px'));
+  const picker = periodPicker({ onChange: () => ctx.live && ctx.live() });
+  ctx_filter(ctx, mkField(t('সময়কাল', 'Period'), picker.node, '260px'));
 
-  return () => {
-    const rows = approvedOf(ctx.deposits).filter(d => {
-      const x = String(d.date).slice(0, 10);
-      return (!from.value || x >= from.value) && (!to.value || x <= to.value);
-    });
+  const scoped = () => approvedOf(ctx.deposits).filter(picker.inRange);
+  const build = () => {
+    const rows = scoped();
     const total = rows.reduce((s, d) => s + num(d.amount), 0);
     const grid = PAY_METHODS.map(p => {
       const list = rows.filter(d => d.method === p.id);
@@ -317,32 +441,34 @@ function rMethod(ctx, meta) {
         [[{ text: 'Subtotal', span: 5 }, { text: money(g.amt), cls: 'num' }]],
       ));
     });
-    const sheet = buildSheet({ cfg: ctx.cfg, titleEn: meta.en, subEn: `Period: ${fmtDate(from.value)} to ${fmtDate(to.value)}`, titleBn: t(meta.bn, meta.en), parts });
+    const sheet = buildSheet({ cfg: ctx.cfg, titleEn: meta.en, subEn: `Period: ${picker.label()}`, titleBn: t(meta.bn, meta.en), parts });
     return { sheet };
   };
+  build.preview = () => {
+    const rows = scoped();
+    return `${rows.length} ${t('টি এন্ট্রি', 'entries')} · ${taka(rows.reduce((s, d) => s + num(d.amount), 0))}`;
+  };
+  return build;
 }
 
 /* ================= Member-wise ================= */
 function rMemberWise(ctx, meta) {
   const pick = memberPicker({ members: ctx.members, placeholder: t('খালি রাখলে সকল সদস্য…', 'empty = all members…') });
-  const from = el('input', { type: 'date' });
-  const to = el('input', { type: 'date' });
-  ctx_filter(ctx, mkField(t('সদস্য', 'Member'), pick.root, '220px'), mkField(t('শুরু', 'From'), from, '130px'), mkField(t('শেষ', 'To'), to, '130px'));
+  const picker = periodPicker({ onChange: () => ctx.live && ctx.live() });
+  ctx_filter(ctx, mkField(t('সদস্য', 'Member'), pick.root, '220px'), mkField(t('সময়কাল', 'Period'), picker.node, '260px'));
   ctx.filterHost.closest('.card')?.classList.add('overflow-visible');
 
-  return () => {
-    const pool = pick.value ? ctx.members.filter(m => m.id === pick.value) : ctx.members.filter(m => m.status !== 'rejected');
-    const inRange = d => {
-      const x = String(d.date).slice(0, 10);
-      return (!from.value || x >= from.value) && (!to.value || x <= to.value);
-    };
-    const data = pool.map(m => {
-      const s = memberSummary(m, ctx.deposits, cfgOf(ctx));
-      const list = s.deposits.filter(inRange).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-      return { m, s, list, periodTotal: list.reduce((x, d) => x + num(d.amount), 0) };
-    }).sort((a, b) => a.m.memberId.localeCompare(b.m.memberId));
+  const pool = () => (pick.value ? ctx.members.filter(m => m.id === pick.value) : ctx.members.filter(m => m.status !== 'rejected'));
+  const dataOf = () => pool().map(m => {
+    const s = memberSummary(m, ctx.deposits, cfgOf(ctx));
+    const list = s.deposits.filter(picker.inRange).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return { m, s, list, periodTotal: list.reduce((x, d) => x + num(d.amount), 0) };
+  }).sort((a, b) => a.m.memberId.localeCompare(b.m.memberId));
+
+  const build = () => {
+    const data = dataOf();
     const gTotal = data.reduce((s, r) => s + r.periodTotal, 0);
-    const period = (from.value || to.value) ? `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}` : `As on ${fmtDate(todayISO())}`;
+    const period = `Period: ${picker.label()}`;
 
     const parts = [psTable(
       [{ label: 'SL', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Mobile', cls: 'c' },
@@ -372,26 +498,30 @@ function rMemberWise(ctx, meta) {
     const sheet = buildSheet({ cfg: ctx.cfg, titleEn: meta.en, subEn: period, titleBn: t(meta.bn, meta.en), parts, orientation: 'l' });
     return { sheet, memberName: data.length === 1 ? (data[0].m.nameEn || data[0].m.nameBn) : '' };
   };
+  build.preview = () => {
+    const data = dataOf();
+    return `${data.length} ${t('জন সদস্য', 'members')} · ${taka(data.reduce((s, r) => s + r.periodTotal, 0))}`;
+  };
+  return build;
 }
 
 /* ================= Withdrawal report ================= */
 function rWithdrawal(ctx, meta) {
   const { session } = ctx;
   const own = session.role === 'member';
-  const from = el('input', { type: 'date' });
-  const to = el('input', { type: 'date' });
-  ctx_filter(ctx, mkField(t('শুরু', 'From'), from, '140px'), mkField(t('শেষ', 'To'), to, '140px'));
+  const picker = periodPicker({ onChange: () => ctx.live && ctx.live() });
+  ctx_filter(ctx, mkField(t('সময়কাল', 'Period'), picker.node, '260px'));
 
-  return () => {
-    let rows = (own ? ctx.withdrawals.filter(w => w.memberDocId === session.memberDocId || w.memberId === session.memberId) : ctx.withdrawals)
-      .filter(w => w.status === 'approved');
-    if (from.value) rows = rows.filter(w => String(w.date).slice(0, 10) >= from.value);
-    if (to.value) rows = rows.filter(w => String(w.date).slice(0, 10) <= to.value);
+  const scoped = () => (own ? ctx.withdrawals.filter(w => w.memberDocId === session.memberDocId || w.memberId === session.memberId) : ctx.withdrawals)
+    .filter(w => w.status === 'approved').filter(picker.inRange);
+
+  const build = () => {
+    let rows = scoped();
     rows = rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.memberId).localeCompare(String(b.memberId)));
     const total = rows.reduce((s, w) => s + num(w.amount), 0);
     const sheet = buildSheet({
       cfg: ctx.cfg, titleEn: meta.en,
-      subEn: `Period: ${from.value ? fmtDate(from.value) : 'Beginning'} to ${to.value ? fmtDate(to.value) : fmtDate(todayISO())}`,
+      subEn: `Period: ${picker.label()}`,
       titleBn: t(meta.bn, meta.en),
       parts: [psTable(
         [txnCol, { label: 'Date', cls: 'c' }, { label: 'Member ID', cls: 'c' }, { label: 'Member Name' }, { label: 'Withdrawal Type' }, { label: 'Payment Method' }, { label: 'Amount', cls: 'num' }],
@@ -405,6 +535,11 @@ function rWithdrawal(ctx, meta) {
     const sole = rows.length && rows.every(w => w.memberDocId === rows[0].memberDocId) ? rows[0].memberName : '';
     return { sheet, memberName: own ? (ctx.members.find(m => m.id === session.memberDocId)?.nameEn || ctx.members.find(m => m.id === session.memberDocId)?.nameBn || '') : sole };
   };
+  build.preview = () => {
+    const rows = scoped();
+    return `${rows.length} ${t('টি উত্তোলন', 'withdrawals')} · ${taka(rows.reduce((s, w) => s + num(w.amount), 0))}`;
+  };
+  return build;
 }
 
 const BUILDERS = {
