@@ -3,7 +3,7 @@
    Staff, Member Logins, Cloud Sync, Backup. Members get the same Activity Log
    and Change Password here — nothing lives in the Member Panel or Dashboard. */
 import {
-  el, esc, toast, fmtDateTime, num, confirmBox, deviceId, t,
+  el, esc, toast, fmtDateTime, num, confirmBox, deviceId, t, auto,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, banner, btn, kv, embedPage } from '../ui.js';
@@ -145,7 +145,7 @@ function passwordSection(host) {
       await changeOwnPassword(v.cur, v.pw1);
       toast(t('পাসওয়ার্ড পরিবর্তন সফল', 'Password updated'), 'success');
       f.reset();
-    } catch (err2) { err.textContent = err2.message; }
+    } catch (err2) { err.textContent = auto(err2.message); }
   });
   host.appendChild(card(t('পাসওয়ার্ড পরিবর্তন', 'Change Password'), 'Change Password', f));
 }
@@ -269,7 +269,7 @@ async function organisationSection(session, host) {
     try {
       pendingLogo = await resizeLogoFile(file);
       paintPreview();
-      toast(t('লোগো নির্বাচন করা হয়েছে — Save করুন', 'Logo selected — press Save'), 'info');
+      toast(t('লোগো নির্বাচন করা হয়েছে — সংরক্ষণ করুন', 'Logo selected — press Save'), 'info');
     } catch (err) {
       toast(err.message || t('লোগো লোড করা যায়নি', 'The logo could not be loaded'), 'error');
       fileInput.value = '';

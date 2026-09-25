@@ -24,7 +24,7 @@ export async function verifyPassword(password, record) {
 export function passwordIssues(pw) {
   const p = String(pw || '');
   const out = [];
-  if (p.length < 6) out.push('কমপক্ষে ৬ অক্ষর প্রয়োজন / At least 6 characters required');
+  if (p.length < 6) out.push('কমপক্ষে ৬ অক্ষর প্রয়োজন / At least 6 characters required'); /* shown via auto() */
   if (/^\s|\s$/.test(p)) out.push('শুরুতে/শেষে স্পেস রাখা যাবে না / No leading or trailing space');
   return out;
 }

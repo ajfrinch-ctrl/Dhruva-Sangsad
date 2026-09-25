@@ -11,7 +11,6 @@
   src:url('../vendor/fonts/noto-sans-bengali-latin-400-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215;}
 @font-face{font-family:'Noto Sans Bengali';font-style:normal;font-weight:700;font-display:swap;
   src:url('../vendor/fonts/noto-sans-bengali-latin-700-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215;}
-
 :root{
   --green:#16a34a; --green-soft:#dcfce7; --green-line:#86efac; --green-dark:#15803d;
   --red:#e11d48; --red-soft:#ffe4e6; --red-line:#fda4af; --red-dark:#be123c;
@@ -27,7 +26,6 @@
   /* shell metrics */
   --header-h:60px; --nav-h:46px; --footer-h:40px; --content-max:1600px;
 }
-
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
@@ -36,13 +34,15 @@ body{
   -webkit-font-smoothing:antialiased;overflow-x:hidden;
 }
 h1,h2,h3,h4{margin:0;font-weight:700;line-height:1.3}
-h1{font-size:var(--f-h1)} h2{font-size:var(--f-h2)} h3{font-size:var(--f-sec)} h4{font-size:var(--f-txt)}
+h1{font-size:var(--f-h1)}
+h2{font-size:var(--f-h2)}
+h3{font-size:var(--f-sec)}
+h4{font-size:var(--f-txt)}
 a{color:var(--green-dark);text-decoration:none}
 p{margin:0 0 8px}
 .hidden{display:none !important}
 .icon{width:1em;height:1em;display:inline-block;vertical-align:-.13em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .i-fill{fill:currentColor;stroke:none}
-
 /* ===================== AUTH ===================== */
 .auth-wrap{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;
   background:linear-gradient(160deg,#f0fdf4 0%,#fff 45%,#fff1f2 100%)}
@@ -67,10 +67,10 @@ p{margin:0 0 8px}
 .lang-opt strong{font-size:18px}
 .lang-opt span{font-size:12px;color:var(--muted)}
 .lang-opt.on{border-color:var(--green);background:var(--green-soft);box-shadow:0 0 0 2px var(--green-line)}
-@media (max-width:430px){.lang-pick{grid-template-columns:1fr}}
+@media (max-width:430px){.lang-pick{grid-template-columns:1fr}
+}
 .auth-note{background:var(--green-soft);border:1px solid var(--green-line);border-radius:var(--r-sm);padding:8px 10px;font-size:12px;color:var(--green-dark);margin-bottom:12px}
 .link-btn{background:none;border:0;color:var(--green-dark);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px;text-decoration:underline}
-
 /* ===================== APP SHELL ===================== */
 #app{display:none;min-height:100dvh;flex-direction:column}
 #app.on{display:flex;height:100dvh;max-height:100dvh;overflow:hidden}
@@ -102,21 +102,7 @@ p{margin:0 0 8px}
 .icon-btn{position:relative;display:grid;place-items:center;width:38px;height:38px;border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);cursor:pointer;color:var(--text);font-size:17px;flex:none;transition:.15s}
 .icon-btn:hover{background:#f9fafb}
 .badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;border:2px solid #fff}
-
 /* ---- top navigation tabs ---- */
-.topnav{position:fixed;top:var(--header-h);left:0;right:0;z-index:59;background:#fff;border-bottom:1px solid var(--line);
-  display:flex;align-items:stretch;gap:2px;height:var(--nav-h);padding:0 12px;overflow-x:auto;overflow-y:hidden;
-  -webkit-overflow-scrolling:touch;scrollbar-width:thin}
-.topnav::-webkit-scrollbar{height:6px}
-.topnav::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
-.nav-tab{position:relative;display:inline-flex;align-items:center;gap:7px;flex:none;border:0;background:transparent;
-  font:inherit;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;padding:0 14px;white-space:nowrap;transition:.14s;
-  border-bottom:2.5px solid transparent}
-.nav-tab .icon{width:16px;height:16px}
-.nav-tab:hover{color:var(--text);background:#f7f8fa}
-.nav-tab.on{color:var(--green-dark);border-bottom-color:var(--green);background:linear-gradient(180deg,transparent,var(--green-soft))}
-.nav-tab .pill{margin-left:2px;background:var(--red);color:#fff;font-size:11px;font-weight:700;border-radius:9px;padding:1px 6px;line-height:1.4}
-.nav-tab.on .pill{background:var(--green-dark)}
 
 /* ---- main content ---- */
 .main{flex:1;min-width:0;width:100%;max-width:var(--content-max);margin:0 auto;
@@ -125,23 +111,15 @@ p{margin:0 0 8px}
   margin-top:calc(var(--header-h) + var(--nav-h));margin-bottom:var(--footer-h);
   height:calc(100dvh - var(--header-h) - var(--nav-h) - var(--footer-h));max-width:none}
 .main > *{max-width:var(--content-max);margin-left:auto;margin-right:auto}
-.app-footer{position:fixed;left:0;right:0;bottom:0;z-index:58;height:var(--footer-h);
-  display:flex;align-items:center;justify-content:center;gap:10px;padding:0 14px;
-  background:#fff;border-top:1px solid var(--line);box-shadow:0 -1px 2px rgba(16,24,40,.04);font-size:12px;color:var(--muted)}
-.app-footer-org{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;min-width:0;text-align:center}
 .foot-logo{height:22px;width:auto;max-width:72px;object-fit:contain}
 .logo-edit{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .logo-preview{width:88px;height:88px;object-fit:contain;border:1px solid var(--line);border-radius:10px;background:#fff;padding:4px}
 .ps-logo{display:block;height:16mm;width:auto;max-width:42mm;margin:0 auto 2mm;object-fit:contain}
-.app-footer-org strong{color:var(--green-dark);font-size:13px}
-.app-footer-en{color:var(--text)}
-.app-footer-meta{color:var(--faint);font-size:11px}
 .page-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .page-head h1{font-size:var(--f-h1);display:flex;align-items:center;gap:8px}
 .page-head h1 .icon{width:1.15em;height:1.15em;color:var(--green)}
 .page-head .sub{font-size:12.5px;color:var(--muted)}
 .page-head .spacer{flex:1}
-
 /* ===================== CARDS ===================== */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
 .card-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line-2);flex-wrap:wrap}
@@ -149,24 +127,31 @@ p{margin:0 0 8px}
 .card-head .spacer{flex:1}
 .card-body{padding:16px}
 .card-body.tight{padding:0}
-.muted{color:var(--muted)} .faint{color:var(--faint)}
-.fs8{font-size:12px}.fs9{font-size:13px}.fs10{font-size:14px}
-.right{text-align:right}.center{text-align:center}
-.mt6{margin-top:8px}.mt10{margin-top:12px}.mb6{margin-bottom:8px}.mb0{margin-bottom:0}
-
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+.fs8{font-size:12px}
+.fs9{font-size:13px}
+.fs10{font-size:14px}
+.right{text-align:right}
+.center{text-align:center}
+.mt6{margin-top:8px}
+.mt10{margin-top:12px}
+.mb6{margin-bottom:8px}
+.mb0{margin-bottom:0}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
 .stat{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
 .stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--green)}
-.stat.red::before{background:var(--red)}.stat.amber::before{background:var(--amber-dark)}.stat.blue::before{background:var(--blue)}.stat.gray::before{background:var(--faint)}
+.stat.red::before{background:var(--red)}
+.stat.amber::before{background:var(--amber-dark)}
+.stat.blue::before{background:var(--blue)}
+.stat.gray::before{background:var(--faint)}
 .stat .lbl{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:6px}
 .stat .lbl .icon{width:15px;height:15px}
 .stat .val{font-size:24px;font-weight:700;margin-top:4px;line-height:1.2;font-variant-numeric:tabular-nums}
 .stat .sub{font-size:11.5px;color:var(--faint)}
-
 .progress{height:8px;background:#f1f3f5;border-radius:5px;overflow:hidden;margin:6px 0}
 .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--green),#4ade80);border-radius:5px;transition:width .4s}
 .progress.warn > i{background:linear-gradient(90deg,var(--red),#fb7185)}
-
 /* ===================== FORMS ===================== */
 .grid{display:grid;gap:12px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
@@ -191,7 +176,6 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .form-actions.end{justify-content:flex-end}
 fieldset{border:1px solid var(--line);border-radius:var(--r-sm);padding:12px;margin:0 0 12px}
 legend{font-size:12px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:.5px;padding:0 6px}
-
 /* ===================== BUTTONS ===================== */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:inherit;font-size:var(--f-btn);font-weight:700;
   padding:8px 14px;min-height:38px;border-radius:var(--r-sm);border:1px solid transparent;cursor:pointer;transition:.14s;white-space:nowrap;letter-spacing:.2px}
@@ -217,7 +201,6 @@ legend{font-size:12px;font-weight:700;color:var(--green-dark);text-transform:upp
 .btn-xs .icon{width:13px;height:13px}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap}
 .btn-row.end{justify-content:flex-end}
-
 /* ===================== TABLES ===================== */
 .tbl-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 table.tbl{width:100%;border-collapse:collapse;font-size:var(--f-td);background:#fff}
@@ -238,13 +221,11 @@ table.tbl .nowrap{white-space:nowrap}
 .tag.gray{background:#f3f4f6;border-color:var(--line);color:var(--muted)}
 .due-amt{color:var(--red-dark);font-weight:700}
 .adv-amt{color:var(--green-dark);font-weight:700}
-
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
 .toolbar .field{flex:1 1 150px}
 .search-box{position:relative;flex:1 1 240px}
 .search-box input{padding-left:34px}
 .search-box .icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--faint)}
-
 .list{display:flex;flex-direction:column;gap:8px}
 .li{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff}
 .li .ic{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;flex:none;background:#f3f4f6;font-size:15px}
@@ -261,25 +242,21 @@ table.tbl .nowrap{white-space:nowrap}
 .li.wa-msg{background:#dcfce7;border-color:#86efac;border-radius:16px 16px 16px 4px}
 .li.wa-msg .bd .t{color:#14532d}
 .li.wa-msg.unread{background:#bbf7d0;border-color:#4ade80}
-
 .kv{display:grid;grid-template-columns:minmax(120px,34%) 1fr;gap:0;font-size:13.5px;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden}
 .kv > div{padding:8px 12px;border-bottom:1px solid var(--line-2)}
 .kv > div:nth-child(odd){background:#fafbfc;color:var(--muted);font-weight:700;font-size:12.5px}
 .kv > div:nth-last-child(-n+2){border-bottom:0}
-
 .banner{display:flex;gap:8px;align-items:flex-start;padding:11px 14px;border-radius:var(--r-sm);font-size:13.5px;border:1px solid;margin-bottom:12px;line-height:1.55}
 .banner .icon{width:16px;height:16px;flex:none;margin-top:2px}
 .banner.info{background:var(--blue-soft);border-color:#bfdbfe;color:#1e40af}
 .banner.warn{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-dark)}
 .banner.ok{background:var(--green-soft);border-color:var(--green-line);color:var(--green-dark)}
 .banner.err{background:var(--red-soft);border-color:var(--red-line);color:var(--red-dark)}
-
 .tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:14px}
 .tabs button{border:0;background:transparent;font:inherit;font-size:13.5px;font-weight:700;color:var(--muted);
   padding:9px 14px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:.13s}
 .tabs button.on{color:var(--green-dark);border-bottom-color:var(--green)}
 .tabs button:hover{color:var(--text)}
-
 /* ===================== MODAL / TOAST ===================== */
 .modal-back{position:fixed;inset:0;background:rgba(17,24,39,.45);display:flex;align-items:center;justify-content:center;
   z-index:200;padding:16px;animation:fade .15s}
@@ -296,12 +273,13 @@ table.tbl .nowrap{white-space:nowrap}
 .toast-wrap{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:calc(100% - 32px);max-width:420px}
 .toast{background:#111827;color:#fff;font-size:13.5px;font-weight:600;padding:10px 16px;border-radius:22px;box-shadow:0 6px 18px rgba(0,0,0,.2);animation:up .18s;text-align:center;line-height:1.5}
 .toast.out{opacity:0;transition:.22s}
-.toast-success{background:var(--green-dark)}.toast-error{background:var(--red-dark)}.toast-warn{background:var(--amber-dark)}
+.toast-success{background:var(--green-dark)}
+.toast-error{background:var(--red-dark)}
+.toast-warn{background:var(--amber-dark)}
 @keyframes up{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 .success-pop{text-align:center;padding:6px 0}
 .success-pop .tick{width:54px;height:54px;margin:0 auto 10px;border-radius:50%;background:var(--green-soft);color:var(--green-dark);display:grid;place-items:center;font-size:28px}
 .success-pop h4{font-size:16px;margin-bottom:10px}
-
 /* ===================== PRINT SHEET (PDF source) ===================== */
 .sheet-holder{background:#eceef0;padding:14px;border-radius:var(--r);overflow-x:auto}
 .print-sheet{width:210mm;min-height:120mm;margin:0 auto;background:#fff;color:#000;padding:10mm 9mm;
@@ -330,7 +308,6 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
 .sheet-bar{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
 /* scrollable A4 preview frame used by the report pages */
 .sheet-offscreen{position:absolute;left:-99999px;top:0;pointer-events:none}
-
 /* ===================== MINI BAR CHART ===================== */
 .bars{display:flex;align-items:flex-end;gap:14px;overflow-x:auto;padding:8px 2px 0;min-height:150px}
 .bar{flex:1 0 52px;display:flex;flex-direction:column;align-items:center;gap:5px}
@@ -340,7 +317,6 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   border-radius:4px 4px 0 0;transition:height .3s ease}
 .bar-lbl{font-size:12px;color:var(--muted);white-space:nowrap}
 .bar-val{font-size:12px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
-
 /* ===================== RESPONSIVE ===================== */
 @media (max-width:900px){
   :root{
@@ -353,48 +329,43 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
   .stat .val{font-size:20px}
   .topbar{padding:0 12px}
 }
-@media (max-width:640px){
-  :root{
+@media (max-width:640px){:root{
     --f-h1:17px; --f-h2:13px; --f-sec:12px; --f-th:10px; --f-td:11.5px;
     --f-txt:12px; --f-btn:12px; --f-lbl:10.5px; --f-inp:12px;
     --header-h:50px; --nav-h:42px; --footer-h:44px;
   }
-  .main{padding:12px 10px 10px}
-  .brand-logo{width:32px;height:32px;font-size:15px}
-  .brand-txt .n{font-size:14px}
-  .brand-txt .r{font-size:10px;max-width:130px}
-  .brand-txt .r .brand-role-tag{display:none}
-  .chip{font-size:11px;padding:4px 8px}
-  .icon-btn{width:34px;height:34px;font-size:15px}
-  .nav-tab{font-size:12.5px;padding:0 11px}
-  .stats{grid-template-columns:1fr 1fr;gap:8px}
-  .stat{padding:10px 12px}
-  .stat .val{font-size:18px}
-  .g2,.g3,.g4{grid-template-columns:1fr 1fr}
-  .card-body{padding:12px}
-  .card-head{padding:10px 12px}
-  .modal-body{padding:12px 14px}
-  .modal-foot{padding:10px 14px}
-  .btn{padding:7px 12px;min-height:36px}
+.main{padding:12px 10px 10px}
+.brand-logo{width:32px;height:32px;font-size:15px}
+.brand-txt .n{font-size:14px}
+.brand-txt .r{font-size:10px;max-width:130px}
+.brand-txt .r .brand-role-tag{display:none}
+.chip{font-size:11px;padding:4px 8px}
+.icon-btn{width:34px;height:34px;font-size:15px}
+.stats{grid-template-columns:1fr 1fr;gap:8px}
+.stat{padding:10px 12px}
+.stat .val{font-size:18px}
+.g2,.g3,.g4{grid-template-columns:1fr 1fr}
+.card-body{padding:12px}
+.card-head{padding:10px 12px}
+.modal-body{padding:12px 14px}
+.modal-foot{padding:10px 14px}
+.btn{padding:7px 12px;min-height:36px}
 }
-@media (max-width:430px){
-  .g2,.g3,.g4{grid-template-columns:1fr}
-  .stats{grid-template-columns:1fr 1fr}
-  .toolbar .field{flex:1 1 100%}
-  .btn{padding:7px 10px}
-  .modal-foot .btn{flex:1}
-  .topbar{padding:0 8px}
-  /* dashboard fit on small phones */
+@media (max-width:430px){.g2,.g3,.g4{grid-template-columns:1fr}
+.stats{grid-template-columns:1fr 1fr}
+.toolbar .field{flex:1 1 100%}
+.btn{padding:7px 10px}
+.modal-foot .btn{flex:1}
+.topbar{padding:0 8px}
+/* dashboard fit on small phones */
   .hero-card .hc-val{font-size:21px}
-  .hero-card .hc-lbl{flex-wrap:wrap;gap:2px 10px}
-  .stat .val{font-size:16px;overflow-wrap:anywhere}
-  .stat .lbl{font-size:10px;letter-spacing:.2px}
-  .stat .sub{font-size:10.5px}
-  .sec-head h2{font-size:11px}
+.hero-card .hc-lbl{flex-wrap:wrap;gap:2px 10px}
+.stat .val{font-size:16px;overflow-wrap:anywhere}
+.stat .lbl{font-size:10px;letter-spacing:.2px}
+.stat .sub{font-size:10.5px}
+.sec-head h2{font-size:11px}
 }
-
 .auth-theme-btn{position:fixed;top:12px;right:12px;z-index:80}
-
 /* ===================== ROLE COLORS ===================== */
 html[data-role="admin"]{
   --role:#7c3aed; --role-soft:#ede9fe; --role-line:#c4b5fd; --role-dark:#5b21b6;
@@ -409,14 +380,7 @@ html[data-role="member"]{
    Buttons, nav, FAB, stats and inputs stay brand green for every role. */
 html[data-role="admin"] .topbar,html[data-role="maker"] .topbar,html[data-role="member"] .topbar{border-bottom-color:var(--role-line);background:linear-gradient(180deg,var(--role-soft),#fff 70%)}
 html[data-role="admin"] .brand-txt .r,html[data-role="maker"] .brand-txt .r,html[data-role="member"] .brand-txt .r{color:var(--role-dark)}
-
 /* Bottom navigation visuals (layout lives in the MOBILE-FIRST SHELL block below) */
-.bottom-nav .nav-tab{
-  flex:1;flex-direction:column;justify-content:center;gap:2px;padding:6px 4px;
-  border-bottom:0;border-top:2.5px solid transparent;font-size:11px;
-}
-.bottom-nav .nav-tab .icon{width:21px;height:21px}
-.bottom-nav .nav-tab.on{border-top-color:var(--green);border-bottom:0}
 
 html[data-theme="amoled"][data-role="admin"],
 html[data-theme="dark"][data-role="admin"]{--role-soft:#1e1033;--role-line:#5b21b6}
@@ -428,7 +392,6 @@ html[data-theme="amoled"][data-role="member"] .bottom-nav,
 html[data-theme="dark"][data-role="member"] .bottom-nav{background:#000;border-color:#222}
 html[data-theme="amoled"][data-role] .topbar,
 html[data-theme="dark"][data-role] .topbar{background:#000}
-
 /* ===================== HARD DARK (AMOLED) ===================== */
 html[data-theme="amoled"],html[data-theme="dark"]{
   color-scheme:dark;
@@ -441,9 +404,8 @@ html[data-theme="amoled"],html[data-theme="dark"]{
   --shadow:none;
 }
 html[data-theme="amoled"] body,html[data-theme="dark"] body{background:#000;color:var(--text)}
-html[data-theme="amoled"] .topbar,html[data-theme="dark"] .topbar,
-html[data-theme="amoled"] .topnav,html[data-theme="dark"] .topnav,
-html[data-theme="amoled"] .app-footer,html[data-theme="dark"] .app-footer,
+html[data-theme="amoled"] .topbar,html[data-theme="dark"] .topbar{
+  background:#000}
 html[data-theme="amoled"] .card,html[data-theme="dark"] .card,
 html[data-theme="amoled"] .stat,html[data-theme="dark"] .stat,
 html[data-theme="amoled"] .modal,html[data-theme="dark"] .modal,
@@ -458,7 +420,6 @@ html[data-theme="amoled"] .chip,html[data-theme="dark"] .chip,
 html[data-theme="amoled"] .auth-tabs,html[data-theme="dark"] .auth-tabs{background:#000;border-color:#333;color:var(--text)}
 html[data-theme="amoled"] .icon-btn:hover,html[data-theme="dark"] .icon-btn:hover,
 html[data-theme="amoled"] .btn-ghost:hover,html[data-theme="dark"] .btn-ghost:hover,
-html[data-theme="amoled"] .nav-tab:hover,html[data-theme="dark"] .nav-tab:hover{background:#111}
 html[data-theme="amoled"] input,html[data-theme="dark"] input,
 html[data-theme="amoled"] select,html[data-theme="dark"] select,
 html[data-theme="amoled"] textarea,html[data-theme="dark"] textarea{background:#000;color:var(--text);border-color:#333}
@@ -473,7 +434,6 @@ html[data-theme="amoled"] .card-head,html[data-theme="dark"] .card-head,
 html[data-theme="amoled"] .kv > div:nth-child(odd),html[data-theme="dark"] .kv > div:nth-child(odd){background:#050505;color:var(--muted);border-color:var(--line)}
 html[data-theme="amoled"] table.tbl td,html[data-theme="dark"] table.tbl td{border-color:#1a1a1a}
 html[data-theme="amoled"] table.tbl tbody tr:hover,html[data-theme="dark"] table.tbl tbody tr:hover{background:#0a0a0a}
-html[data-theme="amoled"] .nav-tab.on,html[data-theme="dark"] .nav-tab.on{background:#052e16;color:#86efac;border-bottom-color:var(--green)}
 html[data-theme="amoled"] .auth-tabs button.on,html[data-theme="dark"] .auth-tabs button.on{background:#111;color:#86efac}
 html[data-theme="amoled"] .modal-back,html[data-theme="dark"] .modal-back{background:rgba(0,0,0,.78)}
 html[data-theme="amoled"] .modal-head,html[data-theme="dark"] .modal-head,
@@ -485,23 +445,20 @@ html[data-theme="amoled"] .li.wa-msg,html[data-theme="dark"] .li.wa-msg{backgrou
 html[data-theme="amoled"] .li.wa-msg .bd .t,html[data-theme="dark"] .li.wa-msg .bd .t{color:#86efac}
 html[data-theme="amoled"] .print-sheet,html[data-theme="dark"] .print-sheet,
 html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{color:#000 !important;background:#fff}
-
-@media print{
-  body{background:#fff}
-  .topbar,.topnav,.bottom-nav,.app-footer,.sheet-bar,.toast-wrap,.no-print,.tabs,.toolbar{display:none !important}
-  #app.on{height:auto;max-height:none;overflow:visible}
-  .main{padding:0;max-width:none;margin:0;height:auto;overflow:visible}
-  .print-sheet .ps-head,.print-sheet .ps-foot{position:static}
-  .card,.sheet-holder{border:0;box-shadow:none;padding:0;margin:0;background:#fff}
-  .print-sheet{box-shadow:none;width:auto;padding:0}
-  @page{size:A4;margin:10mm}
-  /* Report “Print”: keep only the sheet, drop the modal chrome */
+@media print{body{background:#fff}
+.topbar,.topnav,.bottom-nav,.app-footer,.sheet-bar,.toast-wrap,.no-print,.tabs,.toolbar{display:none !important}
+#app.on{height:auto;max-height:none;overflow:visible}
+.main{padding:0;max-width:none;margin:0;height:auto;overflow:visible}
+.print-sheet .ps-head,.print-sheet .ps-foot{position:static}
+.card,.sheet-holder{border:0;box-shadow:none;padding:0;margin:0;background:#fff}
+.print-sheet{box-shadow:none;width:auto;padding:0}
+@page{size:A4;margin:10mm}
+/* Report “Print”: keep only the sheet, drop the modal chrome */
   body.printing .modal-back{position:static;display:block;background:#fff;inset:auto;padding:0}
-  body.printing .modal{max-width:none;width:auto;max-height:none;border-radius:0;box-shadow:none;background:#fff}
-  body.printing .modal-head,body.printing .modal-foot{display:none !important}
-  body.printing .modal-body{padding:0;overflow:visible}
+body.printing .modal{max-width:none;width:auto;max-height:none;border-radius:0;box-shadow:none;background:#fff}
+body.printing .modal-head,body.printing .modal-foot{display:none !important}
+body.printing .modal-body{padding:0;overflow:visible}
 }
-
 /* ===================== ADMIN HUB (tile grid) ===================== */
 .hub-group{margin-bottom:16px}
 .hub-group-title{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;text-transform:uppercase;
@@ -527,7 +484,6 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 .hub-tile.info .tic{background:var(--blue-soft);color:#1d4ed8}
 .hub-tile .go{color:var(--faint);font-size:15px;flex:none;align-self:center}
 .hub-tile .go .icon{width:16px;height:16px}
-
 .hub-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .hub-sec{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .hub-sec .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex:none;
@@ -535,15 +491,15 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 .hub-sec .ic .icon{width:20px;height:20px}
 .hub-sec h2{font-size:17px}
 .hub-sec .s{font-size:12px;color:var(--muted)}
-@media (max-width:560px){
-  .hub-grid{grid-template-columns:1fr 1fr;gap:8px}
-  .hub-tile{flex-direction:column;gap:8px;padding:12px}
-  .hub-tile .ts,.hub-tile .go{display:none}
-  .hub-tile .tt{font-size:13px}
-  .hub-tile .tic{width:34px;height:34px}
+@media (max-width:560px){.hub-grid{grid-template-columns:1fr 1fr;gap:8px}
+.hub-tile{flex-direction:column;gap:8px;padding:12px}
+.hub-tile .ts,.hub-tile .go{display:none}
+.hub-tile .tt{font-size:13px}
+.hub-tile .tic{width:34px;height:34px}
 }
-@media (max-width:360px){.hub-grid{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}}
-
+@media (max-width:360px){.hub-grid{grid-template-columns:1fr}
+.quick-grid{grid-template-columns:1fr 1fr}
+}
 /* ===================== APPROVAL INBOX ===================== */
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .chip-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--text);
@@ -570,18 +526,15 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 .appr .kind{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--faint);
   border:1px solid var(--line);border-radius:5px;padding:0 5px}
 .count-line{font-size:12px;color:var(--muted);margin-bottom:8px}
-@media (max-width:700px){
-  .appr{flex-wrap:wrap}
-  .appr .acts{width:100%;justify-content:flex-start}
-  .appr .amt{margin-left:48px}
+@media (max-width:700px){.appr{flex-wrap:wrap}
+.appr .acts{width:100%;justify-content:flex-start}
+.appr .amt{margin-left:48px}
 }
-
 /* ===================== MOBILE-FIRST SHELL =====================
    < 1024px : fixed bottom navigation (5 slots) + contextual FAB
    >=1024px : left icon rail (72px, expands on hover/pin)
    ============================================================= */
 :root{ --bottom-nav-h:0px; --rail-w:0px; }
-
 /* ---- bottom navigation ---- */
 .bottom-nav{
   display:none;
@@ -592,23 +545,6 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   align-items:stretch;justify-content:space-around;
   box-shadow:0 -2px 12px rgba(16,24,40,.07);
 }
-.bottom-nav .nav-tab{
-  position:relative;display:flex;align-items:center;gap:4px;flex:1;min-width:0;
-  border:0;background:transparent;font:inherit;color:var(--faint);cursor:pointer;
-  padding:0 2px;min-height:48px;
-}
-.bottom-nav .nav-tab span{font-size:10.5px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-.bottom-nav .nav-tab.on{color:var(--green-dark,var(--green));background:transparent}
-.bottom-nav .nav-tab.on::before{
-  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:24px;height:2.5px;border-radius:0 0 3px 3px;background:var(--green);
-}
-.bottom-nav .nav-tab .pill{
-  position:absolute;top:3px;right:calc(50% - 22px);background:var(--red);color:#fff;
-  font-size:9.5px;font-weight:700;border-radius:9px;padding:0 4px;line-height:1.5;min-width:15px;
-}
-
-
 /* ---- desktop icon rail ---- */
 .rail{
   display:none;position:fixed;left:0;top:var(--header-h);bottom:var(--footer-h);z-index:57;
@@ -631,19 +567,7 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   border-radius:0 3px 3px 0;background:var(--green)}
 .rail .rail-tab .pill{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;
   border-radius:9px;padding:0 6px;line-height:1.6}
-
 /* ---- contextual FAB ---- */
-.fab{
-  position:fixed;right:16px;z-index:58;
-  bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px) + 14px);
-  height:52px;padding:0 18px;border:0;border-radius:26px;background:var(--green);color:#fff;
-  font:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;cursor:pointer;
-  box-shadow:0 8px 22px rgba(22,163,74,.35);
-}
-.fab .icon{width:20px;height:20px}
-.fab:active{transform:scale(.96)}
-
-@media (min-width:1024px){ .fab{bottom:calc(var(--footer-h) + 18px);right:24px} }
 
 /* ---- bottom sheet (More menu) ---- */
 .sheet-backdrop{position:fixed;inset:0;z-index:200;background:rgba(17,24,39,.45);opacity:0;transition:opacity .2s}
@@ -680,17 +604,14 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .18s}
 .switch.on{background:var(--green)}
 .switch.on::after{left:22px}
-@media (min-width:640px){
-  .sheet{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-46%) scale(.98);
+@media (min-width:640px){.sheet{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-46%) scale(.98);
     border-radius:16px;max-width:420px;width:100%;opacity:0}
-  .sheet.on{transform:translate(-50%,-50%) scale(1);opacity:1}
+.sheet.on{transform:translate(-50%,-50%) scale(1);opacity:1}
 }
-
 /* ---- layout switches ---- */
 @media (max-width:1023px){
   :root{ --bottom-nav-h:58px; }
-  .topnav{display:none !important}
-  .app-footer{display:none}
+
   .bottom-nav{display:flex}
   .main{
     margin-top:var(--header-h);
@@ -699,19 +620,15 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
     padding:14px 12px 20px;
   }
 }
-@media (min-width:1024px){
-  :root{ --rail-w:76px; }
-  .topnav{display:none !important}
-  .bottom-nav{display:none !important}
-  .rail{display:flex}
-  .main{
+@media (min-width:1024px){:root{ --rail-w:76px; }
+.bottom-nav{display:none !important}
+.rail{display:flex}
+.main{
     margin-top:var(--header-h);margin-left:var(--rail-w);
     height:calc(100dvh - var(--header-h) - var(--footer-h));
     width:calc(100% - var(--rail-w));padding:20px 24px 16px;
   }
-  .app-footer{left:var(--rail-w)}
 }
-
 /* ===================== RESPONSIVE CARD TABLES =====================
    Below 768px every table row becomes a card, using the data-label that
    tableWrap() writes on each cell — no duplicated markup, no lost columns. */
@@ -745,13 +662,14 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   table.tbl tfoot td{padding:3px 0;font-size:13px}
   table.tbl tfoot td::before{content:none}
 }
-
 /* ===================== DASHBOARD (mobile-first) ===================== */
 /* member home: time-of-day greeting */
 .greet{margin:2px 2px 12px}
 .greet-hi{font-size:16.5px;font-weight:800;line-height:1.3}
 .greet-sub{font-size:12px;color:var(--muted);margin-top:2px}
-@media (max-width:430px){.greet{margin:2px 2px 10px}.greet-hi{font-size:15.5px}}
+@media (max-width:430px){.greet{margin:2px 2px 10px}
+.greet-hi{font-size:15.5px}
+}
 .hero-card{background:linear-gradient(140deg,#16a34a,#15803d);color:#fff;border-radius:var(--r);
   padding:14px 16px 13px;margin-bottom:12px;box-shadow:0 8px 22px rgba(22,163,74,.22)}
 .hero-card .hc-lbl{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;opacity:.9}
@@ -778,16 +696,11 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 .act .at{font-size:13px;font-weight:700;line-height:1.35}
 .act .as{font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .act .aw{font-size:10.5px;color:var(--faint);white-space:nowrap;flex:none;text-align:right;line-height:1.35}
-
-
 /* date mirror under the native date input (always DD-MM-YYYY) */
 .dfmt{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
-
-@media (max-width:640px){
-  .hero-card .hc-val{font-size:23px}
-  .quick-grid .hub-tile .tic{width:38px;height:38px}
+@media (max-width:640px){.hero-card .hc-val{font-size:23px}
+.quick-grid .hub-tile .tic{width:38px;height:38px}
 }
-
 /* ===================== STATES: skeleton · empty · error · offline ===================== */
 .sk-wrap{display:block}
 .sk-line,.sk-dot{display:block;border-radius:6px;
@@ -803,9 +716,8 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
 .sk-dot{width:34px;height:34px;border-radius:10px;flex:none}
 .sk-row .sk-lines{flex:1;min-width:0;padding-top:2px}
 @keyframes sk{0%{background-position:100% 0}100%{background-position:0 0}}
-@media (prefers-reduced-motion:reduce){
-  .sk-line,.sk-dot,.ptr.loading .ptr-spin{animation:none}
-  *{transition-duration:.01ms !important}
+@media (prefers-reduced-motion:reduce){.sk-line,.sk-dot,.ptr.loading .ptr-spin{animation:none}
+*{transition-duration:.01ms !important}
 }
 .empty-state{padding:30px 18px;text-align:center;color:var(--muted)}
 .empty-state.compact{padding:22px 14px}
@@ -824,7 +736,6 @@ html[data-theme="amoled"] .print-sheet *,html[data-theme="dark"] .print-sheet *{
   top:calc(var(--header-h) + 8px);z-index:61}
 .offline-bar[hidden]{display:none}
 .offline-bar .icon{width:14px;height:14px}
-
 /* ===================== DARK / AMOLED: mobile shell + tiles ===================== */
 html[data-theme="dark"] .hub-tile,
 html[data-theme="amoled"] .hub-tile{background:var(--card);color:var(--text)}
@@ -871,21 +782,16 @@ html[data-theme="dark"] .sk-dot,
 html[data-theme="amoled"] .sk-dot{background:linear-gradient(90deg,#141414 25%,#1f1f1f 37%,#141414 63%);background-size:400% 100%}
 html[data-theme="dark"] .empty-state .es-ic,
 html[data-theme="amoled"] .empty-state .es-ic{background:#141414}
-html[data-theme="dark"] .fab,
-html[data-theme="amoled"] .fab{box-shadow:0 6px 18px rgba(0,0,0,.55)}
-
 /* ===================== GESTURES (roadmap step-8 polish) =====================
    Swipe-to-act · pull-to-refresh · collapse-on-scroll topbar · 44px targets */
 
 /* ---- collapse-on-scroll topbar (body.tb-hidden is set by gestures.js) ---- */
 body.tb-hidden .topbar{transform:translateY(-110%)}
 body.tb-hidden .offline-bar{top:8px}
-@media (max-width:1023px){
-  .main{transition:margin-top .22s ease,height .22s ease}
-  body.tb-hidden .main{margin-top:0;
+@media (max-width:1023px){.main{transition:margin-top .22s ease,height .22s ease}
+body.tb-hidden .main{margin-top:0;
     height:calc(100dvh - var(--bottom-nav-h) - env(safe-area-inset-bottom,0px))}
 }
-
 /* ---- swipe-to-act (approval rows) ---- */
 .appr.swipe{padding:0}
 .swipe{position:relative;overflow:hidden}
@@ -900,8 +806,8 @@ body.tb-hidden .offline-bar{top:8px}
   display:flex;gap:12px;align-items:center;padding:11px 13px;
   touch-action:pan-y;transition:transform .18s ease;will-change:transform}
 .swipe-front.drag{user-select:none;-webkit-user-select:none;cursor:grabbing}
-@media (max-width:700px){.swipe-front{flex-wrap:wrap}}
-
+@media (max-width:700px){.swipe-front{flex-wrap:wrap}
+}
 /* ---- pull-to-refresh indicator (first child of .main while pulling) ---- */
 .ptr{height:0;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;width:100%}
 .ptr.ease{transition:height .2s ease}
@@ -915,13 +821,11 @@ body.tb-hidden .offline-bar{top:8px}
 @keyframes ptrspin{to{transform:rotate(360deg)}}
 html[data-theme="dark"] .ptr.ready .ptr-box,
 html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
-
 /* ---- 44px touch targets for primary mobile actions ---- */
 @media (max-width:640px){
   .form-actions .btn-primary,.form-actions .btn-danger,
   .modal-foot .btn,.btn-block{min-height:44px}
 }
-
 /* ============ Phase KHA — member forms + list ============ */
 /* --- registration wizard --- */
 .wsteps{display:flex;align-items:center;gap:6px;margin-bottom:12px}
@@ -954,8 +858,7 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
   .mform input,.mform select,.mform textarea{font-size:16px}
   .mform input,.mform select{min-height:48px}
 }
-@media (max-width:640px){
-  .form-sticky{margin:12px -12px -12px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+@media (max-width:640px){.form-sticky{margin:12px -12px -12px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
 }
 /* --- member picker (combobox) --- */
 .card.overflow-visible{overflow:visible}
@@ -988,7 +891,6 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
 .pc-nums{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted);margin-top:5px}
 .pc-nums b{color:var(--text);font-variant-numeric:tabular-nums}
 .pc-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
-
 /* ============ Phase GA — deposit / withdrawal / transactions ============ */
 /* --- segmented single-select chips (forms + filter sheet) --- */
 .seg{display:flex;gap:6px;flex-wrap:wrap}
@@ -1032,7 +934,8 @@ html[data-theme="amoled"] .ptr.ready .ptr-box{color:#4ade80}
   padding:10px 8px calc(12px + env(safe-area-inset-bottom,0px));
   background:linear-gradient(180deg,transparent,var(--bg) 45%)}
 .export-bar .icon-btn{width:46px;height:46px;font-size:19px;box-shadow:var(--shadow)}
-@media(max-width:640px){.export-bar{gap:12px}}
+@media(max-width:640px){.export-bar{gap:12px}
+}
 /* ============ Phase NGO — admin: backup blocks, danger zone, user cards, activity ============ */
 .btn-stack{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .btn-stack .btn{min-height:46px}
@@ -1085,7 +988,6 @@ details.acc .grid{padding:2px 12px 12px}
   .auth-card input:not([type=checkbox]),.auth-card select{min-height:48px}
   .auth-card .pw-wrap input{padding-right:54px}
 }
-
 /* ============ Auth modern — clean card, icon inputs, step heads, spinners ============ */
 /* Section heading inside the auth card */
 .auth-card .auth-h{font-size:16px;text-align:center;line-height:1.35}
@@ -1152,7 +1054,6 @@ details.acc .grid{padding:2px 12px 12px}
 .auth-card .wa-same{margin-top:4px;font-size:12.5px;min-height:36px}
 /* Success screen keeps the same hero rhythm */
 .auth-card .kv{margin-bottom:4px}
-
 /* ============ PWA install pill — floating, cancellable (Active-Plus style) ============ */
 .install-bar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));
   transform:translate(-50%,14px);opacity:0;z-index:190;pointer-events:none;
@@ -1172,7 +1073,6 @@ details.acc .grid{padding:2px 12px 12px}
   border-radius:10px;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
 .install-bar .ib-close:hover{background:var(--bg-2);color:var(--text)}
 html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{background:#000;border-color:#333}
-
 /* =====================================================================
    =====================  v6.6 — MODERN APP INTERFACE  ===================
    Android-app-like: icon grids, 2-column options, clean top bar,
@@ -1187,13 +1087,11 @@ html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{back
 .topbar .brand-txt .n{overflow:hidden;text-overflow:ellipsis}
 .topbar .brand-txt .r{max-width:40vw;justify-content:flex-start}
 .top-right{margin-left:0}
-@media (max-width:430px){
-  .topbar{padding:0 8px;gap:4px}
-  .topbar .brand{gap:8px}
-  .topbar .icon-btn{width:34px;height:34px}
-  .topbar .brand-txt .r{max-width:32vw}
+@media (max-width:430px){.topbar{padding:0 8px;gap:4px}
+.topbar .brand{gap:8px}
+.topbar .icon-btn{width:34px;height:34px}
+.topbar .brand-txt .r{max-width:32vw}
 }
-
 /* ---- hub section menu (Deposits / Transactions / Settings) — 2 columns,
    an odd last tile keeps the SAME size (auto-placement, never stretched) ---- */
 .sec-menu{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
@@ -1217,13 +1115,11 @@ html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{back
 .sec-tile.warn .st-ic{background:var(--amber-soft);color:var(--amber-dark)}
 .sec-tile.danger .st-ic{background:var(--red-soft);color:var(--red-dark)}
 .sec-tile.gray .st-ic{background:#f3f4f6;color:var(--muted)}
-@media (max-width:640px){
-  .sec-menu{gap:8px}
-  .sec-tile{padding:12px 10px 11px;min-height:86px;border-radius:13px}
-  .sec-tile .st-t{font-size:12.5px}
-  .sec-tile .st-s{font-size:10px}
+@media (max-width:640px){.sec-menu{gap:8px}
+.sec-tile{padding:12px 10px 11px;min-height:86px;border-radius:13px}
+.sec-tile .st-t{font-size:12.5px}
+.sec-tile .st-s{font-size:10px}
 }
-
 /* ---- back-to-menu bar inside a hub section ---- */
 .sec-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .sec-back{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);
@@ -1233,7 +1129,6 @@ html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{back
 .sec-bar-t{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:800;min-width:0;
   overflow-wrap:anywhere}
 .sec-bar-t .icon{width:18px;height:18px;color:var(--green)}
-
 /* ---- selectable option cards (জমার ধরন / পরিশোধ পদ্ধতি …): 2 columns,
    icon on top, label below; odd last card keeps normal size ---- */
 .opt-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
@@ -1251,18 +1146,15 @@ html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{back
   box-shadow:0 0 0 2px var(--green-line)}
 .opt-card.on .oc-ic{background:var(--green);color:#fff}
 .opt-card .oc-tx{overflow-wrap:anywhere}
-@media (max-width:430px){
-  .opt-grid{gap:8px}
-  .opt-card{min-height:76px;font-size:11.5px;border-radius:12px}
-  .opt-card .oc-ic{width:30px;height:30px;font-size:16px}
+@media (max-width:430px){.opt-grid{gap:8px}
+.opt-card{min-height:76px;font-size:11.5px;border-radius:12px}
+.opt-card .oc-ic{width:30px;height:30px;font-size:16px}
 }
-
 /* ---- fixed (non-editable) monthly amount ---- */
 .fixed-amt{display:flex;align-items:center;gap:10px;border:1.5px dashed var(--green-line);
   background:var(--green-soft);border-radius:var(--r-sm);padding:10px 12px;min-height:48px;flex-wrap:wrap}
 .fixed-amt b{font-size:19px;color:var(--green-dark);font-variant-numeric:tabular-nums}
 .fixed-amt span{font-size:10.5px;color:var(--muted);font-weight:700}
-
 /* ---- unique transaction id chip ---- */
 .txn-id{display:inline-flex;align-items:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   font-size:11px;font-weight:700;letter-spacing:.2px;color:var(--green-dark);background:var(--green-soft);
@@ -1271,7 +1163,6 @@ html[data-theme="amoled"] .install-bar,html[data-theme="dark"] .install-bar{back
 .txn-id.copied{background:var(--green);color:#fff;border-color:var(--green)}
 .txn-id-static{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.3px;overflow-wrap:anywhere}
 td .txn-id, .kv .txn-id{margin:0}
-
 /* ---- modern transaction card (rule 11) ---- */
 .txn-list{display:flex;flex-direction:column;gap:9px}
 .txncard{
@@ -1291,7 +1182,6 @@ td .txn-id, .kv .txn-id{margin:0}
 .txncard .tx-amt{font-size:14.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .txncard .tx-sub{font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
 .txncard .tx-go{align-self:center;color:var(--faint);flex:none;font-size:16px}
-
 /* ---- deposit/withdrawal feed card (Deposits hub) — v6.6 markup ---- */
 .tcard{border-radius:14px}
 .tcard .tc-top{display:flex;align-items:center;gap:8px}
@@ -1304,7 +1194,6 @@ td .txn-id, .kv .txn-id{margin:0}
 .tcard .tc-title span{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--green-dark)}
 .tcard .tc-meta{font-size:11.5px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
 .tcard .tc-top .tag-wrap{margin-left:auto;flex:none}
-
 /* ---- member rows: long names WRAP, never overlap controls (rule 21) ---- */
 .pcard .pc-head{align-items:flex-start;gap:10px}
 .pcard .pc-ava{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;
@@ -1317,7 +1206,6 @@ td .txn-id, .kv .txn-id{margin:0}
 .pcard .pc-idline{font-size:11.5px;color:var(--muted);white-space:nowrap}
 .pcard .pc-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none;margin-left:6px}
 .pcard .pc-go{color:var(--faint);font-size:17px;line-height:1}
-
 /* ---- dashboard greeting + notices ---- */
 .greet{margin:6px 2px 14px}
 .greet-hi{font-size:21px;font-weight:800;line-height:1.25;letter-spacing:.1px}
@@ -1325,13 +1213,13 @@ td .txn-id, .kv .txn-id{margin:0}
 .greet-date{display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:11px;font-weight:700;
   color:var(--faint);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
 .greet-date .icon{width:13px;height:13px}
-@media (max-width:430px){.greet-hi{font-size:18.5px}.greet-sub{font-size:12px}}
+@media (max-width:430px){.greet-hi{font-size:18.5px}
+.greet-sub{font-size:12px}
+}
 .notice-card .card-head h3{display:flex;align-items:center;gap:7px}
 .notice-card .card-head h3 .icon{width:16px;height:16px;color:var(--amber-dark)}
-
 /* ---- report summary-before-filters ---- */
 .report-summary{margin-bottom:6px}
-
 /* ---- report preview modal (exact sheet; single source of truth with PDF) ---- */
 .rpv{padding:8px}
 .rpv-modal{max-width:min(920px,100%);width:100%;border-radius:16px}
@@ -1341,17 +1229,16 @@ td .txn-id, .kv .txn-id{margin:0}
 .rpv-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px))}
 .rpv-foot .btn{min-height:46px;font-size:14px}
 .rpv-holder .print-sheet{box-shadow:none;margin:0 auto}
-@media (max-width:640px){.rpv{padding:0}.rpv-modal{border-radius:0;max-height:100dvh;height:100dvh;max-width:none}
-  .rpv-holder{max-height:calc(100dvh - 140px)}}
-
+@media (max-width:640px){.rpv{padding:0}
+.rpv-modal{border-radius:0;max-height:100dvh;height:100dvh;max-width:none}
+.rpv-holder{max-height:calc(100dvh - 140px)}
+}
 /* ---- the mobile bottom bar stays ≤5 items; labels tiny ---- */
-.bottom-nav .nav-tab span{font-size:10px}
 
 /* ---- tables: never let ids/names break layout ---- */
 table.tbl td,table.tbl th{overflow-wrap:anywhere}
 table.tbl .num{white-space:nowrap}
 .cell-name{overflow-wrap:anywhere;white-space:normal}
-
 /* ---- dark / AMOLED for the new components ---- */
 html[data-theme="dark"] .sec-tile,html[data-theme="amoled"] .sec-tile,
 html[data-theme="dark"] .opt-card,html[data-theme="amoled"] .opt-card,
@@ -1372,17 +1259,15 @@ html[data-theme="dark"] .fixed-amt b,html[data-theme="amoled"] .fixed-amt b{colo
 html[data-theme="dark"] .rpv-modal,html[data-theme="amoled"] .rpv-modal{background:#000}
 html[data-theme="dark"] .sheet-holder,html[data-theme="amoled"] .sheet-holder{background:#111}
 html[data-theme="dark"] .sec-tile .pill,html[data-theme="amoled"] .sec-tile .pill{background:var(--red);color:#fff}
-
 /* ---- remove legacy FAB visual entirely (rule 5) ---- */
-.fab{display:none !important}
 
 /* ================= v7: notification centre (top-bar bell) ================= */
 .notif-body{max-height:62vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 14px 4px}
 .notif-body .list{padding-bottom:6px}
 .notif-body .li{cursor:pointer;transition:background .15s}
 .notif-body .li:active{background:#eef1f4}
-@media (max-width:430px){ .notif-body{max-height:58vh} }
-
+@media (max-width:430px){.notif-body{max-height:58vh}
+}
 /* =====================================================================
    v7 SHELL + COMPONENTS
    The shell is static markup (index.html); these rules style the new bottom
@@ -1392,13 +1277,11 @@ html[data-theme="dark"] .sec-tile .pill,html[data-theme="amoled"] .sec-tile .pil
 
 /* [hidden] must always win (e.g. #auth.auth-wrap is display:flex) */
 [hidden]{display:none !important}
-
 /* ---- inline language switch: labels carry both languages ---- */
 .i-en{display:none}
 .ni-lbl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html[data-lang="en"] .i-bn{display:none}
 html[data-lang="en"] .i-en{display:inline}
-
 /* ---- bottom navigation (static anchors; app.js adds the icons) ---- */
 .bottom-nav .nav-item{
   position:relative;display:none;flex:1;min-width:0;min-height:48px;
@@ -1421,15 +1304,14 @@ html[data-lang="en"] .i-en{display:inline}
 html[data-role="admin"] .bottom-nav .nav-item[data-roles~="staff"],
 html[data-role="maker"] .bottom-nav .nav-item[data-roles~="staff"],
 html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:flex}
-
 /* ---- first-paint skeleton ---- */
 .page-skeleton{padding:2px}
 .sk{border-radius:var(--r);background:linear-gradient(90deg,#eef0f3 25%,#f7f8fa 37%,#eef0f3 63%);
   background-size:400% 100%;animation:sk-shimmer 1.3s ease-in-out infinite}
 .skgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:2px}
 @keyframes sk-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
-@media (prefers-reduced-motion:reduce){.sk{animation:none}}
-
+@media (prefers-reduced-motion:reduce){.sk{animation:none}
+}
 /* ---- full-width action cards (the ONE primary action of a screen) ---- */
 .action-card{
   width:100%;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;
@@ -1450,7 +1332,6 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .action-card .ac-go{opacity:.6;display:flex}
 .action-card .pill{background:var(--red);color:#fff;font-size:10.5px;font-weight:700;
   border-radius:10px;padding:1px 7px}
-
 /* ---- generic list rows (listRow) ---- */
 .row{position:relative;display:flex;align-items:flex-start;gap:11px;background:var(--card,#fff);
   border:1px solid var(--line);border-radius:var(--r);padding:12px 13px;margin-bottom:8px}
@@ -1474,7 +1355,6 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .rw-amt.due-amt{color:var(--red-dark)}
 .row-hit{position:absolute;inset:0;border:0;background:transparent;cursor:pointer;border-radius:inherit}
 .row-acts,.row-actions{flex:1 0 100%;display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;justify-content:flex-end}
-
 /* ---- member cards / search tools ---- */
 .list-tools{display:flex;flex-direction:column;gap:9px;margin:12px 0}
 .crumb{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
@@ -1508,7 +1388,6 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .md-head{display:flex;gap:12px;align-items:center}
 .md-name{font-size:16px;font-weight:700}
 .md-sub{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-
 /* ---- filter sheet (inside the bottom sheet) ---- */
 .fsheet{padding:0 18px}
 .fsheet-sec{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
@@ -1516,7 +1395,6 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .fsheet-dates{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .fsheet-actions{display:flex;gap:8px;padding:6px 18px 4px}
 .si-right{margin-left:auto}
-
 /* ---- misc used by the rewritten pages ---- */
 .statement-actions{display:flex;gap:8px;margin:12px 0}
 .staff-filter{background:var(--card,#fff);border:1px solid var(--line);border-radius:var(--r);
@@ -1524,12 +1402,10 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .mpick-row{background:var(--card,#fff);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;margin-bottom:10px}
 .btn-sm{font-size:12px;padding:6px 10px;min-height:32px;border-radius:8px}
 .btn-sm .icon{width:15px;height:15px}
-@media (max-width:359px){
-  .bottom-nav .nav-item{font-size:9.5px}
-  .skgrid{grid-template-columns:1fr}
-  .fsheet-dates{grid-template-columns:1fr}
+@media (max-width:359px){.bottom-nav .nav-item{font-size:9.5px}
+.skgrid{grid-template-columns:1fr}
+.fsheet-dates{grid-template-columns:1fr}
 }
-
 /* =====================================================================
    v7 LOGIN — fits the viewport exactly, no overlap, no horizontal scroll
    (320 → 430 px tested against the shared scale below).
@@ -1549,18 +1425,15 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .auth-foot-link{display:none}
 .login-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
 .login-row .link-btn{font-size:12.5px;padding:2px}
-@media (max-width:359px){
-  .auth-wrap{padding-left:10px;padding-right:10px}
-  .auth-card{padding:20px 14px 18px}
-  .auth-logo{width:80px;height:80px}
-  .auth-tabs button{font-size:12.5px;padding:8px 4px}
+@media (max-width:359px){.auth-wrap{padding-left:10px;padding-right:10px}
+.auth-card{padding:20px 14px 18px}
+.auth-logo{width:80px;height:80px}
+.auth-tabs button{font-size:12.5px;padding:8px 4px}
 }
-@media (max-height:620px){
-  .auth-logo{width:72px;height:72px;margin-bottom:8px}
-  .auth-brand{margin-bottom:10px}
-  .auth-card{padding:18px 16px 16px}
+@media (max-height:620px){.auth-logo{width:72px;height:72px;margin-bottom:8px}
+.auth-brand{margin-bottom:10px}
+.auth-card{padding:18px 16px 16px}
 }
-
 /* =====================================================================
    v7 REPORTS — the filter card must visibly drive the output.
    The period control (quick ranges + From/To) and the live result counter
@@ -1579,15 +1452,12 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .filter-live:empty{display:none}
 .rep-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
 .rep-filters > .field{flex:1 1 190px;min-width:0}
-@media (max-width:560px){
-  /* the filter fields carry an inline flex-basis, so override it explicitly */
+@media (max-width:560px){/* the filter fields carry an inline flex-basis, so override it explicitly */
   .rep-filters > .field{flex:1 1 100% !important;width:100%}
 }
-@media (max-width:359px){
-  .period-dates{grid-template-columns:1fr}
-  .period-chips .seg-chip{font-size:12px;padding:7px 11px}
+@media (max-width:359px){.period-dates{grid-template-columns:1fr}
+.period-chips .seg-chip{font-size:12px;padding:7px 11px}
 }
-
 /* =====================================================================
    v7 PENDING REQUESTS (admin approval inbox) — one modern card per request:
    who, member ID, application/deposit date, amount, then the two decisions.
@@ -1615,13 +1485,12 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
 .acard .ac-acts{display:flex;gap:8px;flex-wrap:wrap}
 .acard .ac-acts .btn{flex:1 1 120px;justify-content:center}
 .acard .ac-acts.secondary .btn{flex:0 1 auto;font-weight:600}
-@media (max-width:359px){ .acard .ac-acts .btn{flex:1 1 100%} }
-
+@media (max-width:359px){.acard .ac-acts .btn{flex:1 1 100%}
+}
 /* small additions: member picker wrapper + approval card sub line */
 .mpick-box{position:relative;display:flex;align-items:center}
 .ac-sub{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}
 .ac-extra{font-weight:600;color:var(--faint)}
-
 /* long Bengali labels must wrap inside full-width buttons instead of overflowing */
 .btn-block,.cta-block,.form-sticky .btn,.ac-acts .btn,.action-card .ac-t{white-space:normal;overflow-wrap:anywhere}
 .action-card .ac-t{text-align:left}

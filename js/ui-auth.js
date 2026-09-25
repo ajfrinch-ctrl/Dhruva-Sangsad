@@ -2,7 +2,7 @@
    Nothing else is rendered while unauthenticated.
    Modern mobile-first layout: gradient hero, icon inputs, live hints,
    loading spinners, Bengali-first labels. Field names & validation unchanged. */
-import { el, clear, $, toast, alertBox, esc, tx, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
+import { el, clear, $, toast, alertBox, esc, tx, auto, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
 import { logoSrc } from './brand.js';
 import { getLang, setLang } from './i18n.js';
 import { icon } from './icons.js';
@@ -137,7 +137,8 @@ function forgotForm(body, root, onLoggedIn) {
   body.appendChild(holder);
   let found = null;
 
-  const errHtml = msg => `<span class="form-err">${esc(msg)}</span>`;
+  /* legacy 'বাংলা / English' messages are split to the active language */
+  const errHtml = msg => `<span class="form-err">${esc(auto(msg))}</span>`;
   const months = [
     [1, 'জানুয়ারি / January'], [2, 'ফেব্রুয়ারি / February'], [3, 'মার্চ / March'],
     [4, 'এপ্রিল / April'], [5, 'মে / May'], [6, 'জুন / June'],
@@ -396,7 +397,7 @@ async function registerForm(body, root, onLoggedIn) {
 
   const setErr = (name, msg) => {
     const box = f.querySelector(`[data-err="${name}"]`);
-    if (box) { box.textContent = msg; box.closest('.field').classList.add('bad'); }
+    if (box) { box.textContent = auto(msg); box.closest('.field').classList.add('bad'); }
   };
   const clearErrs = () => {
     f.querySelectorAll('.err').forEach(x => x.textContent = '');

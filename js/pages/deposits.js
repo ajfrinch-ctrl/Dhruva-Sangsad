@@ -13,7 +13,7 @@
  */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, modal, confirmBox,
-  DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, t, tx,
+  DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, t, tx, auto,
 } from '../util.js';
 import { icon } from '../icons.js';
 import {
@@ -384,7 +384,7 @@ export async function depositEntry(session, params = {}) {
     form.querySelectorAll('.field').forEach(x => x.classList.remove('bad'));
     const setErr = (n, msg) => {
       const b = form.querySelector(`[data-err="${n}"]`);
-      if (b) { b.textContent = msg; b.closest('.field').classList.add('bad'); }
+      if (b) { b.textContent = auto(msg); b.closest('.field').classList.add('bad'); }
     };
     const v = Object.fromEntries(new FormData(form).entries());
     const monthly = v.type === 'monthly';
@@ -606,7 +606,7 @@ export async function withdrawalScreen(session) {
     form.querySelectorAll('.field').forEach(x => x.classList.remove('bad'));
     const setErr = (n, msg) => {
       const b = form.querySelector(`[data-err="${n}"]`);
-      if (b) { b.textContent = msg; b.closest('.field').classList.add('bad'); }
+      if (b) { b.textContent = auto(msg); b.closest('.field').classList.add('bad'); }
     };
     const v = Object.fromEntries(new FormData(form).entries());
     let bad = false;

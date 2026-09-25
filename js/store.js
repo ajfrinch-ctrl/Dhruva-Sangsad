@@ -135,10 +135,10 @@ export async function checkUnique({ memberId, mobile, whatsapp, email }, exclude
   const mob = normalizeMobile(mobile), wa = normalizeMobile(whatsapp), em = (email || '').trim().toLowerCase();
   for (const m of members) {
     if (excludeId && m.id === excludeId) continue;
-    if (memberId && m.memberId === memberId) errs.push({ field: 'memberId', msg: 'এই Member ID ইতোমধ্যে ব্যবহৃত হয়েছে। / This Member ID already exists.' });
+    if (memberId && m.memberId === memberId) errs.push({ field: 'memberId', msg: 'এই সদস্য আইডি ইতোমধ্যে ব্যবহৃত হয়েছে। / This Member ID already exists.' });
     if (mob && normalizeMobile(m.mobile) === mob) errs.push({ field: 'mobile', msg: 'এই মোবাইল নম্বর ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
     if (wa && normalizeMobile(m.whatsapp) === wa) errs.push({ field: 'whatsapp', msg: 'এই WhatsApp নম্বর ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
-    if (em && (m.email || '').trim().toLowerCase() === em) errs.push({ field: 'email', msg: 'এই Email ID ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
+    if (em && (m.email || '').trim().toLowerCase() === em) errs.push({ field: 'email', msg: 'এই ইমেইল আইডি ইতোমধ্যে একজন সদস্যের জন্য ব্যবহৃত হয়েছে।' });
   }
   // de-dup by field
   const seen = new Set();
@@ -425,7 +425,7 @@ export function canModifyDeposit(deposit, session) {
   if (session.role === 'admin') return { ok: true };
   if (session.role === 'maker') {
     if (String(deposit.date).slice(0, 10) !== todayISO()) {
-      return { ok: false, msg: 'Maker শুধুমাত্র আজকের তারিখের জমা Edit/Delete করতে পারবেন। / Maker can edit or delete only today\'s deposits.' };
+      return { ok: false, msg: 'Maker শুধুমাত্র আজকের তারিখের জমা সম্পাদনা বা মুছতে পারবেন। / Maker can edit or delete only today\'s deposits.' };
     }
     return { ok: true };
   }

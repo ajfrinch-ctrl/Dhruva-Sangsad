@@ -158,10 +158,10 @@ export async function changeOwnPassword(currentPassword, newPassword) {
   const u = await dbGet('users', s.id);
   if (!u) throw new Error('User not found');
   const ok = await verifyPassword(currentPassword, u.password);
-  if (!ok) throw new Error('বর্তমান Password সঠিক নয় / Current password is incorrect');
+  if (!ok) throw new Error('বর্তমান পাসওয়ার্ড সঠিক নয় / Current password is incorrect');
   const issues = passwordIssues(newPassword);
   if (issues.length) throw new Error(issues[0]);
-  if (u.isBootstrap && String(newPassword) === 'admin') throw new Error('Default password পুনরায় ব্যবহার করা যাবে না। / The default password cannot be reused.');
+  if (u.isBootstrap && String(newPassword) === 'admin') throw new Error('ডিফল্ট পাসওয়ার্ড পুনরায় ব্যবহার করা যাবে না। / The default password cannot be reused.');
   if (String(newPassword) === DEFAULT_MEMBER_PASSWORD) throw new Error('ডিফল্ট পাসওয়ার্ড ব্যবহার করা যাবে না / The default password cannot be used.');
   const pw = await hashPassword(newPassword);
   const next = { ...u, password: pw, isBootstrap: false, mustChangePassword: false, passwordChangedAt: nowISO() };
@@ -185,10 +185,10 @@ export async function completeAdminSetup({ displayName, username, mobile, email,
   if (u.isBootstrap) await assertBootstrapAllowed();
   const issues = passwordIssues(newPassword);
   if (issues.length) throw new Error(issues[0]);
-  if (String(newPassword) === 'admin') throw new Error('Default password “admin” আর ব্যবহার করা যাবে না। / The default password can no longer be used.');
+  if (String(newPassword) === 'admin') throw new Error('ডিফল্ট পাসওয়ার্ড আর ব্যবহার করা যাবে না। / The default password can no longer be used.');
   const uname = String(username || u.username).trim().toLowerCase();
   const users = await dbAll('users');
-  if (users.some(x => x.id !== u.id && (x.username || '').toLowerCase() === uname)) throw new Error('এই Username ইতোমধ্যে ব্যবহৃত হয়েছে। / Username already exists.');
+  if (users.some(x => x.id !== u.id && (x.username || '').toLowerCase() === uname)) throw new Error('এই ইউজারনেম ইতোমধ্যে ব্যবহৃত হয়েছে। / Username already exists.');
   const pw = await hashPassword(newPassword);
   const next = {
     ...u, username: uname, displayName: displayName || u.displayName,
@@ -274,9 +274,9 @@ export async function verifyRecoveryDob(identifier, dobDay, dobMonth) {
 
 export async function recoverPassword({ identifier, dobDay, dobMonth, field1, value1, field2, value2, newPassword }) {
   const u = await findUser(identifier);
-  if (!u) throw new Error('এই User ID খুঁজে পাওয়া যায়নি / User ID not found');
+  if (!u) throw new Error('এই ইউজার আইডি খুঁজে পাওয়া যায়নি / User ID not found');
   if (u.role !== ROLES.MEMBER) {
-    throw new Error('Admin/Maker Password রিসেট করতে Admin-এর সাথে যোগাযোগ করুন। / Contact the Admin to reset a staff password.');
+    throw new Error('Admin/Maker পাসওয়ার্ড রিসেট করতে Admin-এর সাথে যোগাযোগ করুন। / Contact the Admin to reset a staff password.');
   }
   const m = await dbGet('members', u.memberDocId);
   if (!m) throw new Error('সদস্য রেকর্ড পাওয়া যায়নি / Member record not found');

@@ -11,7 +11,7 @@
  */
 import {
   el, esc, toast, taka, money, num, fmtDate, todayISO, memberIdFromMobile, isValidMobile,
-  isValidEmail, normalizeMobile, debounce, confirmBox, waNumber, modal, alertBox, t,
+  isValidEmail, normalizeMobile, debounce, confirmBox, waNumber, modal, alertBox, t, auto,
 } from '../util.js';
 import { icon } from '../icons.js';
 import { page, card, banner, btn, kv, statCard, sectionHead, listRow, emptyState, statusTag, segChips } from '../ui.js';
@@ -305,7 +305,7 @@ export async function newMemberScreen(session) {
   form.elements.sameWa.addEventListener('change', () => { form.elements.whatsapp.readOnly = form.elements.sameWa.checked; syncWa(); });
   form.elements.whatsapp.addEventListener('input', () => { form.elements.whatsapp.value = form.elements.whatsapp.value.replace(/\D/g, '').slice(0, 11); });
 
-  const setErr = (n, m) => { const b = form.querySelector(`[data-err="${n}"]`); if (b) { b.textContent = m; b.closest('.field').classList.add('bad'); } };
+  const setErr = (n, m) => { const b = form.querySelector(`[data-err="${n}"]`); if (b) { b.textContent = auto(m); b.closest('.field').classList.add('bad'); } };
   const clearErrs = () => {
     form.querySelectorAll('.err').forEach(x => x.textContent = '');
     form.querySelectorAll('.field').forEach(x => x.classList.remove('bad'));
@@ -500,7 +500,7 @@ export function memberEditor(session, m, deposits, withdrawals, cfg, onSaved) {
     e.preventDefault();
     f.querySelectorAll('.err').forEach(x => x.textContent = '');
     f.querySelectorAll('.field').forEach(x => x.classList.remove('bad'));
-    const setErr = (n, msg) => { const b = f.querySelector(`[data-err="${n}"]`); if (b) { b.textContent = msg; b.closest('.field').classList.add('bad'); } };
+    const setErr = (n, msg) => { const b = f.querySelector(`[data-err="${n}"]`); if (b) { b.textContent = auto(msg); b.closest('.field').classList.add('bad'); } };
     const v = Object.fromEntries(new FormData(f).entries());
     let bad = false;
     if (!isValidMobile(v.mobile)) { setErr('mobile', t('সঠিক মোবাইল নম্বর দিন', 'Enter a valid mobile number')); bad = true; }
