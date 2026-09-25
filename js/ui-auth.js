@@ -1,10 +1,9 @@
 /* Guest screens: Login (default), Register, Forgot Password, Registration success.
    Nothing else is rendered while unauthenticated.
    Modern mobile-first layout: gradient hero, icon inputs, live hints,
-   loading spinners, Bengali-first labels. Field names & validation unchanged. */
+   loading spinners, English labels. Field names & validation unchanged. */
 import { el, clear, $, toast, alertBox, esc, tx, auto, num, memberIdFromMobile, isValidMobile, isValidEmail, normalizeMobile, fmtDate, toISO, t } from './util.js';
 import { logoSrc } from './brand.js';
-import { getLang, setLang } from './i18n.js';
 import { icon } from './icons.js';
 import { login, recoverPassword, findMemberForRecovery, verifyRecoveryDob } from './auth.js';
 import { registerMember, settings } from './store.js';
@@ -28,10 +27,6 @@ export function renderAuth(root, onLoggedIn) {
       <button type="button" data-m="register" class="${mode === 'register' ? 'on' : ''}">${icon('register')} ${t('নিবন্ধন', 'Register')}</button>
     </div>
     <div id="authBody"></div>
-    <div class="auth-lang">
-      <button type="button" data-lang="bn" class="${getLang() === 'bn' ? 'on' : ''}">বাংলা</button>
-      <button type="button" data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">English</button>
-    </div>
 `;
   const themeBtn = el('button', { class: 'icon-btn auth-theme-btn', type: 'button' });
   const paint = () => {
@@ -51,7 +46,6 @@ export function renderAuth(root, onLoggedIn) {
   card.querySelectorAll('#authTabs button').forEach(b => b.addEventListener('click', () => {
     mode = b.dataset.m; renderAuth(root, onLoggedIn);
   }));
-  card.querySelectorAll('.auth-lang button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
   const body = card.querySelector('#authBody');
   if (mode === 'login') loginForm(body, root, onLoggedIn);
   else if (mode === 'register') registerForm(body, root, onLoggedIn);
@@ -121,7 +115,7 @@ function loginForm(body, root, onLoggedIn) {
     loadingBtn(btn, t('লগইন হচ্ছে…', 'Signing in…'));
     try {
       const s = await login(id, pw, { remember: f.elements.remember.checked });
-      toast(`স্বাগতম, ${s.displayName}`, 'success');
+      toast(`Welcome, ${s.displayName}`, 'success');
       onLoggedIn(s);
     } catch (err) {
       errBox.innerHTML = `<span class="form-err">${esc(err.message)}</span>`;
@@ -283,7 +277,7 @@ const AUTH_REG_FIELD_STEP = {
   email: 1, nid: 1, dob: 1, profession: 1, address: 1,
   installment: 2, password: 2,
 };
-const AUTH_BN_STEP = ['১', '২', '৩'];
+const AUTH_BN_STEP = ['1', '2', '3'];
 
 async function registerForm(body, root, onLoggedIn) {
   clear(body);
@@ -300,7 +294,7 @@ async function registerForm(body, root, onLoggedIn) {
     </div>
     <div class="auth-info">${t('নিজের তথ্য দিয়ে সদস্য অ্যাকাউন্ট তৈরি করুন। Maker/Admin অনুমোদনের পর অ্যাপের সব ফিচার ব্যবহার করা যাবে।', 'Create your member account with your own details. All features become available after Maker/Admin approval.')}</div>
     <div class="wstep" data-step="0">
-      <div class="step-head"><div class="sh-num">০১</div>
+      <div class="step-head"><div class="sh-num">01</div>
         <div><h3>${t('যোগাযোগ', 'Contact')}</h3>
         <div class="s">${t('মোবাইল শেষ ৬ সংখ্যা হবে আপনার সদস্য আইডি', 'The last 6 digits of your mobile become your member ID')}</div></div></div>
       <div class="field"><label>${t('মোবাইল নম্বর', 'Mobile number')} <span class="req">*</span></label>
@@ -315,7 +309,7 @@ async function registerForm(body, root, onLoggedIn) {
         <div class="err" data-err="whatsapp"></div></div>
     </div>
     <div class="wstep" data-step="1">
-      <div class="step-head"><div class="sh-num">০২</div>
+      <div class="step-head"><div class="sh-num">02</div>
         <div><h3>${t('পরিচয়', 'Identity')}</h3>
         <div class="s">${t('আসল নাম লিখুন — এটিই রিপোর্টে দেখাবে', 'Use your real name — this appears on reports')}</div></div></div>
       <div class="grid g2">
@@ -340,7 +334,7 @@ async function registerForm(body, root, onLoggedIn) {
       </details>
     </div>
     <div class="wstep" data-step="2">
-      <div class="step-head"><div class="sh-num">০৩</div>
+      <div class="step-head"><div class="sh-num">03</div>
         <div><h3>${t('অ্যাকাউন্ট', 'Account')}</h3>
         <div class="s">${t('মাসিক কিস্তি ও লগইন পাসওয়ার্ড', 'Monthly installment & login password')}</div></div></div>
       <div class="field"><label>${t('মাসিক কিস্তি (৳)', 'Monthly installment (৳)')} <span class="req">*</span></label>

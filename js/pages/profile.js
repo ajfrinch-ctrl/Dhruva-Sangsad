@@ -6,21 +6,18 @@
  *   · Change Password, Activity Log → Settings
  *   · deposits / statements / transactions → their own modules
  * A member can never edit their own profile — Maker/Admin corrects the data.
+ * Change Password lives ONLY in Settings — there is no pointer/duplicate here.
  */
 import { el, esc, fmtDate, t, taka } from '../util.js';
-import { page, card, kv, banner, statusTag, statCard, listRow } from '../ui.js';
+import { page, card, kv, banner, statusTag, statCard } from '../ui.js';
 import {
   allDeposits, allWithdrawals, getMember, memberSummary, settings, summaryOpts, withdrawalBalance,
 } from '../store.js';
-import { can } from '../auth.js';
-import { App } from '../app.js';
 
 export async function pageProfile(session) {
   const wrap = page(t('আমার প্রোফাইল', 'My Profile'), 'My Profile', 'member');
   if (session.role === 'member') await memberProfile(wrap, session);
   else staffProfile(wrap, session);
-  const ptr = settingsPointer(session);
-  if (ptr) wrap.appendChild(ptr);
   return wrap;
 }
 
@@ -98,22 +95,4 @@ function staffProfile(wrap, session) {
     [t('ভূমিকা', 'Role'), esc(role)],
     [t('সদস্য আইডি', 'Member ID'), esc(session.memberId || '')],
   ])));
-  wrap.appendChild(el('div', {
-    class: 'fs8 muted', style: 'margin:6px 2px 2px',
-    text: t(
-      'নিজের পাসওয়ার্ড পরিবর্তন ও কার্যক্রমের লগ সেটিংসে দেখুন।',
-      'Change your own password and review the activity log in Settings.',
-    ),
-  }));
-}
-
-/* A pointer, never a second copy of Settings. */
-function settingsPointer(session) {
-  if (!can(session, 'settings')) return null;
-  return listRow({
-    ic: 'key',
-    title: esc(t('পাসওয়ার্ড ও সেটিংস', 'Password & Settings')),
-    sub: esc(t('পাসওয়ার্ড পরিবর্তন ও অ্যাকটিভিটি লগ সেটিংসে আছে।', 'Change Password and the Activity Log live in Settings.')),
-    onClick: () => App.go('settings'),
-  });
 }

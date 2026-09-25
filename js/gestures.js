@@ -248,10 +248,11 @@ function attachTopbarCollapse(view) {
 }
 
 /** Wire every shell-level gesture once. Safe to call a single time from boot. */
-export function initShellGestures({ onRefresh } = {}) {
+export function initShellGestures({ onRefresh, collapseTopbar = true } = {}) {
   const view = document.getElementById('view');
   if (!view) return;
   const refresh = typeof onRefresh === 'function' ? onRefresh : () => window.App?.refresh();
   attachPullToRefresh(view, refresh);
-  attachTopbarCollapse(view);
+  /* The shell keeps the top bar fixed (app-like); collapse-on-scroll is opt-in. */
+  if (collapseTopbar) attachTopbarCollapse(view);
 }

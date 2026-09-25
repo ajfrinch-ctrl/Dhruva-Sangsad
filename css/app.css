@@ -338,7 +338,7 @@ table.ps-tbl tfoot td{font-size:8pt;font-weight:700}
 .brand-logo{width:32px;height:32px;font-size:15px}
 .brand-txt .n{font-size:14px}
 .brand-txt .r{font-size:10px;max-width:130px}
-.brand-txt .r .brand-role-tag{display:none}
+.brand-txt .r .brand-role-tag,.brand-txt .r .brand-role-sep{display:none}
 .chip{font-size:11px;padding:4px 8px}
 .icon-btn{width:34px;height:34px;font-size:15px}
 .stats{grid-template-columns:1fr 1fr;gap:8px}
@@ -1505,3 +1505,203 @@ html[data-role="member"] .bottom-nav .nav-item[data-roles~="member"]{display:fle
   font-size:12.5px;font-weight:600;line-height:1.5}
 .dupe-warn[hidden]{display:none}
 .dupe-warn .icon{width:16px;height:16px;flex:none;margin-top:1px}
+/* =====================================================================
+   v7.1 — mobile shell fixes
+   · fixed app viewport (no page-level scroll / rubber-band; only .main scrolls)
+   · bottom bar is ALWAYS visible: it sits above every sheet/backdrop, and the
+     More / notification / filter sheets open above it, never over it
+   · offline = red top bar only (no banner, no text)
+   · report controls (Period / Status / Member) are full width
+   · compact, collapsible transaction rows
+   ===================================================================== */
+body.shell-on{position:fixed;inset:0;width:100%;height:100dvh;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+body.shell-on #app.on{height:100dvh;max-height:100dvh}
+.main{overscroll-behavior:contain}
+.topbar{transform:none !important}   /* the header never slides away on scroll */
+
+/* offline: the whole top bar frame turns red, whatever the role tint */
+html[data-role] .topbar.sync-offline,html[data-role] .topbar.sync-error,
+.topbar.sync-offline,.topbar.sync-error{border-color:#e11d48 !important;border-bottom-color:#e11d48 !important}
+.topbar.sync-offline .brand-logo,.topbar.sync-error .brand-logo{border-color:#e11d48;box-shadow:0 0 0 2px rgba(225,29,72,.25)}
+
+/* bottom bar above sheets; sheets above the bar */
+.bottom-nav{z-index:230}
+@media (max-width:1023px){
+  .sheet-backdrop{bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px))}
+  .sheet{bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px));padding-bottom:12px;
+    max-height:calc(92dvh - var(--bottom-nav-h))}
+}
+
+/* reports — full-width, thumb-friendly controls */
+.rep-filters{flex-direction:column;gap:12px}
+.rep-filters > .field{flex:1 1 100% !important;width:100%;min-width:0}
+.rep-filters .period-pick,.rep-filters .period-status,.rep-filters .seg{width:100%}
+.rep-filters .seg{display:flex;flex-wrap:nowrap;gap:8px}
+.rep-filters .seg .seg-chip{flex:1 1 0;min-width:0;min-height:44px;padding:8px 6px;text-align:center;justify-content:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.rep-filters .period-dates{grid-template-columns:1fr 1fr;width:100%}
+.rep-filters .period-dates input,.rep-filters select,.rep-filters input{width:100%;min-height:44px;font-size:15px}
+@media (max-width:359px){.rep-filters .seg{flex-wrap:wrap}
+.rep-filters .seg .seg-chip{flex:1 1 45%}
+}
+
+/* compact collapsible transaction rows (deposits · withdrawals · transactions) */
+.txn-list{display:flex;flex-direction:column;gap:8px;width:100%;max-width:100%;overflow:hidden}
+.txr{position:relative;display:block;width:100%;max-width:100%;background:var(--card,#fff);border:1px solid var(--line);
+  border-radius:var(--r);padding:0;overflow:hidden}
+.txr-head{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:10px 12px;border:0;
+  background:transparent;font:inherit;color:var(--text);cursor:pointer;text-align:left}
+.txr-head .rw-ic{width:34px;height:34px;flex:none}
+.txr-name{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.txr-name b{font-size:14px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%}
+.txr-name small{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%}
+.txr-amt{flex:none;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14.5px;max-width:42%;overflow:hidden;text-overflow:ellipsis}
+.txr-amt.in{color:var(--green-dark)}
+.txr-amt.out{color:var(--red-dark)}
+.txr-chev{flex:none;display:grid;place-items:center;color:var(--faint);transition:transform .18s ease}
+.txr-chev .icon{width:16px;height:16px}
+.txr.open .txr-chev{transform:rotate(90deg)}
+.txr-body{display:none;padding:0 12px 12px;border-top:1px solid var(--line-2,var(--line))}
+.txr.open .txr-body{display:block}
+.txr-body .kv{margin-top:10px;font-size:13px}
+.txr-body .kv > div{min-width:0;overflow-wrap:anywhere}
+.txr-body .txn-id-static{font-size:12px}
+.txr-body .row-actions{margin-top:10px;justify-content:flex-end}
+html[data-theme="dark"] .txr,html[data-theme="amoled"] .txr{background:#000;border-color:#222}
+/* member rows: the action row wraps under the name instead of overflowing */
+.mrow{flex-wrap:wrap}
+/* stacked list tools: the search box must not inherit the row flex-basis as a height */
+.list-tools .search-box{flex:0 0 auto}
+
+/* =====================================================================
+   v7.2 — iOS-style frosted-glass chrome + "water-drop" glass icons
+   · top bar, bottom bar and bottom sheets are translucent and blur what
+     scrolls beneath them (content now scrolls UNDER both bars)
+   · offline = red-tinted glass top bar (no banner, no text)
+   · AI water-drop icons in the big icon slots; SVG stays for small ones
+   ===================================================================== */
+:root{
+  --glass-bg:rgba(255,255,255,.66);
+  --glass-bg-strong:rgba(255,255,255,.78);
+  --glass-line:rgba(255,255,255,.55);
+  --glass-hair:rgba(15,23,42,.08);
+  --glass-blur:saturate(180%) blur(22px);
+}
+html[data-theme="dark"],html[data-theme="amoled"]{
+  --glass-bg:rgba(14,14,16,.62);
+  --glass-bg-strong:rgba(14,14,16,.78);
+  --glass-line:rgba(255,255,255,.08);
+  --glass-hair:rgba(255,255,255,.10);
+}
+
+/* ---- top bar ---- */
+.topbar,html[data-role] .topbar{
+  /* a faint top-to-bottom gradient so the bar reads as glass even before anything scrolls under it */
+  background:linear-gradient(180deg,rgba(255,255,255,.86) 0%,rgba(255,255,255,.60) 100%) !important;
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  border:0 !important;border-bottom:1px solid var(--glass-hair) !important;
+  box-shadow:0 1px 0 var(--glass-line) inset,0 6px 24px rgba(16,24,40,.06);
+}
+html[data-theme="dark"] .topbar,html[data-theme="amoled"] .topbar,
+html[data-theme="dark"][data-role] .topbar,html[data-theme="amoled"][data-role] .topbar{
+  background:linear-gradient(180deg,rgba(14,14,16,.82) 0%,rgba(14,14,16,.58) 100%) !important}
+/* status is shown as a hairline glow, offline as a red tint of the whole bar */
+.topbar.sync-synced,.topbar.sync-online,.topbar.sync-syncing{border-bottom-color:rgba(22,163,74,.35) !important}
+.topbar.sync-offline,.topbar.sync-error,
+html[data-role] .topbar.sync-offline,html[data-role] .topbar.sync-error{
+  background:rgba(225,29,72,.16) !important;
+  border-bottom:2px solid #e11d48 !important;
+}
+html[data-theme="dark"] .topbar.sync-offline,html[data-theme="amoled"] .topbar.sync-offline,
+html[data-theme="dark"] .topbar.sync-error,html[data-theme="amoled"] .topbar.sync-error{background:rgba(225,29,72,.28) !important}
+.topbar.sync-offline .brand-txt .n,.topbar.sync-error .brand-txt .n,
+.topbar.sync-offline .brand-txt .r,.topbar.sync-error .brand-txt .r{color:#be123c}
+.topbar .icon-btn{background:rgba(255,255,255,.55);border-color:var(--glass-hair);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+html[data-theme="dark"] .topbar .icon-btn,html[data-theme="amoled"] .topbar .icon-btn{background:rgba(255,255,255,.06)}
+
+/* ---- bottom bar ---- */
+.bottom-nav,html[data-theme="dark"] .bottom-nav,html[data-theme="amoled"] .bottom-nav{
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  border-top:1px solid var(--glass-hair);
+  box-shadow:0 1px 0 var(--glass-line) inset,0 -8px 28px rgba(16,24,40,.06);
+}
+.bottom-nav .nav-item.on::before{display:none}   /* the glowing icon marks the tab now */
+
+/* ---- sheets (More / notifications / filters) ---- */
+.sheet,html[data-theme="dark"] .sheet,html[data-theme="amoled"] .sheet{
+  background:var(--glass-bg-strong);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  border:1px solid var(--glass-line);border-bottom:0;
+  box-shadow:0 -12px 40px rgba(16,24,40,.18);
+}
+.sheet-backdrop{background:rgba(17,24,39,.28);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.sheet-item .si-ic,html[data-theme="dark"] .sheet-item .si-ic,html[data-theme="amoled"] .sheet-item .si-ic{
+  background:rgba(255,255,255,.45);border:1px solid var(--glass-line);width:40px;height:40px;border-radius:12px}
+html[data-theme="dark"] .sheet-item .si-ic,html[data-theme="amoled"] .sheet-item .si-ic{background:rgba(255,255,255,.06)}
+
+/* ---- content scrolls under the bars (mobile shell) ---- */
+@media (max-width:1023px){
+  .main{
+    margin-top:0;margin-bottom:0;
+    height:100dvh;
+    padding-top:calc(var(--header-h) + 14px);
+    padding-bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px) + 22px);
+  }
+}
+
+/* ---- solid fallback when the browser cannot blur ---- */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .topbar,html[data-role] .topbar,.bottom-nav,.sheet{background:var(--card,#fff) !important}
+  html[data-theme="dark"] .topbar,html[data-theme="amoled"] .topbar,
+  html[data-theme="dark"] .bottom-nav,html[data-theme="amoled"] .bottom-nav,
+  html[data-theme="dark"] .sheet,html[data-theme="amoled"] .sheet{background:#0b0b0b !important}
+}
+
+/* ---- water-drop icons ---- */
+.icon-ai{display:block;width:1em;height:1em;object-fit:contain;pointer-events:none;user-select:none;
+  filter:drop-shadow(0 4px 6px rgba(16,24,40,.16));transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .25s}
+/* bottom bar: bigger, fully saturated and edged with a crisp shadow so the pale
+   glass does not melt into the bar; inactive tabs differ by glow/scale, not by fading */
+.bottom-nav .nav-item .icon-ai{width:34px;height:34px;margin-top:-4px;opacity:1;
+  filter:saturate(1.35) contrast(1.06) drop-shadow(0 1px 1px rgba(16,24,40,.35)) drop-shadow(0 3px 4px rgba(16,24,40,.18))}
+.bottom-nav .nav-item.on .icon-ai{
+  filter:saturate(1.45) contrast(1.06) drop-shadow(0 1px 1px rgba(16,24,40,.35)) drop-shadow(0 6px 10px rgba(22,163,74,.45));
+  transform:translateY(-3px) scale(1.12)}
+.bottom-nav .nav-item .ni-lbl{font-weight:600}
+.bottom-nav .nav-item:active .icon-ai{transform:scale(.92)}
+.rail .rail-tab .icon-ai{width:26px;height:26px}
+.topbar .icon-btn{padding:0}
+.topbar .icon-btn .icon-ai{width:26px;height:26px}
+.sec-tile .st-ic,.action-card .ac-ic,.ac-ic{overflow:visible}
+.sec-tile .st-ic .icon-ai{width:40px;height:40px}
+.action-card .ac-ic .icon-ai,.ac-ic .icon-ai{width:42px;height:42px;filter:drop-shadow(0 6px 8px rgba(0,0,0,.22))}
+.sheet-item .si-ic .icon-ai{width:32px;height:32px}
+/* tiles: a soft glass well instead of the flat green square */
+.sec-tile .st-ic:has(.icon-ai){background:linear-gradient(160deg,rgba(255,255,255,.9),rgba(220,252,231,.6));
+  border:1px solid rgba(255,255,255,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 2px 6px rgba(16,24,40,.06)}
+html[data-theme="dark"] .sec-tile .st-ic:has(.icon-ai),html[data-theme="amoled"] .sec-tile .st-ic:has(.icon-ai){
+  background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);box-shadow:none}
+.action-card .ac-ic:has(.icon-ai){background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.35)}
+/* gentle float on the active tab and the primary action card */
+@keyframes ds-float{0%,100%{transform:translateY(-3px) scale(1.12)}50%{transform:translateY(-6px) scale(1.12)}}
+@keyframes ds-float-soft{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.bottom-nav .nav-item.on .icon-ai{animation:ds-float 3.2s ease-in-out infinite}
+.action-card.primary .ac-ic .icon-ai{animation:ds-float-soft 3.6s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.icon-ai{animation:none !important}}
+
+/* ---- v7.2.1 polish ----
+   · transaction rows use the glass status icons (approved / pending / rejected,
+     deposit / withdraw) instead of small outline glyphs
+   · install pill floats ABOVE the bottom bar instead of behind it (it used to
+     bleed a green glow through the glass) */
+.rw-ic:has(.icon-ai),.txr-head .rw-ic:has(.icon-ai){background:transparent !important;border:0;overflow:visible}
+.txr-head .rw-ic .icon-ai,.rw-ic .icon-ai{width:36px;height:36px;filter:drop-shadow(0 3px 5px rgba(16,24,40,.18))}
+@media (max-width:1023px){
+  .install-bar{bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px) + 12px)}
+}
+/* while the install pill is showing, leave room for it under the scrolled content */
+@media (max-width:1023px){
+  body:has(.install-bar.on) .main{padding-bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px) + 98px)}
+}

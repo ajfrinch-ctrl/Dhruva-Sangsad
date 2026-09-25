@@ -47,6 +47,7 @@ class FirebaseBridge extends EventTarget {
     this.app = null; this.auth = null; this.db = null;
     this.config = null; this.status = 'offline'; this.listeners = [];
     this.ready = false; this.lastError = null; this.syncing = false;
+    this.flushAgain = false;   /* a flush was requested while one was running */
     this.initPromise = null;
   }
 
@@ -103,6 +104,10 @@ class FirebaseBridge extends EventTarget {
       this.attachListeners();
       this.setStatus(navigator.onLine ? 'online' : 'offline');
       this.flush();
+      /* First load on this device: download the current data set into the
+         local database once, so every later start (and offline use) reads
+         from local storage instead of waiting for the network. */
+      this.initialPull().catch(() => {});
       return true;
     } catch (e) {
       this.setStatus('sync-error', e.message);
@@ -163,9 +168,41 @@ class FirebaseBridge extends EventTarget {
     }
   }
 
-  /** Push all queued local operations up to Firebase. */
+  /** One-time initial download (first load → local storage). Idempotent:
+   *  guarded by a local flag, so the same data is never pulled twice. */
+  async initialPull() {
+    if (!this.ready || !this.db || !navigator.onLine) return 0;
+    if (await getSetting('initialPull_v1', false)) return 0;
+    let n = 0;
+    for (const store of SYNCED_STORES) {
+      try {
+        const snap = await withTimeout(this.db.ref(PATHS[store]).get(), 20000);
+        if (!snap.exists()) continue;
+        for (const rec of Object.values(snap.val() || {})) {
+          if (store === 'settings') { if (rec.key && rec.key !== 'firebaseConfig') await dbPutRaw('settings', rec); }
+          else await applyRemote(store, rec);
+          n++;
+        }
+      } catch (e) { this.lastError = e.message; /* e.g. rules deny this store for this role — skip */ }
+    }
+    await setSetting('initialPull_v1', true, { queue: false });
+    if (n) window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store: '*', remote: true } }));
+    return n;
+  }
+
+  /** Reconnect immediately when the browser says the network is back, instead
+   *  of waiting for the SDK's retry back-off. */
+  reconnectNow() {
+    if (!this.ready || !this.db) return;
+    try { this.db.goOnline(); } catch { /* ignore */ }
+    this.flush();
+  }
+
+  /** Push all queued local operations up to Firebase. ONE flush at a time; a
+   *  request that arrives mid-flush runs once more when this one finishes, so
+   *  nothing waits for the 30 s timer and nothing is pushed twice. */
   async flush() {
-    if (this.syncing) return 0;
+    if (this.syncing) { this.flushAgain = true; return 0; }
     if (!this.ready || !navigator.onLine) return 0;
     const items = await queueAll();
     if (!items.length) { this.setStatus('synced'); return 0; }
@@ -208,6 +245,7 @@ class FirebaseBridge extends EventTarget {
     this.syncing = false;
     if (done && !failed) await this.stampSyncMetadata(done);
     this.setStatus(failed ? 'sync-error' : 'synced', failed ? this.lastError : null);
+    if (this.flushAgain) { this.flushAgain = false; setTimeout(() => this.flush(), 50); }
     return done;
   }
 
@@ -371,7 +409,12 @@ class FirebaseBridge extends EventTarget {
 export const firebase = new FirebaseBridge();
 
 /* connectivity + periodic flush */
-window.addEventListener('online', () => { firebase.setStatus('online'); firebase.flush(); });
+window.addEventListener('online', () => { firebase.setStatus('online'); firebase.reconnectNow(); });
 window.addEventListener('offline', () => firebase.setStatus('offline'));
-window.addEventListener('ds:queue-changed', () => { if (navigator.onLine) firebase.flush(); });
+/* Only NEW local writes trigger a flush (removing a pushed item from the queue
+   must not start another round — that is what caused repeated sync passes). */
+window.addEventListener('ds:queue-changed', e => {
+  if (e.detail && e.detail.reason === 'remove') return;
+  if (navigator.onLine) firebase.flush();
+});
 setInterval(() => { if (navigator.onLine && firebase.ready) firebase.flush(); }, 30000);

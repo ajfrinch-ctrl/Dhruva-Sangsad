@@ -51,6 +51,7 @@ export async function pageStatements(session, params = {}) {
   /* ---- member context: members get their own, staff pick one ---- */
   let memberDocId = '';
   let picker = null;
+  let ready = false;
   if (staff) {
     const pool = members.filter(m => m.status !== 'rejected');
     if (!pool.length) { wrap.appendChild(banner('err', esc(t('কোনো সদস্য পাওয়া যায়নি।', 'No member found.')))); return wrap; }
@@ -59,7 +60,9 @@ export async function pageStatements(session, params = {}) {
       members: pool,
       value: params.memberDocId || '',
       placeholder: t('সদস্য খুঁজুন (নাম / আইডি / মোবাইল)…', 'Find a member (name / ID / mobile)…'),
-      onPick: () => paint(),
+      /* the picker also fires for its initial value, before the rest of the
+         screen exists — paint() only once the page is fully built (ready) */
+      onPick: () => { if (ready) paint(); },
     });
     const f = el('div', { class: 'field' });
     f.appendChild(el('label', { text: t('সদস্য', 'Member') }));
@@ -143,7 +146,7 @@ export async function pageStatements(session, params = {}) {
     bodyHost.appendChild(statementTable(
       rows.map(r => ({
         date: r.date,
-        description: r.kind === 'deposit' ? tx(typeLabel(r.type).bn) : tx(withdrawalTypeLabel(r.type).bn),
+        description: r.kind === 'deposit' ? t(typeLabel(r.type).bn, typeLabel(r.type).en) : t(withdrawalTypeLabel(r.type).bn, withdrawalTypeLabel(r.type).en),
         deposit: r.deposit, payment: r.payment, balance: r.balance,
       })),
     ));
@@ -229,6 +232,7 @@ export async function pageStatements(session, params = {}) {
 
   fromEl.addEventListener('change', paint);
   toEl.addEventListener('change', paint);
+  ready = true;
   paint();
   return wrap;
 }

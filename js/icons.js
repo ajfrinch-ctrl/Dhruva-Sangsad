@@ -72,6 +72,21 @@ export function icon(name, cls = '') {
   const d = P[name] || P.info;
   return `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 }
+/* ---- "water-drop" glass icons (AI-generated PNGs in icons/ai/) ----
+   Used only in the BIG icon slots: bottom bar, side rail, More sheet,
+   Settings tiles, action cards and the bell. Small inline icons (buttons,
+   rows, stat cards) stay as crisp SVG. Any name that has no PNG yet falls
+   back to the SVG automatically, so the set can grow without code changes. */
+export const AI_ICONS = new Set([
+  'home', 'members', 'member', 'deposit', 'receipt', 'report', 'chart', 'approve', 'settings', 'menu',
+  'plus', 'withdraw', 'bell', 'lock', 'log', 'maker', 'building', 'backup', 'info', 'sync',
+  'moon', 'sun', 'logout', 'clock', 'reject',
+]);
+export const AI_ICON_DIR = './icons/ai/';
+export function bigIcon(name, cls = '') {
+  if (!AI_ICONS.has(name)) return icon(name, cls);
+  return `<img class="icon icon-ai ${cls}" src="${AI_ICON_DIR}${name}.png" alt="" draggable="false" decoding="async">`;
+}
 export function iconEl(name, cls = '') {
   const span = document.createElement('span');
   span.innerHTML = icon(name, cls);

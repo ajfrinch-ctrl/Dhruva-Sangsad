@@ -1,7 +1,8 @@
 /* Deposits — ONE unified section for the whole deposit workflow.
  *
- *   #deposits            → summary + full-width actions + ONE records list
- *                          (every status: pending / approved / rejected)
+ *   #deposits            → summary + full-width actions + today's deposit
+ *                          records (latest 5, collapsed rows; hidden when
+ *                          there is no deposit today)
  *   #deposits/new        → submit a deposit (the only place deposits are created)
  *   #deposits/withdraw   → withdrawal request/entry + its own list
  *
@@ -13,12 +14,12 @@
  */
 import {
   el, esc, toast, taka, money, num, fmtDate, fmtDateTime, todayISO, modal, confirmBox,
-  monthKey, monthLabel, DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, debounce, t, tx, auto,
+  monthKey, monthLabel, DEPOSIT_TYPES, PAY_METHODS, typeLabel, methodLabel, STATUS_EN, t, tx, auto,
 } from '../util.js';
 import { icon } from '../icons.js';
 import {
-  page, card, tableWrap, statusTag, banner, btn, kv, statCard, emptyState, segChips,
-  filterSheet, optionGrid, actionCard, sectionHead, txnIdChip, bindCopyIds,
+  page, card, statusTag, banner, btn, statCard,
+  optionGrid, actionCard, sectionHead, bindCopyIds, txnRow, todaysLatest,
 } from '../ui.js';
 import { memberPicker } from '../picker.js';
 import {
@@ -100,113 +101,49 @@ export async function pageDeposits(session, params = {}) {
     onClick: () => App.go('deposits', 'withdraw'),
   }));
 
-  /* ---- the ONE list (single source of truth for deposit records) ---- */
-  wrap.appendChild(sectionHead(
-    staff ? t('সব জমার রেকর্ড', 'All deposit records') : t('আমার জমাসমূহ', 'My deposits'),
-    'Deposit records',
-  ));
-
-  let st = '', tp = '', mt = '', from = '', to = '', q = '';
-  const head = el('div', { class: 'txn-head' });
-  const searchBox = el('div', { class: 'search-box', html: icon('search') });
-  const qEl = el('input', {
-    type: 'search', placeholder: staff ? t('নাম / আইডি / বিবরণ…', 'Name / ID / note…') : t('বিবরণ / টাকা…', 'Note / amount…'),
-    autocomplete: 'off', 'aria-label': t('জমা খুঁজুন', 'Search deposits'),
-  });
-  searchBox.appendChild(qEl);
-  const filterBtn = el('button', { type: 'button', class: 'btn btn-ghost filter-btn', 'aria-label': t('ফিল্টার', 'Filter') });
-  const paintBadge = () => {
-    const n = [st, tp, mt, from, to].filter(Boolean).length;
-    filterBtn.innerHTML = `${icon('filter')}<span>${esc(t('ফিল্টার', 'Filter'))}</span>${n ? `<span class="fbadge">${n}</span>` : ''}`;
-  };
-  paintBadge();
-  filterBtn.addEventListener('click', () => filterSheet({
-    state: { st, tp, mt, from, to },
-    sections: [
-      { key: 'tp', label: t('ধরন', 'Type'), options: [{ value: '', bn: 'সব', en: 'All' }, ...TYPE_SHORT] },
-      { key: 'mt', label: t('পদ্ধতি', 'Method'), options: [{ value: '', bn: 'সব', en: 'All' }, ...METHOD_SHORT] },
-    ],
-    dates: { fromLabel: t('শুরু', 'From'), toLabel: t('শেষ', 'To') },
-    onApply: x => { ({ tp, mt, from, to } = x); paintBadge(); render(); },
-    onClear: () => { st = tp = mt = from = to = ''; paintBadge(); render(); },
-  }));
-  head.append(searchBox, filterBtn);
-  wrap.appendChild(head);
-
-  /* status chips — pending / approved / rejected live INSIDE this one list */
-  const chips = segChips('depst', [
-    { value: '', bn: 'সব', en: 'All' },
-    { value: 'pending', bn: 'অপেক্ষমাণ', en: 'Pending' },
-    { value: 'approved', bn: 'অনুমোদিত', en: 'Approved' },
-    { value: 'rejected', bn: 'বাতিল', en: 'Rejected' },
-  ], '', { onChange: v => { st = v; render(); } });
-  chips.root.classList.add('chips-bar');
-  wrap.appendChild(chips.root);
-
-  const listHost = el('div', { class: 'person-list' });
-  wrap.appendChild(listHost);
-
-  const filtered = () => {
-    const query = q.trim().toLowerCase();
-    return myDeposits.filter(d => {
-      if (st && d.status !== st) return false;
-      if (tp && d.type !== tp) return false;
-      if (mt && d.method !== mt) return false;
-      const dt = String(d.date).slice(0, 10);
-      if (from && dt < from) return false;
-      if (to && dt > to) return false;
-      if (query && ![d.txnId, d.memberId, d.memberName, d.description, d.comment, String(d.amount)]
-        .some(v => String(v || '').toLowerCase().includes(query))) return false;
-      return true;
-    }).sort((a, b) => String(b.date).localeCompare(String(a.date))
-      || String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
-  };
-
-  function render() {
-    const rows = filtered();
-    listHost.replaceChildren();
-    if (!rows.length) {
-      listHost.appendChild(emptyState({
-        ic: 'receipt',
-        title: st === 'pending' ? t('কোনো অপেক্ষমাণ জমা নেই', 'No pending deposits')
-          : st === 'approved' ? t('কোনো অনুমোদিত জমা নেই', 'No approved deposits')
-          : st === 'rejected' ? t('কোনো বাতিল জমা নেই', 'No rejected deposits')
-          : t('কোনো জমা নেই', 'No deposits yet'),
-        hint: staff ? '' : t('“নতুন জমা” চেপে আপনার প্রথম জমা দাখিল করুন।', 'Tap “New deposit” to submit your first deposit.'),
-        actionLabel: staff ? '' : t('নতুন জমা', 'New deposit'),
-        onAction: staff ? null : () => App.go('deposits', 'new'),
-      }));
-      return;
-    }
-    rows.forEach(d => listHost.appendChild(depositRow(d, session, staff)));
+  /* ---- Deposit records: TODAY's transactions only, latest 5, collapsed ----
+     Older days are never listed here (Statement / Reports cover history).
+     No deposit today → the whole section stays hidden (no empty box). */
+  const todays = todaysLatest(myDeposits, todayISO(), 5);
+  if (todays.length) {
+    wrap.appendChild(sectionHead(
+      staff ? t('আজকের জমা', 'Deposit records') : t('আমার আজকের জমা', 'My deposit records'),
+      'Deposit records',
+    ));
+    const listHost = el('div', { class: 'txn-list' });
+    todays.forEach(d => listHost.appendChild(depositRow(d, session, staff)));
+    wrap.appendChild(listHost);
+    bindCopyIds(listHost);
   }
-
-  qEl.addEventListener('input', debounce(() => { q = qEl.value.trim(); render(); }, 160));
-  render();
-  bindCopyIds(listHost);
   return wrap;
 }
 
-/** One deposit record — date first, amount and status, then the meta line. */
+/** One deposit record — collapsed: member name + amount; tap → full details. */
 function depositRow(d, session, staff) {
-  const row = el('div', { class: 'row rec' });
   const tone = d.status === 'approved' ? 'g' : d.status === 'pending' ? 'a' : 'r';
-  const desc = d.description || tx(typeLabel(d.type).bn) || '';
-  row.innerHTML = `<span class="rw-ic ${tone}">${icon(d.status === 'pending' ? 'clock' : d.status === 'approved' ? 'approve' : 'reject')}</span>
-    <span class="rw-bd">
-      <span class="rw-t"><b class="num">${esc(fmtDate(d.date))}</b> · <b class="num">${esc(taka(d.amount))}</b></span>
-      <span class="rw-s">${esc(desc)}${d.method ? ` · ${esc(tx(methodLabel(d.method).bn))}` : ''}</span>
-      ${staff ? `<span class="rw-m">${esc(d.memberName || '')}${d.memberId ? ` · ${esc(d.memberId)}` : ''}</span>` : ''}
-      ${d.rejectReason ? `<span class="rw-m warn">${esc(d.rejectReason)}</span>` : ''}
-    </span>
-    <span class="rw-right">${statusTag(d.status)}</span>`;
-  const acts = el('div', { class: 'row-acts' });
-  const hit = el('button', { type: 'button', class: 'row-hit', 'aria-label': `${fmtDate(d.date)} ${taka(d.amount)}` });
-  hit.addEventListener('click', () => depositDetail(d, session, staff));
-  row.appendChild(hit);
-  const actionBar = depositActions(session, d, staff);
-  if (actionBar) { acts.appendChild(actionBar); row.appendChild(acts); }
-  return row;
+  return txnRow({
+    ic: d.status === 'pending' ? 'clock' : d.status === 'approved' ? 'approve' : 'reject',
+    tone,
+    name: d.memberName || d.memberId || '',
+    meta: `${t(typeLabel(d.type).bn, typeLabel(d.type).en)} · ${tx(STATUS_EN[d.status] || d.status || '')}`,
+    amount: taka(d.amount),
+    amountKind: d.status === 'rejected' ? '' : 'in',
+    details: [
+      [t('পরিমাণ', 'Amount'), `<b>${taka(d.amount)}</b>`],
+      [t('তারিখ', 'Date'), esc(fmtDate(d.date))],
+      [t('ধরন', 'Type'), esc(t(typeLabel(d.type).bn, typeLabel(d.type).en))],
+      [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(t(methodLabel(d.method).bn, methodLabel(d.method).en))],
+      [t('স্ট্যাটাস', 'Status'), statusTag(d.status)],
+      [t('লেনদেন আইডি', 'Transaction ID'), `<b class="txn-id-static">${esc(d.txnId || '—')}</b>`],
+      ...(staff ? [[t('সদস্য আইডি', 'Member ID'), esc(d.memberId || '')]] : []),
+      ...(d.description ? [[t('বিবরণ', 'Description'), esc(d.description)]] : []),
+      ...(d.comment ? [[t('মন্তব্য', 'Comment'), esc(d.comment)]] : []),
+      [t('দাখিল', 'Submitted'), esc(fmtDateTime(d.submittedAt))],
+      ...(d.approvedAt ? [[t('অনুমোদিত', 'Approved'), esc(fmtDateTime(d.approvedAt))]] : []),
+      ...(d.rejectReason ? [[t('বাতিলের কারণ', 'Rejection reason'), esc(d.rejectReason)]] : []),
+    ],
+    actions: depositActions(session, d, staff),
+  });
 }
 
 /* Actions live ONLY here and in Pending Requests (no duplicate screens). */
@@ -455,8 +392,8 @@ function depositSuccess(rec) {
         <div>${esc(t('লেনদেন আইডি', 'Transaction ID'))}</div><div><b class="txn-id-static">${esc(rec.txnId || '')}</b></div>
         <div>${esc(t('সদস্য', 'Member'))}</div><div><b>${esc(rec.memberName || '')}</b> (${esc(rec.memberId || '')})</div>
         <div>${esc(t('তারিখ', 'Date'))}</div><div>${esc(fmtDate(rec.date))}</div>
-        <div>${esc(t('ধরন', 'Type'))}</div><div>${esc(tx(typeLabel(rec.type).bn))}</div>
-        <div>${esc(t('পদ্ধতি', 'Method'))}</div><div>${esc(tx(methodLabel(rec.method).bn))}</div>
+        <div>${esc(t('ধরন', 'Type'))}</div><div>${esc(t(typeLabel(rec.type).bn, typeLabel(rec.type).en))}</div>
+        <div>${esc(t('পদ্ধতি', 'Method'))}</div><div>${esc(t(methodLabel(rec.method).bn, methodLabel(rec.method).en))}</div>
         <div>${esc(t('পরিমাণ', 'Amount'))}</div><div><b style="color:var(--green-dark)">${taka(rec.amount)}</b></div>
         <div>${esc(t('স্ট্যাটাস', 'Status'))}</div><div>${statusTag(rec.status)}</div>
       </div>
@@ -465,32 +402,6 @@ function depositSuccess(rec) {
           ? esc(t('জমা সংরক্ষিত ও অনুমোদিত হয়েছে।', 'The deposit was saved and approved.'))
           : esc(t('জমা দাখিল হয়েছে। অনুমোদনের পর হিসাবে যুক্ত হবে।', 'Submitted. It will be added to the account once approved.'))}</span></div>`,
     actions: [{ label: t('ঠিক আছে', 'OK'), value: true, kind: 'primary' }],
-  });
-}
-
-function depositDetail(d, session, staff) {
-  return modal({
-    title: t('জমার বিবরণ', 'Deposit details'), width: 420,
-    body: kv([
-      [t('লেনদেন আইডি', 'Transaction ID'), `<b class="txn-id-static">${esc(d.txnId || '—')}</b>`],
-      [t('সদস্য', 'Member'), `<b>${esc(d.memberName || '')}</b> (${esc(d.memberId || '')})`],
-      [t('পেমেন্ট তারিখ', 'Payment date'), esc(fmtDate(d.date))],
-      [t('ধরন', 'Type'), esc(tx(typeLabel(d.type).bn))],
-      [t('পদ্ধতি', 'Method'), esc(tx(methodLabel(d.method).bn))],
-      [t('পরিমাণ', 'Amount'), `<b>${taka(d.amount)}</b>`],
-      [t('বিবরণ', 'Description'), esc(d.description || '')],
-      [t('মন্তব্য', 'Comment'), esc(d.comment || '')],
-      [t('স্ট্যাটাস', 'Status'), statusTag(d.status)],
-      [t('দাখিল', 'Submitted'), esc(fmtDateTime(d.submittedAt))],
-      [t('অনুমোদিত', 'Approved'), d.approvedAt ? esc(fmtDateTime(d.approvedAt)) : ''],
-      [t('বাতিলের কারণ', 'Rejection reason'), esc(d.rejectReason || '')],
-    ]),
-    actions: [
-      ...(staff && canModifyDeposit(d, session).ok
-        ? [{ label: t('সম্পাদনা', 'Edit'), value: null, kind: 'ghost', onClick: () => { editDeposit(session, d); return true; } }]
-        : []),
-      { label: t('বন্ধ করুন', 'Close'), value: true, kind: 'primary' },
-    ],
   });
 }
 
@@ -504,9 +415,9 @@ function editDeposit(session, d) {
           <input name="date" type="date" value="${esc(String(d.date).slice(0, 10))}" ${session.role === 'maker' ? `min="${todayISO()}" max="${todayISO()}"` : ''}>
           <div class="hint">${esc(t('তারিখ বদলালে নতুন লেনদেন আইডি তৈরি হবে', 'Changing the date re-stamps the transaction ID'))}</div></div>
         <div class="field"><label>${esc(t('ধরন', 'Type'))} <span class="req">*</span></label>
-          <select name="type">${DEPOSIT_TYPES.map(x => `<option value="${x.id}"${x.id === d.type ? ' selected' : ''}>${esc(tx(x.bn))}</option>`).join('')}</select></div>
+          <select name="type">${DEPOSIT_TYPES.map(x => `<option value="${x.id}"${x.id === d.type ? ' selected' : ''}>${esc(t(x.bn, x.en))}</option>`).join('')}</select></div>
         <div class="field"><label>${esc(t('পদ্ধতি', 'Method'))} <span class="req">*</span></label>
-          <select name="method">${PAY_METHODS.map(x => `<option value="${x.id}"${x.id === d.method ? ' selected' : ''}>${esc(tx(x.bn))}</option>`).join('')}</select></div>
+          <select name="method">${PAY_METHODS.map(x => `<option value="${x.id}"${x.id === d.method ? ' selected' : ''}>${esc(t(x.bn, x.en))}</option>`).join('')}</select></div>
         <div class="field"><label>${esc(t('পরিমাণ (৳)', 'Amount (৳)'))} <span class="req">*</span></label>
           <input name="amount" type="number" min="1" step="0.01" value="${esc(d.amount)}"></div>
       </div>
@@ -674,51 +585,59 @@ export async function withdrawalScreen(session) {
     finally { b.disabled = false; }
   });
 
-  /* ---- the withdrawal list (same screen, no second page) ---- */
-  const rows = (staff ? withdrawals : mine(withdrawals, session)).slice()
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
-  wrap.appendChild(sectionHead(
-    staff ? t('সব উত্তোলন', 'All withdrawals') : t('আমার উত্তোলন', 'My withdrawals'),
-    'Withdrawal records',
-  ));
-  const listHost = el('div', { class: 'person-list' });
-  if (!rows.length) {
-    listHost.appendChild(emptyState({ ic: 'withdraw', title: t('কোনো উত্তোলন নেই', 'No withdrawals yet') }));
-  } else {
-    rows.forEach(w => {
+  /* ---- withdrawal records (same screen): TODAY only, latest 5, collapsed;
+          hidden entirely when there is no withdrawal today ---- */
+  const todays = todaysLatest(staff ? withdrawals : mine(withdrawals, session), todayISO(), 5);
+  if (todays.length) {
+    wrap.appendChild(sectionHead(
+      staff ? t('আজকের উত্তোলন', 'Withdrawal records') : t('আমার আজকের উত্তোলন', 'My withdrawal records'),
+      'Withdrawal records',
+    ));
+    const listHost = el('div', { class: 'txn-list' });
+    todays.forEach(w => {
       const tone = w.status === 'approved' ? 'r' : w.status === 'pending' ? 'a' : 'g';
-      const rec = el('div', { class: 'row rec' });
-      rec.innerHTML = `<span class="rw-ic ${tone}">${icon('withdraw')}</span>
-        <span class="rw-bd">
-          <span class="rw-t"><b class="num">${esc(fmtDate(w.date))}</b> · <b class="num due-amt">${esc(taka(w.amount))}</b></span>
-          <span class="rw-s">${esc(tx(withdrawalTypeLabel(w.type).bn))}${w.description ? ` · ${esc(w.description)}` : ''}</span>
-          ${staff ? `<span class="rw-m">${esc(w.memberName || '')}${w.memberId ? ` · ${esc(w.memberId)}` : ''}</span>` : ''}
-        </span>
-        <span class="rw-right">${statusTag(w.status)}</span>`;
+      let acts = null;
       if (w.status === 'pending' && staff) {
-        const acts = el('div', { class: 'row-acts' });
-        const bar = el('div', { class: 'btn-row' });
-        bar.appendChild(btn(t('অনুমোদন', 'Approve'), 'approve', 'soft', async () => {
+        acts = el('div', { class: 'btn-row row-actions' });
+        acts.appendChild(btn(t('অনুমোদন', 'Approve'), 'approve', 'soft', async () => {
           if (!(await confirmBox(t(`${w.memberName} — ${taka(w.amount)} উত্তোলন অনুমোদন করবেন?`, `Approve the withdrawal of ${taka(w.amount)} for ${w.memberName}?`), { okLabel: t('অনুমোদন', 'Approve') }))) return;
           await setWithdrawalStatus(w.id, 'approved', session);
           toast(t('উত্তোলন অনুমোদিত হয়েছে', 'Withdrawal approved'), 'success');
           App.refresh();
         }, { size: 'xs' }));
-        bar.appendChild(btn(t('বাতিল', 'Reject'), 'reject', 'softred', async () => {
+        acts.appendChild(btn(t('বাতিল', 'Reject'), 'reject', 'softred', async () => {
           const r = await rejectReason(t('উত্তোলন বাতিলের কারণ', 'Withdrawal rejection reason'));
           if (r === null) return;
           await setWithdrawalStatus(w.id, 'rejected', session, r);
           toast(t('উত্তোলন বাতিল হয়েছে', 'Withdrawal rejected'), 'warn');
           App.refresh();
         }, { size: 'xs' }));
-        acts.appendChild(bar);
-        rec.appendChild(acts);
       }
-      listHost.appendChild(rec);
+      listHost.appendChild(txnRow({
+        ic: 'withdraw', tone,
+        name: w.memberName || w.memberId || '',
+        meta: `${t(withdrawalTypeLabel(w.type).bn, withdrawalTypeLabel(w.type).en)} · ${tx(STATUS_EN[w.status] || w.status || '')}`,
+        amount: taka(w.amount),
+        amountKind: w.status === 'rejected' ? '' : 'out',
+        details: [
+          [t('পরিমাণ', 'Amount'), `<b>${taka(w.amount)}</b>`],
+          [t('তারিখ', 'Date'), esc(fmtDate(w.date))],
+          [t('উত্তোলনের ধরন', 'Withdrawal type'), esc(t(withdrawalTypeLabel(w.type).bn, withdrawalTypeLabel(w.type).en))],
+          [t('পরিশোধ পদ্ধতি', 'Payment method'), esc(t(methodLabel(w.method).bn, methodLabel(w.method).en))],
+          [t('স্ট্যাটাস', 'Status'), statusTag(w.status)],
+          [t('লেনদেন আইডি', 'Transaction ID'), `<b class="txn-id-static">${esc(w.txnId || '—')}</b>`],
+          ...(staff ? [[t('সদস্য আইডি', 'Member ID'), esc(w.memberId || '')]] : []),
+          ...(w.description ? [[t('বিবরণ', 'Description'), esc(w.description)]] : []),
+          ...(w.comment ? [[t('মন্তব্য', 'Comment'), esc(w.comment)]] : []),
+          [t('দাখিল', 'Submitted'), esc(fmtDateTime(w.submittedAt))],
+          ...(w.rejectReason ? [[t('বাতিলের কারণ', 'Rejection reason'), esc(w.rejectReason)]] : []),
+        ],
+        actions: acts,
+      }));
     });
+    wrap.appendChild(listHost);
+    bindCopyIds(listHost);
   }
-  wrap.appendChild(listHost);
-  bindCopyIds(listHost);
   return wrap;
 }
 

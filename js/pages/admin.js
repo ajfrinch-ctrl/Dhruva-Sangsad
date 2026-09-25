@@ -173,7 +173,7 @@ async function pendingDepositItems(session) {
       memberId: d.memberId,
       dateLabel: fmtDate(d.date),
       dateCaption: t('জমার তারিখ', 'Deposit date'),
-      meta: `${typeLabel(d.type).bn} · ${methodLabel(d.method).bn}${descOf(d) ? ' · ' + descOf(d) : ''}`,
+      meta: `${t(typeLabel(d.type).bn, typeLabel(d.type).en)} · ${t(methodLabel(d.method).bn, methodLabel(d.method).en)}${descOf(d) ? ' · ' + descOf(d) : ''}`,
       amount: num(d.amount),
       sort: String(d.submittedAt || ''),
       actions: [
@@ -207,7 +207,7 @@ async function pendingWithdrawalItems(session) {
       memberId: w.memberId,
       dateLabel: fmtDate(w.date),
       dateCaption: t('উত্তোলনের তারিখ', 'Withdrawal date'),
-      meta: `${withdrawalTypeLabel(w.type).bn} · ${methodLabel(w.method).bn}${descOf(w) ? ' · ' + descOf(w) : ''}`,
+      meta: `${t(withdrawalTypeLabel(w.type).bn, withdrawalTypeLabel(w.type).en)} · ${t(methodLabel(w.method).bn, methodLabel(w.method).en)}${descOf(w) ? ' · ' + descOf(w) : ''}`,
       amount: num(w.amount),
       sort: String(w.submittedAt || ''),
       actions: [
@@ -441,7 +441,7 @@ export async function staffManager(session, host) {
     });
     c.body.replaceChildren();
     if (staff.length > rows.length || term) {
-      c.body.appendChild(el('div', { class: 'count-line', text: `${rows.length} / ${staff.length} জন` }));
+      c.body.appendChild(el('div', { class: 'count-line', text: `${rows.length} / ${staff.length}` }));
     }
     if (isNarrowList()) {
       if (!rows.length) {
@@ -578,7 +578,7 @@ export async function accountManager(session, host) {
       return [m.memberId, m.nameBn, m.nameEn, m.mobile, u && u.username].some(x => String(x || '').toLowerCase().includes(term));
     });
     c.body.replaceChildren();
-    c.body.appendChild(el('div', { class: 'count-line', text: `${shown.length} / ${rows.length} সদস্য` }));
+    c.body.appendChild(el('div', { class: 'count-line', text: `${shown.length} / ${rows.length} members` }));
     if (isNarrowList()) {
       if (!shown.length) {
         c.body.appendChild(emptyState({ ic: 'members', title: t('এই ফিল্টারে কোনো সদস্য নেই', 'No members match this filter'), compact: true }));
