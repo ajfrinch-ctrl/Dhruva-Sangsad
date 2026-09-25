@@ -126,7 +126,7 @@ export function todaysLatest(rows, today, limit = 5) {
 export function txnRow({ ic = 'deposit', tone = '', name = '', meta = '', amount = '', amountKind = '', details = [], actions = null, open = false } = {}) {
   const row = el('div', { class: `txr${open ? ' open' : ''}` });
   const head = el('button', { type: 'button', class: 'txr-head', 'aria-expanded': open ? 'true' : 'false' });
-  head.innerHTML = `<span class="rw-ic ${tone}">${icon(ic)}</span>
+  head.innerHTML = `<span class="rw-ic ${tone}">${bigIcon(ic)}</span>
     <span class="txr-name"><b>${esc(name)}</b>${meta ? `<small>${esc(meta)}</small>` : ''}</span>
     <span class="txr-amt ${amountKind}">${esc(amount)}</span>
     <span class="txr-chev">${icon('chevron')}</span>`;

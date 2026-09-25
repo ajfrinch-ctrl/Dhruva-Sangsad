@@ -1596,13 +1596,15 @@ html[data-theme="dark"],html[data-theme="amoled"]{
 
 /* ---- top bar ---- */
 .topbar,html[data-role] .topbar{
-  background:var(--glass-bg) !important;
+  /* a faint top-to-bottom gradient so the bar reads as glass even before anything scrolls under it */
+  background:linear-gradient(180deg,rgba(255,255,255,.86) 0%,rgba(255,255,255,.60) 100%) !important;
   -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
   border:0 !important;border-bottom:1px solid var(--glass-hair) !important;
   box-shadow:0 1px 0 var(--glass-line) inset,0 6px 24px rgba(16,24,40,.06);
 }
 html[data-theme="dark"] .topbar,html[data-theme="amoled"] .topbar,
-html[data-theme="dark"][data-role] .topbar,html[data-theme="amoled"][data-role] .topbar{background:var(--glass-bg) !important}
+html[data-theme="dark"][data-role] .topbar,html[data-theme="amoled"][data-role] .topbar{
+  background:linear-gradient(180deg,rgba(14,14,16,.82) 0%,rgba(14,14,16,.58) 100%) !important}
 /* status is shown as a hairline glow, offline as a red tint of the whole bar */
 .topbar.sync-synced,.topbar.sync-online,.topbar.sync-syncing{border-bottom-color:rgba(22,163,74,.35) !important}
 .topbar.sync-offline,.topbar.sync-error,
@@ -1660,10 +1662,17 @@ html[data-theme="dark"] .sheet-item .si-ic,html[data-theme="amoled"] .sheet-item
 /* ---- water-drop icons ---- */
 .icon-ai{display:block;width:1em;height:1em;object-fit:contain;pointer-events:none;user-select:none;
   filter:drop-shadow(0 4px 6px rgba(16,24,40,.16));transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .25s}
-.bottom-nav .nav-item .icon-ai{width:31px;height:31px;margin-top:-2px;opacity:.95;filter:drop-shadow(0 3px 4px rgba(16,24,40,.2))}
-.bottom-nav .nav-item.on .icon-ai{opacity:1;filter:drop-shadow(0 6px 10px rgba(22,163,74,.35));transform:translateY(-3px) scale(1.12)}
+/* bottom bar: bigger, fully saturated and edged with a crisp shadow so the pale
+   glass does not melt into the bar; inactive tabs differ by glow/scale, not by fading */
+.bottom-nav .nav-item .icon-ai{width:34px;height:34px;margin-top:-4px;opacity:1;
+  filter:saturate(1.35) contrast(1.06) drop-shadow(0 1px 1px rgba(16,24,40,.35)) drop-shadow(0 3px 4px rgba(16,24,40,.18))}
+.bottom-nav .nav-item.on .icon-ai{
+  filter:saturate(1.45) contrast(1.06) drop-shadow(0 1px 1px rgba(16,24,40,.35)) drop-shadow(0 6px 10px rgba(22,163,74,.45));
+  transform:translateY(-3px) scale(1.12)}
+.bottom-nav .nav-item .ni-lbl{font-weight:600}
 .bottom-nav .nav-item:active .icon-ai{transform:scale(.92)}
 .rail .rail-tab .icon-ai{width:26px;height:26px}
+.topbar .icon-btn{padding:0}
 .topbar .icon-btn .icon-ai{width:26px;height:26px}
 .sec-tile .st-ic,.action-card .ac-ic,.ac-ic{overflow:visible}
 .sec-tile .st-ic .icon-ai{width:40px;height:40px}
@@ -1681,3 +1690,18 @@ html[data-theme="dark"] .sec-tile .st-ic:has(.icon-ai),html[data-theme="amoled"]
 .bottom-nav .nav-item.on .icon-ai{animation:ds-float 3.2s ease-in-out infinite}
 .action-card.primary .ac-ic .icon-ai{animation:ds-float-soft 3.6s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.icon-ai{animation:none !important}}
+
+/* ---- v7.2.1 polish ----
+   · transaction rows use the glass status icons (approved / pending / rejected,
+     deposit / withdraw) instead of small outline glyphs
+   · install pill floats ABOVE the bottom bar instead of behind it (it used to
+     bleed a green glow through the glass) */
+.rw-ic:has(.icon-ai),.txr-head .rw-ic:has(.icon-ai){background:transparent !important;border:0;overflow:visible}
+.txr-head .rw-ic .icon-ai,.rw-ic .icon-ai{width:36px;height:36px;filter:drop-shadow(0 3px 5px rgba(16,24,40,.18))}
+@media (max-width:1023px){
+  .install-bar{bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px) + 12px)}
+}
+/* while the install pill is showing, leave room for it under the scrolled content */
+@media (max-width:1023px){
+  body:has(.install-bar.on) .main{padding-bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom,0px) + 98px)}
+}

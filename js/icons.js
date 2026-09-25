@@ -80,7 +80,7 @@ export function icon(name, cls = '') {
 export const AI_ICONS = new Set([
   'home', 'members', 'member', 'deposit', 'receipt', 'report', 'chart', 'approve', 'settings', 'menu',
   'plus', 'withdraw', 'bell', 'lock', 'log', 'maker', 'building', 'backup', 'info', 'sync',
-  'moon', 'sun', 'logout',
+  'moon', 'sun', 'logout', 'clock', 'reject',
 ]);
 export const AI_ICON_DIR = './icons/ai/';
 export function bigIcon(name, cls = '') {

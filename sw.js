@@ -9,7 +9,7 @@
  *    and statements must work offline; the Excel engine is NOT precached — it
  *    is only fetched if an export is actually used (and then cached).
  */
-const VERSION = 'ds-v7.2.0';
+const VERSION = 'ds-v7.2.1';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -47,6 +47,8 @@ const PRECACHE = [
   'icons/ai/moon.png',
   'icons/ai/sun.png',
   'icons/ai/logout.png',
+  'icons/ai/clock.png',
+  'icons/ai/reject.png',
   /* fonts */
   'vendor/fonts/noto-sans-bengali-bengali-400-normal.woff2',
   'vendor/fonts/noto-sans-bengali-bengali-700-normal.woff2',
