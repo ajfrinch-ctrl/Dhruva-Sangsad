@@ -51,17 +51,33 @@ export const DEFAULT_SETTINGS = {
   orgLogo: '',
   waTemplate: 'প্রিয় [Member Name],\nআসসালামু আলাইকুম।\nআপনার মাসিক জমা বকেয়া রয়েছে। অনুগ্রহ করে দ্রুত সময়ের মধ্যে বকেয়া পরিশোধ করার জন্য বিনীতভাবে অনুরোধ করা হলো।\nধন্যবাদ।\nধ্রুব সংসদ',
 };
+/* Settings are read on EVERY navigation (top-bar brand) and by most pages, but
+   change almost never. Memoise them: one IndexedDB round-trip per session
+   instead of 12 sequential reads per call. Invalidated on local save and on
+   any data change from the cloud (the pull dispatches store '*'). */
+let settingsCache = null;
 export async function settings() {
+  if (settingsCache) return { ...settingsCache };
   const out = { ...DEFAULT_SETTINGS };
-  for (const k of Object.keys(DEFAULT_SETTINGS)) {
-    const v = await getSetting(k, undefined);
-    if (v !== undefined && v !== null) out[k] = v;
-  }
-  return out;
+  const keys = Object.keys(DEFAULT_SETTINGS);
+  const vals = await Promise.all(keys.map(k => getSetting(k, undefined)));
+  keys.forEach((k, i) => { if (vals[i] !== undefined && vals[i] !== null) out[k] = vals[i]; });
+  settingsCache = out;
+  return { ...out };
 }
 export async function saveSettings(patch) {
   for (const [k, v] of Object.entries(patch)) await setSetting(k, v);
+  settingsCache = null;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ds:data-changed', { detail: { store: 'settings' } }));
+  }
   return settings();
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('ds:data-changed', e => {
+    const s = e.detail && e.detail.store;
+    if (!s || s === '*' || s === 'settings') settingsCache = null;
+  });
 }
 
 /** Options for memberSummary, derived from settings. Always pass `dueDay`

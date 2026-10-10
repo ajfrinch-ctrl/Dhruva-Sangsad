@@ -19,15 +19,16 @@
 
 /* Single source of truth for the app version. Keep in step with the `?v=`
    cache buster on index.html and the service-worker cache name. */
-export const APP_VERSION = '7.3.0';
+export const APP_VERSION = '7.4.0';
 
 /** The one small logo used everywhere in the UI (favicon, manifest icon 192,
  *  topbar, login, footer, install prompt and print/PDF sheets). */
 export const LOGO_SMALL = './icons/icon-192.png';
 /** Large icon — install/PWA surfaces only (nobody downloads it at runtime). */
 export const LOGO_512 = './icons/icon-512.png';
-/** Legacy full-resolution master, kept on disk so existing custom-logo
- *  settings that still point at it keep working. Never used by the UI. */
+/** Legacy logo path, kept on disk (now a small 192px file, same bytes as the
+ *  small logo) so any old custom-logo setting that still points at it keeps
+ *  working. Never used by the UI. */
 export const LOGO_MASTER = './icons/logo.png';
 /** Back-compat alias (older modules import DEFAULT_LOGO). */
 export const DEFAULT_LOGO = LOGO_SMALL;
