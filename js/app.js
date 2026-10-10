@@ -15,27 +15,21 @@ import { logoSrc, applyLogo, APP_VERSION } from './brand.js';
 import { icon, bigIcon } from './icons.js';
 import { openDB } from './db.js';
 import { ensureBootstrapAdmin, getSession, clearSession, logout, can, checkBootstrapSession } from './auth.js';
-import { renderAuth, setAuthMode } from './ui-auth.js';
 import { initFirebase } from './vendor.js';
 import { applyRole, getTheme, toggleTheme } from './theme.js';
 import { bottomSheet, switchEl, skeleton, errorState, closeAllSheets } from './ui.js';
-import { initShellGestures } from './gestures.js';
-import { initInstallPrompt } from './install-prompt.js';
 import {
   unreadNotifications, logActivity, settings, syncDueNotifications,
   ensureTxnIds, dedupeTxnIds, allMembers, allDeposits, allWithdrawals,
 } from './store.js';
-import { adminSetupWizard, forcePasswordChange } from './pages/account.js';
 
-import { pageHome } from './pages/dashboard.js';
-import { pageMembers } from './pages/members.js';
-import { pageDeposits } from './pages/deposits.js';
-import { pageTransactions } from './pages/transactions.js';
-import { pageStatements } from './pages/statements.js';
-import { pageReports } from './pages/reports.js';
-import { pageSettings } from './pages/settings.js';
-import { pageProfile } from './pages/profile.js';
-import { pageAuthorization } from './pages/admin.js';
+/* Pages, the auth screens and the shell extras are loaded ON DEMAND (dynamic
+   import), not as static imports. Before, opening the app — even just the
+   login screen — downloaded and parsed every page (~250 KB of JS: members,
+   deposits, admin, reports, …). Now the boot graph is only the shell +
+   domain layer (~170 KB), and each page loads the first time it is opened
+   (then stays cached in memory and in the service worker). This also breaks
+   the old app.js ⇄ pages/* import cycle: the shell always evaluates first. */
 
 /* ------------------------------------------------------------------ *
  * Navigation model — one destination per feature, one home per feature.
@@ -66,16 +60,34 @@ const ALIAS = {
 };
 
 const PAGES = {
-  home: pageHome,
-  members: pageMembers,
-  deposits: pageDeposits,
-  transactions: pageTransactions,
-  statements: pageStatements,
-  reports: pageReports,
-  settings: pageSettings,
-  profile: pageProfile,
-  authorization: pageAuthorization,
+  home: () => import('./pages/dashboard.js').then(m => m.pageHome),
+  members: () => import('./pages/members.js').then(m => m.pageMembers),
+  deposits: () => import('./pages/deposits.js').then(m => m.pageDeposits),
+  transactions: () => import('./pages/transactions.js').then(m => m.pageTransactions),
+  statements: () => import('./pages/statements.js').then(m => m.pageStatements),
+  reports: () => import('./pages/reports.js').then(m => m.pageReports),
+  settings: () => import('./pages/settings.js').then(m => m.pageSettings),
+  profile: () => import('./pages/profile.js').then(m => m.pageProfile),
+  authorization: () => import('./pages/admin.js').then(m => m.pageAuthorization),
 };
+/* Resolved page functions, cached for the session (a page's module is fetched
+   once, then reused for every later visit). A failed load is NOT cached, so
+   the error state's Retry button actually retries the network. */
+const pageCache = {};
+function loadPage(route) {
+  if (!pageCache[route]) {
+    pageCache[route] = PAGES[route]().catch(e => { delete pageCache[route]; throw e; });
+  }
+  return pageCache[route];
+}
+
+/* The login/register/forgot screens (~32 KB) are only needed while signed
+   out — signed-in launches never download them. */
+let authModPromise = null;
+function loadAuthMod() {
+  if (!authModPromise) authModPromise = import('./ui-auth.js').catch(e => { authModPromise = null; throw e; });
+  return authModPromise;
+}
 
 /* Route id → permission id. The profile screen replaced the old member-panel
    page, but the role matrix still grants that page as 'member-panel'. */
@@ -183,7 +195,8 @@ export const App = {
     view.scrollTop = 0;
     window.scrollTo(0, 0);
     try {
-      const node = await PAGES[route](s, { ...(sessionParams[route] || {}), section: this.section });
+      const renderPage = await loadPage(route);
+      const node = await renderPage(s, { ...(sessionParams[route] || {}), section: this.section });
       if (this.route !== route) return;      // a newer navigation won
       clear(view);
       view.appendChild(node);
@@ -221,15 +234,27 @@ export const App = {
 
   /* ---------------- auth screens ---------------- */
 
-  renderAuthRoute(route) {
+  async renderAuthRoute(route) {
     const r = AUTH_ROUTES.has(route) ? route : 'login';
-    setAuthMode(r === 'recover' ? 'forgot' : r);
     showAuthHost();
-    renderAuth(authEl, s => this.enter(s));
+    /* The boot screen stays up until the auth module arrives, so a slow
+       network shows the branded loader — never a blank page. */
+    try {
+      const { renderAuth, setAuthMode } = await loadAuthMod();
+      setAuthMode(r === 'recover' ? 'forgot' : r);
+      renderAuth(authEl, s => this.enter(s));
+    } catch (e) {
+      console.error('[auth]', e);
+      const m = document.getElementById('bootMsg');
+      if (m) m.textContent = t('লগইন স্ক্রিন লোড করা যায়নি — সংযোগ দেখে আবার চেষ্টা করুন।', 'The login screen could not be loaded — check your connection and retry.');
+      const b = document.getElementById('boot');
+      if (b) b.classList.add('err');
+      return;
+    }
     hideBoot();
   },
 
-  showAuth() { this.renderAuthRoute(parseHash(location.hash).route || 'login'); },
+  showAuth() { return this.renderAuthRoute(parseHash(location.hash).route || 'login'); },
 
   async enter(session, { silent = false } = {}) {
     this.session = session;
@@ -246,14 +271,17 @@ export const App = {
     await this.render(target, section, true);
 
     /* Gates that must not delay the first paint: they are modals, so the shell
-       is already on screen when they open. */
+       is already on screen when they open. The wizard module loads only when
+       a gate actually triggers (first admin login / forced password change). */
     try {
       if (session.role === 'admin' && (session.isBootstrap || session.profileComplete === false)) {
         if (session.isBootstrap) await checkBootstrapSession(session);
+        const { adminSetupWizard } = await import('./pages/account.js');
         const done = await adminSetupWizard(session);
         if (!done) { await this.doLogout({ confirm: false }); return; }
         this.session = done; window.DS_SESSION = done;
       } else if (session.mustChangePassword) {
+        const { forcePasswordChange } = await import('./pages/account.js');
         const done = await forcePasswordChange(session);
         if (!done) { await this.doLogout({ confirm: false }); return; }
         this.session = done; window.DS_SESSION = done;
@@ -283,9 +311,15 @@ export const App = {
     document.documentElement.setAttribute('data-role', 'guest');
     clearIdleTimer();
     location.hash = hashFor('login');
-    setAuthMode('login');
     showAuthHost();
-    renderAuth(authEl, s => this.enter(s));
+    try {
+      const { renderAuth, setAuthMode } = await loadAuthMod();
+      setAuthMode('login');
+      renderAuth(authEl, s => this.enter(s));
+    } catch (e) {
+      console.error('[auth]', e);
+      location.reload();
+    }
   },
 
   /* ---------------- brand / chrome ---------------- */
@@ -467,7 +501,6 @@ async function onIdleTimeout() {
   clearIdleTimer();
   try { await logActivity('SESSION_TIMEOUT', `${s.role} ${s.username || s.displayName} — 30 minutes of inactivity`, s); } catch { /* ignore */ }
   clearSession();
-  setAuthMode('login');
   location.hash = hashFor('login');
   App.showAuth();
   alertBox(
@@ -582,8 +615,8 @@ async function bootApp() {
     App.paintRole();
     App.refreshNotifBadge().catch(() => {});
   } else {
+    /* renderAuthRoute hides the boot screen once the login module lands. */
     App.showAuth();
-    hideBoot();
   }
 
   /* Everything below is deliberately off the critical path. */
@@ -591,10 +624,6 @@ async function bootApp() {
     try {
       await openDB();
       await ensureBootstrapAdmin();
-      /* Additive maintenance only: stamps missing transaction ids, never
-         rewrites or deletes existing records. */
-      await ensureTxnIds().catch(() => {});
-      await dedupeTxnIds().catch(() => {});
     } catch (e) {
       console.error('[db]', e);
       alertBox(
@@ -606,8 +635,24 @@ async function bootApp() {
     }
   }, 60);
 
-  idle(() => { try { initShellGestures({ onRefresh: () => App.refresh(), collapseTopbar: false }); } catch (e) { console.error(e); } }, 900);
-  idle(() => { try { initInstallPrompt(); } catch (e) { console.error(e); } }, 2600);
+  /* Additive maintenance only: stamps missing transaction ids, never rewrites
+     or deletes existing records. Deferred well past the first paint so it
+     never competes with the first screen's own database reads. */
+  idle(async () => {
+    try {
+      await ensureTxnIds().catch(() => {});
+      await dedupeTxnIds().catch(() => {});
+    } catch (e) { console.error('[db]', e); }
+  }, 4500);
+
+  idle(() => {
+    import('./gestures.js')
+      .then(m => m.initShellGestures({ onRefresh: () => App.refresh(), collapseTopbar: false }))
+      .catch(e => console.error(e));
+  }, 900);
+  idle(() => {
+    import('./install-prompt.js').then(m => m.initInstallPrompt()).catch(e => console.error(e));
+  }, 2600);
   idle(() => { initFirebase().catch(() => {}); }, 1200);
 }
 

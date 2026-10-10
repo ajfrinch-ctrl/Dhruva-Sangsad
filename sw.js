@@ -3,13 +3,20 @@
  * v7 notes
  *  · the old single 764 KB logo is no longer precached — the UI, the manifest
  *    and the PDF sheets all use the optimised `icons/icon-192.png`;
- *  · the app is one module graph (js/app.js) — every module it can reach is
- *    precached so the app still boots with no connectivity;
+ *  · the app boots from js/app.js and lazy-loads each page on first visit —
+ *    every module it can reach is still precached so the app boots and runs
+ *    with no connectivity;
  *  · heavy layout engines (jspdf / html2canvas) are precached because reports
  *    and statements must work offline; the Excel engine is NOT precached — it
  *    is only fetched if an export is actually used (and then cached).
+ *
+ * v7.4 notes
+ *  · JS/CSS are stale-while-revalidate instead of network-first: repeat
+ *    launches paint instantly from cache while the update downloads in the
+ *    background (previously EVERY launch re-downloaded all JS/CSS before it
+ *    could boot). A deployed fix arrives on the next launch at the latest.
  */
-const VERSION = 'ds-v7.3.0';
+const VERSION = 'ds-v7.4.0';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -165,19 +172,26 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  /* JS/CSS: network-first so a deployed fix is never stuck behind the cache. */
+  /* JS/CSS: stale-while-revalidate. The cached copy launches the app
+     instantly; the network refresh happens in the background and is picked
+     up on the next launch — repeat visits never wait for the network. */
   if (/\.(js|mjs|css)$/i.test(url.pathname)) {
     event.respondWith((async () => {
-      try {
-        const fresh = await fetch(req, { cache: 'no-store' });
+      const cache = await caches.open(SHELL);
+      const cached = await caches.match(req, { ignoreSearch: true });
+      const refresh = fetch(req).then(async fresh => {
         if (fresh && fresh.ok) {
-          try { (await caches.open(SHELL)).put(url.pathname.replace(/^\//, ''), fresh.clone()); } catch (_) {}
+          try { await cache.put(req, fresh.clone()); } catch (_) {}
         }
         return fresh;
-      } catch (_) {
-        return (await caches.match(req, { ignoreSearch: true })) ||
-          new Response('', { status: 504, statusText: 'Offline' });
-      }
+      }).catch(() => null);
+      /* waitUntil keeps the worker alive until the background refresh lands —
+         otherwise the update may be killed mid-flight and never cached. */
+      event.waitUntil(refresh);
+      if (cached) return cached;
+      const res = await refresh;
+      if (res) return res;
+      return new Response('', { status: 504, statusText: 'Offline' });
     })());
     return;
   }

@@ -13,7 +13,15 @@
 <!-- ONE logo asset, ~5 KB: starts downloading with the document and is reused
      by every screen (topbar, login, footer, print sheets) from the response cache. -->
 <link rel="preload" as="image" href="./icons/icon-192.png" fetchpriority="high">
-<link rel="stylesheet" href="./css/app.css?v=7.3.0">
+<!-- First-paint font: the UI is English-first, so the small latin subset (~11 KB)
+     covers the boot screen, login and shell; the Bengali subsets load on demand
+     via unicode-range when Bengali text actually renders. -->
+<link rel="preload" as="font" type="font/woff2" crossorigin href="./vendor/fonts/noto-sans-bengali-latin-400-normal.woff2" fetchpriority="high">
+<!-- Bottom-bar icons shared by both roles (~5 KB each after v7.4 optimisation):
+     preloaded so the shell's first paint never waits for them. -->
+<link rel="preload" as="image" href="./icons/ai/home.png">
+<link rel="preload" as="image" href="./icons/ai/deposit.png">
+<link rel="stylesheet" href="./css/app.css?v=7.4.0">
 <style>
 /* Critical first-paint styles — the same shell geometry as css/app.css, inlined
    so the app chrome and the login card appear before any stylesheet/JS lands.
